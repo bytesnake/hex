@@ -1,4 +1,6 @@
 
 /target/
+/music/target/
+/music/Cargo.lock
 **/*.rs.bk
 /Cargo.lock
