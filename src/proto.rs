@@ -2,11 +2,14 @@ use serde_json::{self, Value};
 use hex_music::database::Track;
 
 #[derive(Deserialize)]
+//#[serde(tag = "fn", content="payload")]
 #[serde(untagged)]
 pub enum Incoming {
+    #[serde(rename="search")]
     Search {
         query: String
     },
+    #[serde(rename="get_track")]
     GetTrack {
         key: String
     }
@@ -36,6 +39,7 @@ pub enum Outgoing {
 #[derive(Serialize)]
 struct OutgoingWrapper {
     id: String,
+    #[serde(rename="fn")]
     fnc: String,
     payload: Value
 }

@@ -66,7 +66,8 @@ impl Connection {
         } else {
             let query = query.to_sql_query();
 
-            self.socket.prepare(&format!("SELECT Title, Album, Interpret, Conductor, Composer, Key FROM music WHERE {};", query)).unwrap()
+            println!("Query: {}", query);
+            self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key FROM music WHERE {};", query)).unwrap()
         }
     }
 

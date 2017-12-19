@@ -25,8 +25,8 @@ impl State {
     }
 
     pub fn process(&mut self, msg: String) -> Result<String,()> {
-        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).map_err(|_| ())?;
-
+        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).expect("Couldnt parse!");
+    
         let mut remove = false;
 
         println!("Got: {}", &msg);
@@ -37,8 +37,6 @@ impl State {
                 }
             },
             proto::Incoming::Search { query } => {
-                println!("Got search");
-
                 let prior_state = self.reqs.entry(packet.id.clone())
                     .or_insert(RequestState::Search { 
                         query: query,
