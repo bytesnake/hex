@@ -17,7 +17,7 @@ pub fn get_hash(num_channel: u16, data: &[i16]) -> Result<String> {
 }
 
 
-#[derive(Deserialize, Debug)]
+/*#[derive(Deserialize, Debug)]
 pub struct Artist {
     pub id: String,
     pub name: String
@@ -48,9 +48,10 @@ pub struct MusicEntity {
 
 #[derive(Deserialize, Debug)]
 pub struct Tracks(Vec<MusicEntity>);
+*/
 
-impl Tracks {
-    pub fn new(hash: &str, duration: u32) -> Result<Tracks> {
+//impl Tracks {
+    pub fn get_metadata(hash: &str, duration: u32) -> Result<String> {
         let mut dst = Vec::new();
         let mut easy = Easy::new();
         easy.url("https://api.acoustid.org/v2/lookup")
@@ -98,12 +99,13 @@ impl Tracks {
             return Err(Error::Parsing);
         }
 
-        let recs: Tracks = serde_json::from_value(v["results"].clone())
+        /*let recs: Tracks = serde_json::from_value(v["results"].clone())
             .map_err(|_| Error::Parsing)?;
-
-        Ok(recs)
+*/
+        Ok(serde_json::to_string(&v["results"]).unwrap())
     }
 
+/*
     /// Returns a pair of title name and id to the corresponding recording
     pub fn get_titles(&self) -> Vec<(String, String)> {
         let mut res = Vec::new();
@@ -168,4 +170,4 @@ impl Tracks {
 
         res
     }
-}
+}*/

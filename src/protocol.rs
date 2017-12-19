@@ -53,7 +53,7 @@ impl State {
                 } else {
                     let query = pack["payload"]["query"].as_str().ok_or(())?;
 
-                    let res = collection.search(query);
+                    let res = collection.search(query, 0);
                 
                     if res.len() < 51 {
                         

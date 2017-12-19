@@ -2,14 +2,11 @@ use error::{Error, Result};
 
 use rusqlite;
 use rusqlite::Statement;
+
 use music_search::SearchQuery;
-
-use acousticid::Tracks;
-
-use std::str;
-
 use audio_file::AudioFile;
 
+use std::{env, str};
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
@@ -57,9 +54,10 @@ pub struct Connection {
 
 impl Connection {
     pub fn new() -> Connection {
-        let home_dir = env::home_dir().expect("Could not find the home directory!");
+        let mut dir = env::home_dir().expect("Could not find the home directory!");
+        dir.push(".music.db");
 
-        Connection { socket: rusqlite::Connection::open(&format!("{}/.music.db", home_dir)).unwrap() }
+        Connection { socket: rusqlite::Connection::open(dir.to_str().unwrap()).unwrap() }
     }
 
     pub fn search_prep(&self, query: SearchQuery) -> Statement {
@@ -78,6 +76,7 @@ impl Connection {
                 title: row.get(0),
                 album: row.get(1),
                 interpret: row.get(2),
+                fingerprint: row.get(3),
                 conductor: row.get(4),
                 composer: row.get(5),
                 key: row.get(6)

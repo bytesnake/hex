@@ -1,9 +1,13 @@
+use std::fs::File;
+use std::process::Command;
 use std::path::Path;
+use std::io::Write;
+use uuid::Uuid;
 
 use error::{Result, Error};
 
 use acousticid;
-use acousticid::Tracks;
+use database::Track;
 
 use opus;
 use opus::{Channels, Application};
@@ -11,11 +15,10 @@ use opus::{Channels, Application};
 use hound::WavReader;
 
 pub struct AudioFile {
+    key: String,
     duration: u32,
     opus_data: Vec<u8>,
-    fingerprint: String,
-    metadata: acousticid::Tracks,
-    track: database::Track
+    fingerprint: String
 }
 
 impl AudioFile {
@@ -46,7 +49,7 @@ impl AudioFile {
     /// a wave audio file with 48k sample rate is assumed
     pub fn from_wav_48k(path: &str) -> Result<AudioFile> {
         // read the metadata
-        let tag = v1::Tag::from_path(path).map_err(|_| Error::InvalidFile)?;
+        //let tag = v1::Tag::from_path(path).map_err(|_| Error::InvalidFile)?;
 
         // read the whole wave file
         let mut reader = WavReader::open(path)
@@ -62,16 +65,18 @@ impl AudioFile {
 
         debug!("Open file {} ({} samples) with sample rate {} and {} channels", path, samples.len(),sample_rate, num_channel);
 
-        AudioFile::from_raw_48k(samples, duration, num_channel, Some(tag))
+        AudioFile::from_raw_48k(samples, duration, num_channel)
     }
 
-    pub fn from_raw_48k(samples: Vec<i16>, duration: u32, num_channel: u16, tag: Option<v1::Tag>) -> Result<AudioFile> {
+    pub fn from_raw_48k(samples: Vec<i16>, duration: u32, num_channel: u16) -> Result<AudioFile> {
         // calculate the acousticid of the file
-        let hash = acousticid::get_hash(num_channel, &samples)?;
+        let fingerprint = acousticid::get_hash(num_channel, &samples)?;
+        let key = Uuid::new_v4();
 
-        debug!("Got hash: {}", hash);
+        debug!("Calculated fingerprint: {}", fingerprint);
+        debug!("The corresponding key is {}", key);
 
-        if Path::new(&format!("/home/lorenz/.music/{}", hash)).exists() {
+        if Path::new(&format!("/home/lorenz/.music/{}", key)).exists() {
             return Err(Error::AlreadyExists);
         }
 
@@ -109,30 +114,16 @@ impl AudioFile {
         info!("Size: {}", opus_data.len());
         info!("Duration: {}", duration);
 
-        let tmp = acousticid::Track::new(hash, duration)?;
-
-        // check first if there is any eligible option to select
-        let track = if tmp.has_any() {
-            tag.map(|x| {
-                match tmp.get_id(x.title()) {
-                    Some((title, id)) => Track::new_all(id, title, x.album(), x.artist()),
-                    None => Track::new("", "")
-                }
-            })
-        } else {
-            Track::new_all(tag.title().unwrap_or(""), "", tag.album(), tag.artist())
-        };
-
-        Ok(AudioFile { duration: duration, fingerprint: hash, opus_data: opus_data, metadata: acousticid::Track::new(hash, duration) })
+        Ok(AudioFile { key: key.simple().to_string(), duration: duration, fingerprint: fingerprint, opus_data: opus_data })
     }
     
     pub fn to_db(&mut self) -> Result<Track> {
-        let mut file = File::create(&format!("/home/lorenz/.music/{}", self.track.get_id()))
-            .map_err(|_| Error::InvalidFile);
+        let mut file = File::create(&format!("/home/lorenz/.music/{}", self.key))
+            .map_err(|_| Error::InvalidFile)?;
 
-        file.write_all(&self.data)
-            .map_err(|_| Error::InvalidFile);
+        file.write_all(&self.opus_data)
+            .map_err(|_| Error::InvalidFile)?;
 
-        self.track.clone()
+        Ok(Track::empty(&self.key, &self.fingerprint))
     }
 }
