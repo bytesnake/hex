@@ -7,7 +7,7 @@ use websocket::async::Server;
 use tokio_core::reactor::{Handle, Core};
 use futures::{Future, Sink, Stream};
 
-use protocol;
+use state::State;
 
 pub fn start() {
 	let mut core = Core::new().unwrap();
@@ -39,7 +39,7 @@ pub fn start() {
                 //.and_then(|(s, _)| s.send(Message::text("Hello World!").into()))
                 // simple echo server impl
                 .and_then(|(s,_)| {
-                    let mut state = protocol::State::new();
+                    let mut state = State::new();
                     
                     let (sink, stream) = s.split();
                     stream
