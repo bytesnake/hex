@@ -5,21 +5,10 @@ import {Layout, TextField} from 'preact-mdl';
 
 export default class Header extends Component {
     onSearch = () => {
-    }
+   }
 
 	render() {
-		/*return (
-			<header class={style.header}>
-				<h1>Preact App</h1>
-				<nav>
-					<Link href="/">Home</Link>
-					<Link href="/profile">Me</Link>
-					<Link href="/profile/john">John</Link>
-				</nav>
-			</header>
-		);*/
-
-        /*return (
+        return (
             <Layout.Header class={style.header}>
             <Layout.HeaderRow>
 			<Layout.Title>
@@ -34,8 +23,6 @@ export default class Header extends Component {
 			/>
             </Layout.HeaderRow>
             </Layout.Header>
-        );*/
-
-        return;
+        );
 	}
 }

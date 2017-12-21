@@ -1,7 +1,7 @@
 import { h, Component } from 'preact';
 import { Layout, Navigation } from 'preact-mdl';
 
-class Sidebar extends Component {
+export default class Sidebar extends Component {
 	shouldComponentUpdate() {
 		return false;
 	}
@@ -11,7 +11,7 @@ class Sidebar extends Component {
 	};
 
 	render() {
-		/*return (
+		return (
 			<Layout.Drawer onClick={this.hide}>
 				<Layout.Title>Example App</Layout.Title>
 				<Navigation>
@@ -20,7 +20,6 @@ class Sidebar extends Component {
 					<Navigation.Link href="/profile/john">John</Navigation.Link>
 				</Navigation>
 			</Layout.Drawer>
-		);*/
-        return;
+		);
 	}
 }

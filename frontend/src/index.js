@@ -4,7 +4,6 @@ import { h, render } from 'preact';
 import './style';
 import 'babel-polyfill'
 import mdl from 'material-design-lite/material';
-import { Button } from 'preact-mdl';
 
 let root;
 function init() {

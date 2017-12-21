@@ -1,6 +1,6 @@
 import { h, Component } from 'preact';
 import { Router } from 'preact-router';
-import { Button, Icon } from 'preact-mdl';
+import { Button, Icon, Layout } from 'preact-mdl';
 
 import Header from './header';
 import Sidebar from './sidebar';
@@ -17,24 +17,28 @@ export default class App extends Component {
 	};
 
     handleFab = () => {
-		alert('You clicked New!');
+		alert('Add a new song!');
 	};
 
 	render() {
 		return (
 			<div id="app">
-				<Header />
-                /*<Sidebar />
+                <Layout fixed-header fixed-drawer>
+                    <Header />
+                    <Sidebar />
 
-                <Button id="fab" fab colored onClick={this.handleFab}>
-                    <Icon icon="create" />
-                </Button>
-*/
-				<Router onChange={this.handleRoute}>
-					<Home path="/" />
-					<Profile path="/profile/" user="me" />
-					<Profile path="/profile/:user" />
-				</Router>
+                    <Button id="fab" fab colored onClick={this.handleFab}>
+                        <Icon icon="create" />
+                    </Button>
+
+                    <Layout.Content>
+                        <Router onChange={this.handleRoute}>
+                            <Home path="/" />
+                            <Profile path="/profile/" user="me" />
+                            <Profile path="/profile/:user" />
+                        </Router>
+                    </Layout.Content>
+                </Layout>
 			</div>
 		);
 	}
