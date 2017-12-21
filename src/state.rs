@@ -13,14 +13,16 @@ enum RequestState {
 
 pub struct State {
     reqs: HashMap<String, RequestState>,
-    collection: hex_music::Collection
+    collection: hex_music::Collection,
+    buffer: Vec<u8>
 }
 
 impl State {
     pub fn new() -> State {
         State {
             reqs: HashMap::new(),
-            collection: hex_music::Collection::new()
+            collection: hex_music::Collection::new(),
+            buffer: Vec::new()
         }
     }
 
@@ -32,9 +34,7 @@ impl State {
         println!("Got: {}", &msg);
         let payload = match packet.payload {
             proto::Incoming::GetTrack { key } => { 
-                proto::Outgoing::Track {
-                    data: database::Track::empty("", "")
-                }
+                proto::Outgoing::Track(self.collection.get_track(&key))
             },
             proto::Incoming::Search { query } => {
                 let prior_state = self.reqs.entry(packet.id.clone())
@@ -61,6 +61,29 @@ impl State {
                     answ: res,
                     more: more
                 }
+            },
+            proto::Incoming::ClearBuffer => {
+                self.buffer.clear();
+
+                proto::Outgoing::ClearBuffer
+            },
+
+            proto::Incoming::AddTrack { format } => {
+                let res = self.collection.add_track(&format, &self.buffer);
+
+                proto::Outgoing::AddTrack {
+                    data: res
+                }
+            },
+
+            proto::Incoming::GetTrackData { key } => {
+                //let data = self.collection.get_track_data(&key);
+
+                proto::Outgoing::GetTrackData
+            },
+            
+            proto::Incoming::UpdateTrack { key, title, album, interpret, conductor, composer } => {
+                proto::Outgoing::UpdateTrack(self.collection.update_track(&key, title, album, interpret, conductor, composer))
             }
         };
 
@@ -71,5 +94,9 @@ impl State {
 
         // wrap the payload to a full packet and convert to a string
         payload.to_string(&packet.id, &packet.fnc)
+    }
+
+    pub fn process_binary(&mut self, data: &[u8]) {
+        self.buffer.extend_from_slice(data);
     }
 }

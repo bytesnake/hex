@@ -88,4 +88,12 @@ impl Connection {
     pub fn insert_track(&self, track: Track) {
         self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer) VALUES (?1, ?2, ?3, ?4, ?5, ?6)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer]).unwrap();
     }
+
+    pub fn get_track(&self, key: &str) -> Result<Track> {
+        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key FROM music WHERE Key = '{}'", key)).map_err(|_| Error::Internal)?;
+        
+        let res = self.search(&mut stmt).next().ok_or(Error::Internal);
+
+        res
+    }
 }

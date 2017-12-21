@@ -12,6 +12,25 @@ pub enum Incoming {
     #[serde(rename="get_track")]
     GetTrack {
         key: String
+    },
+    #[serde(rename="clear_buffer")]
+    ClearBuffer,
+    #[serde(rename="add_track")]
+    AddTrack {
+        format: String
+    },
+    #[serde(rename="get_track_data")]
+    GetTrackData {
+        key: String
+    },
+    #[serde(rename="update_track")]
+    UpdateTrack {
+        key: String,
+        title: Option<String>,
+        album: Option<String>,
+        interpret: Option<String>,
+        conductor: Option<String>,
+        composer: Option<String>
     }
 }
 
@@ -31,9 +50,13 @@ pub enum Outgoing {
         answ: Vec<Track>,
         more: bool
     },
-    Track {
+    Track(Result<Track, ()>),
+    ClearBuffer,
+    AddTrack {
         data: Track
-    }
+    },
+    GetTrackData,
+    UpdateTrack(Result<String,()>)
 }
 
 #[derive(Serialize)]

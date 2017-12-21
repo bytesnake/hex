@@ -53,6 +53,11 @@ pub fn start() {
                                 let msg = state.process(msg).unwrap();
                                 Some(OwnedMessage::Text(msg))
                             },
+                            OwnedMessage::Binary(data) => {
+                                state.process_binary(&data);
+
+                                None
+                            },
                             _ => Some(m)
                         }
                     })

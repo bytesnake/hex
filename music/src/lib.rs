@@ -39,4 +39,20 @@ impl Collection {
 
         res
     }
+
+    pub fn add_track(&self, format: &str, data: &[u8]) -> database::Track {
+        let track = audio_file::AudioFile::new(data, format).unwrap().to_db().unwrap();
+
+        self.socket.insert_track(track.clone());
+
+        track
+    }
+
+    pub fn get_track(&self, key: &str) -> Result<database::Track, ()> {
+        self.socket.get_track(key).map_err(|_| ())
+    }
+
+    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String, ()> {
+        Ok(key.into())
+    }
 }

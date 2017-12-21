@@ -18,17 +18,13 @@ export default class Profile extends Component {
 		// start a timer for the clock:
 		this.timer = setInterval(this.updateTime, 1000);
 		this.updateTime();
+
+
         this.socket = new Protocol()
-            .then(socket => socket.search("test"))
-            .then(elms => {
-                for(let val of elms) {
-                    alert(val);
-                }
+            .then(async (socket) => {
+                for await (const elm of socket.search("A"))
+                    alert(elm.album);
             });
-            /*i.then((msg) => {
-                    alert(msg.id);
-            });*/
-            //});
 
 		// every time we get remounted, increment a counter:
 		this.setState({ count: this.state.count+1 });

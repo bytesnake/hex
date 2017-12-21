@@ -17,21 +17,22 @@ export default class Protocol {
         return this.send_msg(uuid, 'get_song', {'hash': hash});
     }
 
-    *search(query) {
+    async *search(query) {
         var uuid = guid();
 
         while(true) {
-            let answ = yield this.send_msg(uuid, 'query', {'query': query});
+            const answ = await this.send_msg(uuid, 'search', {'query': query});
 
-            for(var i in answ.result)
+            for(const i of answ.answ)
                 yield i;
 
-            if(answ.more == false)
+            if(!answ.more)
                 break;
+
         }
     }
 
-    send_msg(uuid, fn, payload) {
+    async send_msg(uuid, fn, payload) {
         var uuid = guid();
 
         var proto = {
@@ -45,11 +46,13 @@ export default class Protocol {
             self.socket.onmessage = function(e) {
                 var parsed = JSON.parse(e.data);
 
+                console.log("Got: " + e.data);
+
                 if(parsed.id == uuid) {
                     if(parsed.fn != fn)
                         reject("Wrong header!");
                     else
-                        resolv(parsed);
+                        resolv(parsed.payload);
                 }
             };
 
