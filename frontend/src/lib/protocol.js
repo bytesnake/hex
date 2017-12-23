@@ -1,14 +1,16 @@
 import { guid } from './uuid.js'
 
-export default class Protocol {
+class Protocol {
     constructor() {
         this.socket = new WebSocket('ws://localhost:2794', 'rust-websocket');
 
         var self = this;
-        return new Promise(function(resolve, reject) {
+        this.promise = new Promise(function(resolve, reject) {
             self.socket.onopen = () => resolve(self);
             self.socket.onerr = () => reject();
         });
+
+        return this;
     }
 
     get_song(hash) {
@@ -32,7 +34,7 @@ export default class Protocol {
         }
     }
 
-    async send_msg(uuid, fn, payload) {
+    send_msg(uuid, fn, payload) {
         var uuid = guid();
 
         var proto = {
@@ -41,9 +43,12 @@ export default class Protocol {
             'payload': payload
         };
 
+        var proto_str = JSON.stringify(proto);
+
         var self = this;
         var promise = new Promise(function(resolv, reject) {
-            self.socket.onmessage = function(e) {
+            //self.socket.onmessage = function(e) {
+            self.socket.addEventListener('message', function(e) {
                 var parsed = JSON.parse(e.data);
 
                 console.log("Got: " + e.data);
@@ -54,15 +59,21 @@ export default class Protocol {
                     else
                         resolv(parsed.payload);
                 }
-            };
+            });
 
-            var proto_str = JSON.stringify(proto);
-            console.log("Send: " + proto);
+            console.log("Send: " + proto_str);
 
-            self.socket.send(proto_str);
+            if(self.socket.readyState === WebSocket.OPEN)
+                self.socket.send(proto_str);
+            else 
+                self.socket.onopen = function() {
+                    self.socket.send(proto_str);
+                }
         });
 
 
         return promise;
     }
 }
+
+export default new Protocol();

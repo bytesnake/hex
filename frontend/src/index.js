@@ -22,4 +22,6 @@ if (module.hot) {
 	module.hot.accept('./components/app', () => requestAnimationFrame(init) );
 }
 
+require('preact/debug');
+
 init();

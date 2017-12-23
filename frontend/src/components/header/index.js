@@ -1,13 +1,11 @@
 import { h, Component } from 'preact';
-import { Link } from 'preact-router';
+import { Link, route } from 'preact-router';
 import style from './style.less';
 import {Layout, TextField} from 'preact-mdl';
+import Protocol from '../../lib/protocol.js';
 
 export default class Header extends Component {
-    onSearch = () => {
-   }
-
-	render() {
+	render(props) {
         return (
             <Layout.Header class={style.header}>
             <Layout.HeaderRow>
@@ -18,7 +16,7 @@ export default class Header extends Component {
 			<TextField
 				placeholder="Search"
 				type="search"
-				onSearch={this.onSearch}
+                onChange={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
 				style="background-color:#FFF; color:#000; padding:10px;"
 			/>
             </Layout.HeaderRow>

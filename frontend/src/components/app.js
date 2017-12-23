@@ -5,7 +5,7 @@ import { Button, Icon, Layout } from 'preact-mdl';
 import Header from './header';
 import Sidebar from './sidebar';
 import Home from './home';
-import Profile from './profile';
+import Search from './search';
 
 export default class App extends Component {
 	/** Gets fired when the route changes.
@@ -34,8 +34,7 @@ export default class App extends Component {
                     <Layout.Content>
                         <Router onChange={this.handleRoute}>
                             <Home path="/" />
-                            <Profile path="/profile/" user="me" />
-                            <Profile path="/profile/:user" />
+                            <Search path="/search/:query" />
                         </Router>
                     </Layout.Content>
                 </Layout>
