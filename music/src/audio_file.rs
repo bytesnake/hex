@@ -16,7 +16,7 @@ use hound::WavReader;
 
 pub struct AudioFile {
     key: String,
-    duration: u32,
+    duration: f64,
     opus_data: Vec<u8>,
     fingerprint: String
 }
@@ -35,6 +35,7 @@ impl AudioFile {
             .map_err(|x| Error::InvalidFile)?;
 
         let mut output = Command::new("ffmpeg")
+            .arg("-y")
             .arg("-i").arg(&file_name)
             .arg("-ar").arg("48000")
             .arg("/tmp/temp_music_new.wav")
@@ -61,14 +62,14 @@ impl AudioFile {
         // seconds
         let sample_rate = reader.spec().sample_rate as f64;
         let num_channel = reader.spec().channels;
-        let duration = reader.duration() / sample_rate as u32;
+        let duration = reader.duration() as f64 / sample_rate as f64;
 
         debug!("Open file {} ({} samples) with sample rate {} and {} channels", path, samples.len(),sample_rate, num_channel);
 
         AudioFile::from_raw_48k(samples, duration, num_channel)
     }
 
-    pub fn from_raw_48k(samples: Vec<i16>, duration: u32, num_channel: u16) -> Result<AudioFile> {
+    pub fn from_raw_48k(samples: Vec<i16>, duration: f64, num_channel: u16) -> Result<AudioFile> {
         // calculate the acousticid of the file
         let fingerprint = acousticid::get_hash(num_channel, &samples)?;
         let key = Uuid::new_v4();
@@ -124,6 +125,6 @@ impl AudioFile {
         file.write_all(&self.opus_data)
             .map_err(|_| Error::InvalidFile)?;
 
-        Ok(Track::empty(&self.key, &self.fingerprint))
+        Ok(Track::empty(&self.key, &self.fingerprint, self.duration))
     }
 }

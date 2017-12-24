@@ -45,18 +45,19 @@ pub fn start() {
                     stream
                     .take_while(|m| Ok(!m.is_close()))
                     .filter_map(move |m| {
-                        println!("Message from Client: {:?}", m);
                         match m {
                             OwnedMessage::Ping(p) => Some(OwnedMessage::Pong(p)),
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(msg) => {
                                 let msg = state.process(msg).unwrap();
+                                println!("Send: {}", msg);
+
                                 Some(OwnedMessage::Text(msg))
                             },
                             OwnedMessage::Binary(data) => {
                                 state.process_binary(&data);
 
-                                None
+                                Some(OwnedMessage::Text("{\"fn\": \"upload\"}".into()))
                             },
                             _ => Some(m)
                         }

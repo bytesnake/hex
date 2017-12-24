@@ -53,6 +53,12 @@ impl Collection {
     }
 
     pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String, ()> {
-        Ok(key.into())
+        self.socket.update_track(key, title, album, interpret, conductor, composer).map_err(|_| ())
+    }
+
+    pub fn get_suggestion(&self, key: &str) -> Result<String, ()> {
+        let track = self.socket.get_track(key).map_err(|_| ())?;
+
+        track.suggestion().map_err(|_| ())
     }
 }

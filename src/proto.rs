@@ -25,12 +25,16 @@ pub enum Incoming {
     },
     #[serde(rename="update_track")]
     UpdateTrack {
-        key: String,
+        update_key: String,
         title: Option<String>,
         album: Option<String>,
         interpret: Option<String>,
         conductor: Option<String>,
         composer: Option<String>
+    },
+    #[serde(rename="get_suggestion")]
+    GetSuggestion {
+        track_key: String
     }
 }
 
@@ -42,7 +46,7 @@ pub struct IncomingWrapper {
     pub payload: Incoming
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(untagged)]
 pub enum Outgoing {
     SearchResult {
@@ -53,10 +57,14 @@ pub enum Outgoing {
     Track(Result<Track, ()>),
     ClearBuffer,
     AddTrack {
-        data: Track
+        key: String
     },
     GetTrackData,
-    UpdateTrack(Result<String,()>)
+    UpdateTrack(Result<String,()>),
+    GetSuggestion {
+        key: String,
+        data: Result<String, ()>
+    }
 }
 
 #[derive(Serialize)]

@@ -5,6 +5,7 @@ use rusqlite::Statement;
 
 use music_search::SearchQuery;
 use audio_file::AudioFile;
+use acousticid;
 
 use std::{env, str};
 use std::fs::File;
@@ -19,14 +20,16 @@ pub struct Track {
     conductor: Option<String>,
     composer: Option<String>,
     fingerprint: String,
-    key: String
+    pub key: String,
+    duration: f64
 }
 
 impl Track {
-    pub fn empty(key: &str, fingerprint: &str) -> Track {
+    pub fn empty(key: &str, fingerprint: &str, duration: f64) -> Track {
         Track {
             key: key.into(),
             fingerprint: fingerprint.into(),
+            duration: duration,
             title: None,
             album: None,
             interpret: None,
@@ -35,16 +38,21 @@ impl Track {
         }
     }
 
-    pub fn new(key: &str, fingerprint: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Track {
+    pub fn new(key: &str, fingerprint: &str, duration: f64, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Track {
         Track {
             key: key.into(),
             fingerprint: fingerprint.into(),
+            duration: duration,
             title: title,
             album: album,
             interpret: interpret,
             conductor: conductor,
             composer: composer
         }
+    }
+
+    pub fn suggestion(&self) -> Result<String> {
+        acousticid::get_metadata(&self.fingerprint, self.duration as u32)
     }
 }
 
@@ -67,7 +75,7 @@ impl Connection {
             let query = query.to_sql_query();
 
             println!("Query: {}", query);
-            self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key FROM music WHERE {};", query)).unwrap()
+            self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration FROM music WHERE {};", query)).unwrap()
         }
     }
 
@@ -80,20 +88,41 @@ impl Connection {
                 fingerprint: row.get(3),
                 conductor: row.get(4),
                 composer: row.get(5),
-                key: row.get(6)
+                key: row.get(6),
+                duration: row.get(7)
             }
         }).unwrap().filter_map(|x| x.ok()).map(|x| x.clone())
     }
 
     pub fn insert_track(&self, track: Track) {
-        self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer) VALUES (?1, ?2, ?3, ?4, ?5, ?6)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer]).unwrap();
+        self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration]).unwrap();
     }
 
     pub fn get_track(&self, key: &str) -> Result<Track> {
-        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key FROM music WHERE Key = '{}'", key)).map_err(|_| Error::Internal)?;
+        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration FROM music WHERE Key = '{}'", key)).map_err(|_| Error::Internal)?;
         
         let res = self.search(&mut stmt).next().ok_or(Error::Internal);
 
         res
+    }
+    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String> {
+        if let Some(title) = title {
+            self.socket.execute("UPDATE music SET Title = ? WHERE Key = ?", &[&title, &key]).map_err(|_| Error::Internal)?;
+        }
+        if let Some(album) = album {
+            self.socket.execute("UPDATE music SET Album = ? WHERE Key = ?", &[&album, &key]).map_err(|_| Error::Internal)?;
+        }
+        if let Some(interpret) = interpret {
+            self.socket.execute("UPDATE music SET Interpret = ? WHERE Key = ?", &[&interpret, &key]).map_err(|_| Error::Internal)?;
+        }
+        if let Some(conductor) = conductor {
+            self.socket.execute("UPDATE music SET Conductor = ? WHERE Key = ?", &[&conductor, &key]).map_err(|_| Error::Internal)?;
+        }
+        if let Some(composer) = composer {
+            self.socket.execute("UPDATE music SET Composer = ? WHERE Key = ?", &[&composer, &key]).map_err(|_| Error::Internal)?;
+        }
+
+        return Ok(key.into());
+    
     }
 }

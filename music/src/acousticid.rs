@@ -58,7 +58,7 @@ pub struct Tracks(Vec<MusicEntity>);
             .map_err(|_| Error::Internal)?;
 
         let mut form = Form::new();
-        form.part("client").contents(b"XUyy3J95aA0").add().map_err(|_| Error::Internal)?;
+        form.part("client").contents(b"TbyclXn4zAg").add().map_err(|_| Error::Internal)?;
         form.part("fingerprint").contents(hash.as_bytes()).add().map_err(|_| Error::Internal)?;
         form.part("duration").contents(format!("{}", duration).as_bytes()).add().map_err(|_| Error::Internal)?;
         form.part("meta").contents(b"recordings releasegroups").add().map_err(|_| Error::Internal)?;
@@ -102,6 +102,9 @@ pub struct Tracks(Vec<MusicEntity>);
         /*let recs: Tracks = serde_json::from_value(v["results"].clone())
             .map_err(|_| Error::Parsing)?;
 */
+
+        println!("ADJSLDJSALK");
+
         Ok(serde_json::to_string(&v["results"]).unwrap())
     }
 

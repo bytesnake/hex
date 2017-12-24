@@ -6,6 +6,7 @@ import Header from './header';
 import Sidebar from './sidebar';
 import Home from './home';
 import Search from './search';
+import Upload from './upload';
 
 export default class App extends Component {
 	/** Gets fired when the route changes.
@@ -16,10 +17,6 @@ export default class App extends Component {
 		this.currentUrl = e.url;
 	};
 
-    handleFab = () => {
-		alert('Add a new song!');
-	};
-
 	render() {
 		return (
 			<div id="app">
@@ -27,16 +24,14 @@ export default class App extends Component {
                     <Header />
                     <Sidebar />
 
-                    <Button id="fab" fab colored onClick={this.handleFab}>
-                        <Icon icon="create" />
-                    </Button>
-
                     <Layout.Content>
                         <Router onChange={this.handleRoute}>
                             <Home path="/" />
                             <Search path="/search/:query" />
                         </Router>
+                        <Upload />
                     </Layout.Content>
+
                 </Layout>
 			</div>
 		);

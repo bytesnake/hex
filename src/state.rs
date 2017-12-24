@@ -32,6 +32,7 @@ impl State {
         let mut remove = false;
 
         println!("Got: {}", &msg);
+
         let payload = match packet.payload {
             proto::Incoming::GetTrack { key } => { 
                 proto::Outgoing::Track(self.collection.get_track(&key))
@@ -72,7 +73,7 @@ impl State {
                 let res = self.collection.add_track(&format, &self.buffer);
 
                 proto::Outgoing::AddTrack {
-                    data: res
+                    key: res.key
                 }
             },
 
@@ -82,8 +83,17 @@ impl State {
                 proto::Outgoing::GetTrackData
             },
             
-            proto::Incoming::UpdateTrack { key, title, album, interpret, conductor, composer } => {
-                proto::Outgoing::UpdateTrack(self.collection.update_track(&key, title, album, interpret, conductor, composer))
+            proto::Incoming::UpdateTrack { update_key, title, album, interpret, conductor, composer } => {
+                proto::Outgoing::UpdateTrack(self.collection.update_track(&update_key, title, album, interpret, conductor, composer))
+            },
+
+            proto::Incoming::GetSuggestion { track_key } => {
+                println!("Get suggestion: {}", track_key);
+
+                proto::Outgoing::GetSuggestion {
+                    key: track_key.clone(),
+                    data: self.collection.get_suggestion(&track_key)
+                }
             }
         };
 
@@ -92,11 +102,15 @@ impl State {
             self.reqs.remove(&packet.id);
         }
 
+        println!("Outgoing: {:?}", payload);
+
         // wrap the payload to a full packet and convert to a string
         payload.to_string(&packet.id, &packet.fnc)
     }
 
     pub fn process_binary(&mut self, data: &[u8]) {
+        println!("Got binary with length: {}", data.len());
+
         self.buffer.extend_from_slice(data);
     }
 }

@@ -19,6 +19,12 @@ class Protocol {
         return this.send_msg(uuid, 'get_song', {'hash': hash});
     }
 
+    update_track(track) {
+        var uuid = guid();
+
+        return this.send_msg(uuid, 'update_track', track);
+    }
+
     async *search(query) {
         var uuid = guid();
 
@@ -34,9 +40,37 @@ class Protocol {
         }
     }
 
-    send_msg(uuid, fn, payload) {
-        var uuid = guid();
+    async upload_files(files) {
+        var keys = [];
+        var self = this;
+        for(const file of files) {
+        //return Promise.all([].map.call(files, function(file) {
+            let uuid = guid();
 
+            let res = await self.send_msg(uuid, 'clear_buffer', null)
+            .then(() => self.send_binary(file[1]))
+            .then(() => self.send_msg(uuid, 'add_track', {'format': file[0]}));
+
+            keys.push(res);
+        }
+
+        return keys;
+        //}));
+    }
+
+    async get_suggestions(keys) {
+        var suggestions = [];
+        for(const key of keys) {
+            let uuid = guid();
+
+            let res = await this.send_msg(uuid, 'get_suggestion', {'track_key': key});
+            suggestions.push(res);
+        }
+
+        return suggestions;
+    }
+
+    send_msg(uuid, fn, payload) {
         var proto = {
             'id': uuid,
             'fn': fn,
@@ -59,7 +93,7 @@ class Protocol {
                     else
                         resolv(parsed.payload);
                 }
-            });
+            }, {once: true});
 
             console.log("Send: " + proto_str);
 
@@ -73,6 +107,34 @@ class Protocol {
 
 
         return promise;
+    }
+
+    send_binary(binary) {
+        var self = this;
+        var promise = new Promise(function(resolv, reject) {
+            //self.socket.onmessage = function(e) {
+            self.socket.addEventListener('message', function(e) {
+
+                var parsed = JSON.parse(e.data);
+
+                console.log("Got: " + e.data);
+
+                if(parsed.fn != 'upload')
+                    reject("Wrong header!");
+                else
+                    resolv();
+            }, {once: true});
+
+            if(self.socket.readyState === WebSocket.OPEN)
+                self.socket.send(binary);
+            else 
+                self.socket.onopen = function() {
+                    self.socket.send(binary);
+                }
+        });
+
+        return promise;
+        
     }
 }
 
