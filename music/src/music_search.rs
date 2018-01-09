@@ -27,7 +27,8 @@ impl Tag {
 
     pub fn to_sql_query(self) -> String {
         match self {
-            Tag::Any(x) | Tag::Title(x) => format!("Title LIKE '%{}%'", x),
+            Tag::Any(x) => format!("Title LIKE '%{}%' OR Album LIKE '%{}%' OR Interpret LIKE '%{}%' OR Conductor LIKE '%{}' OR Composer LIKE '%{}%'", x, x, x, x, x),
+            Tag::Title(x) => format!("Title LIKE '%{}%'", x),
             Tag::Album(x) => format!("Album LIKE '%{}%'", x),
             Tag::Interpret(x) => format!("Interpret LIKE '%{}%'", x),
             Tag::Conductor(x) => format!("Conductor LIKE '%{}%'", x),

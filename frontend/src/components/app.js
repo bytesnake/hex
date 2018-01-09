@@ -7,6 +7,7 @@ import Sidebar from './sidebar';
 import Home from './home';
 import Search from './search';
 import Upload from './upload';
+import MusicPlayer from './music_player';
 
 export default class App extends Component {
 	/** Gets fired when the route changes.
@@ -32,6 +33,7 @@ export default class App extends Component {
                         <Upload />
                     </Layout.Content>
 
+                    <MusicPlayer ref={ x => window.player = x } />
                 </Layout>
 			</div>
 		);

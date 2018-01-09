@@ -189,14 +189,15 @@ module.exports = {
 		Buffer: false,
 		__filename: false,
 		__dirname: false,
-		setImmediate: false
+		setImmediate: false,
+        fs: 'empty'
 	},
 
 	devtool: ENV==='production' ? 'cheap-module-eval-source-map' : 'cheap-module-eval-source-map',
 
 	devServer: {
 		port: process.env.PORT || 8080,
-		host: 'localhost',
+		host: '127.0.0.1',
 		publicPath: '/',
 		contentBase: './src',
 		historyApiFallback: true,

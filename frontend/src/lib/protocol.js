@@ -3,6 +3,7 @@ import { guid } from './uuid.js'
 class Protocol {
     constructor() {
         this.socket = new WebSocket('ws://localhost:2794', 'rust-websocket');
+        this.socket.binaryType = 'arraybuffer';
 
         var self = this;
         this.promise = new Promise(function(resolve, reject) {
@@ -23,6 +24,21 @@ class Protocol {
         var uuid = guid();
 
         return this.send_msg(uuid, 'update_track', track);
+    }
+
+    async *stream(uuid, track_key) {
+        while(true) {
+            const buf = await this.send_msg(uuid, 'stream_next', {'stream_key': track_key});
+
+            if(buf.length == 0)
+                break;
+            else
+                yield buf;
+        }
+    }
+
+    stream_seek(uuid, pos) {
+        return this.send_msg(uuid, 'stream_seek', {'pos': pos});
     }
 
     async *search(query) {
@@ -83,16 +99,22 @@ class Protocol {
         var promise = new Promise(function(resolv, reject) {
             //self.socket.onmessage = function(e) {
             self.socket.addEventListener('message', function(e) {
-                var parsed = JSON.parse(e.data);
+                console.log("Message type: " + e.type);
 
-                console.log("Got: " + e.data);
+                if(typeof e.data === "string") {
+                    var parsed = JSON.parse(e.data);
 
-                if(parsed.id == uuid) {
-                    if(parsed.fn != fn)
-                        reject("Wrong header!");
-                    else
-                        resolv(parsed.payload);
-                }
+                    console.log("Got: " + e.data);
+
+                    if(parsed.id == uuid) {
+                        if(parsed.fn != fn)
+                            reject("Wrong header!");
+                        else
+                            resolv(parsed.payload);
+                     }
+                } else
+                    resolv(new Uint8Array(e.data));
+
             }, {once: true});
 
             console.log("Send: " + proto_str);

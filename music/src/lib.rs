@@ -20,6 +20,12 @@ pub mod acousticid;
 pub mod audio_file;
 pub mod error;
 
+use std::env;
+use std::io::Read;
+use std::fs::File;
+
+use database::Track;
+
 pub struct Collection {
     socket: database::Connection
 }
@@ -60,5 +66,30 @@ impl Collection {
         let track = self.socket.get_track(key).map_err(|_| ())?;
 
         track.suggestion().map_err(|_| ())
+    }
+
+    /// Create a new stream with track
+    pub fn stream_start(&self, key: &str) -> Result<File, ()> {
+        let mut path = env::home_dir().ok_or(())?;
+        path.push(".music");
+        path.push(key);
+
+        File::open(path).map_err(|_| ())
+    }
+
+    /// Get the next opus package
+    pub fn stream_next(&self, file: &mut File) -> Vec<u8> {
+        let mut data = vec![0u8; 1024];
+
+        let nread = file.read(&mut data).unwrap();
+        data.truncate(nread);
+
+        data
+        
+    }
+
+    /// Goto in a certain position in the file
+    pub fn stream_seek(&self, pos: f64, track: &Track, file: &mut File) -> f64 {
+        0.0
     }
 }

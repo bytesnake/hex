@@ -1,13 +1,23 @@
+use std::fs::File;
 use std::collections::HashMap;
 use serde_json::{self, Value};
 
+use websocket::message::OwnedMessage;
+
 use hex_music::{self, database};
+use hex_music::database::Track;
+
 use proto;
 
 enum RequestState {
     Search {
         query: String,
         seek: usize
+    },
+
+    Stream {
+        file: File,
+        track: Track
     }
 }
 
@@ -26,10 +36,11 @@ impl State {
         }
     }
 
-    pub fn process(&mut self, msg: String) -> Result<String,()> {
+    pub fn process(&mut self, msg: String) -> Result<OwnedMessage,()> {
         let packet: proto::IncomingWrapper = serde_json::from_str(&msg).expect("Couldnt parse!");
     
         let mut remove = false;
+        let mut binary_data: Option<Vec<u8>> = None;
 
         println!("Got: {}", &msg);
 
@@ -63,6 +74,47 @@ impl State {
                     more: more
                 }
             },
+            proto::Incoming::StreamNext { stream_key } => {
+                let prior_state = self.reqs.entry(packet.id.clone())
+                    .or_insert(RequestState::Stream {
+                        file: self.collection.stream_start(&stream_key).unwrap(),
+                        track: self.collection.get_track(&stream_key).unwrap()
+                    });
+
+                let mut file = match prior_state {
+                    &mut RequestState::Stream { ref mut file, .. } => file,
+                    _ => panic!("blub")
+                };
+
+                let data = self.collection.stream_next(&mut file);
+
+                binary_data = Some(data);
+
+                proto::Outgoing::StreamNext
+            },
+
+            proto::Incoming::StreamSeek { pos } => {
+                let (mut file, track) = match self.reqs.get_mut(&packet.id).unwrap() {
+                    &mut RequestState::Stream { ref mut file, ref mut track } => (file, track),
+                    _ => panic!("blub")
+                };
+
+                if pos < 0.0 || pos > track.duration {
+                    panic!("blub");
+                }
+                
+                let pos = self.collection.stream_seek(pos, &track, &mut file);
+
+                proto::Outgoing::StreamSeek {
+                    pos: pos
+                }
+            },
+
+            proto::Incoming::StreamEnd => {
+                remove = true;
+
+                proto::Outgoing::StreamEnd
+            },
             proto::Incoming::ClearBuffer => {
                 self.buffer.clear();
 
@@ -77,12 +129,6 @@ impl State {
                 }
             },
 
-            proto::Incoming::GetTrackData { key } => {
-                //let data = self.collection.get_track_data(&key);
-
-                proto::Outgoing::GetTrackData
-            },
-            
             proto::Incoming::UpdateTrack { update_key, title, album, interpret, conductor, composer } => {
                 proto::Outgoing::UpdateTrack(self.collection.update_track(&update_key, title, album, interpret, conductor, composer))
             },
@@ -104,8 +150,12 @@ impl State {
 
         println!("Outgoing: {:?}", payload);
 
-        // wrap the payload to a full packet and convert to a string
-        payload.to_string(&packet.id, &packet.fnc)
+        if let Some(data) = binary_data {
+            Ok(OwnedMessage::Binary(data))
+        } else {
+            // wrap the payload to a full packet and convert to a string
+            payload.to_string(&packet.id, &packet.fnc).map(|x| OwnedMessage::Text(x))
+        }
     }
 
     pub fn process_binary(&mut self, data: &[u8]) {

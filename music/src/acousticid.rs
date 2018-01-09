@@ -58,7 +58,7 @@ pub struct Tracks(Vec<MusicEntity>);
             .map_err(|_| Error::Internal)?;
 
         let mut form = Form::new();
-        form.part("client").contents(b"TbyclXn4zAg").add().map_err(|_| Error::Internal)?;
+        form.part("client").contents(b"-BlPMqeOIA8").add().map_err(|_| Error::Internal)?;
         form.part("fingerprint").contents(hash.as_bytes()).add().map_err(|_| Error::Internal)?;
         form.part("duration").contents(format!("{}", duration).as_bytes()).add().map_err(|_| Error::Internal)?;
         form.part("meta").contents(b"recordings releasegroups").add().map_err(|_| Error::Internal)?;

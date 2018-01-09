@@ -19,9 +19,15 @@ pub enum Incoming {
     AddTrack {
         format: String
     },
-    #[serde(rename="get_track_data")]
-    GetTrackData {
-        key: String
+    #[serde(rename="stream_next")]
+    StreamNext {
+        stream_key: String
+    },
+    #[serde(rename="stream_end")]
+    StreamEnd,
+    #[serde(rename="stream_seek")]
+    StreamSeek {
+        pos: f64
     },
     #[serde(rename="update_track")]
     UpdateTrack {
@@ -59,7 +65,11 @@ pub enum Outgoing {
     AddTrack {
         key: String
     },
-    GetTrackData,
+    StreamNext,
+    StreamSeek {
+        pos: f64
+    },
+    StreamEnd,
     UpdateTrack(Result<String,()>),
     GetSuggestion {
         key: String,

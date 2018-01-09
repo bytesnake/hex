@@ -9,15 +9,17 @@ export default function suggestion_flatten(obj) {
                 if(recording.title && titles.indexOf(recording.title) == -1)
                     titles.push(recording.title);
 
-                for(var artist of recording.artists) {
-                    if(artist.name && artists.indexOf(artist.name) == -1)
-                        artists.push(artist.name);
-                }
+                if(recording.artists)
+                    for(var artist of recording.artists) {
+                        if(artist.name && artists.indexOf(artist.name) == -1)
+                            artists.push(artist.name);
+                    }
 
-                for(var group of recording.releasegroups) {
-                    if(group.title && albums.indexOf(group.title) == -1)
-                        albums.push(group.title);
-                }
+                if(recording.releasegroups)
+                    for(var group of recording.releasegroups) {
+                        if(group.title && albums.indexOf(group.title) == -1)
+                            albums.push(group.title);
+                    }
             }
     }
 

@@ -50,9 +50,9 @@ pub fn start() {
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(msg) => {
                                 let msg = state.process(msg).unwrap();
-                                println!("Send: {}", msg);
+                                //println!("Send: {}", msg);
 
-                                Some(OwnedMessage::Text(msg))
+                                Some(msg)
                             },
                             OwnedMessage::Binary(data) => {
                                 state.process_binary(&data);

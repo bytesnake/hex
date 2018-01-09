@@ -21,7 +21,9 @@ pub struct Track {
     composer: Option<String>,
     fingerprint: String,
     pub key: String,
-    duration: f64
+    pub duration: f64,
+    favs_count: u32,
+    channels: u32
 }
 
 impl Track {
@@ -34,11 +36,13 @@ impl Track {
             album: None,
             interpret: None,
             conductor: None,
-            composer: None
+            composer: None,
+            favs_count: 0,
+            channels: 2
         }
     }
 
-    pub fn new(key: &str, fingerprint: &str, duration: f64, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Track {
+    pub fn new(key: &str, fingerprint: &str, duration: f64, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>, favs_count: u32, channels: u32) -> Track {
         Track {
             key: key.into(),
             fingerprint: fingerprint.into(),
@@ -47,7 +51,9 @@ impl Track {
             album: album,
             interpret: interpret,
             conductor: conductor,
-            composer: composer
+            composer: composer,
+            favs_count: favs_count,
+            channels: channels
         }
     }
 
@@ -70,12 +76,12 @@ impl Connection {
 
     pub fn search_prep(&self, query: SearchQuery) -> Statement {
         if query.is_empty() {
-            self.socket.prepare("SELECT Title, Album, Interpret, Conductor, Composer, Key FROM music").unwrap()
+            self.socket.prepare("SELECT Title, Album, Interpret, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music").unwrap()
         } else {
             let query = query.to_sql_query();
 
             println!("Query: {}", query);
-            self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration FROM music WHERE {};", query)).unwrap()
+            self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE {};", query)).unwrap()
         }
     }
 
@@ -89,17 +95,19 @@ impl Connection {
                 conductor: row.get(4),
                 composer: row.get(5),
                 key: row.get(6),
-                duration: row.get(7)
+                duration: row.get(7),
+                favs_count: row.get(8),
+                channels: row.get(9)
             }
         }).unwrap().filter_map(|x| x.ok()).map(|x| x.clone())
     }
 
     pub fn insert_track(&self, track: Track) {
-        self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration]).unwrap();
+        self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration, FavsCount, Channels) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels]).unwrap();
     }
 
     pub fn get_track(&self, key: &str) -> Result<Track> {
-        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration FROM music WHERE Key = '{}'", key)).map_err(|_| Error::Internal)?;
+        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE Key = '{}'", key)).map_err(|_| Error::Internal)?;
         
         let res = self.search(&mut stmt).next().ok_or(Error::Internal);
 

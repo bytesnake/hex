@@ -16,7 +16,7 @@ export default class Header extends Component {
 			<TextField
 				placeholder="Search"
 				type="search"
-                onChange={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
+                onInput={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
 				style="background-color:#FFF; color:#000; padding:10px;"
 			/>
             </Layout.HeaderRow>
