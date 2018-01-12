@@ -23,6 +23,7 @@ pub mod error;
 use std::env;
 use std::io::Read;
 use std::fs::File;
+use std::mem;
 
 use database::Track;
 
@@ -79,10 +80,36 @@ impl Collection {
 
     /// Get the next opus package
     pub fn stream_next(&self, file: &mut File) -> Vec<u8> {
-        let mut data = vec![0u8; 1024];
+        let mut data = Vec::new();
 
-        let nread = file.read(&mut data).unwrap();
-        data.truncate(nread);
+        loop {
+            //let mut data = vec![0u8; 2400];
+            let mut len_buf = [0u8; 4];
+            let nlength = file.read(&mut len_buf).unwrap();
+
+            if nlength < 4 {
+                return data;
+            }
+
+            let len = unsafe { mem::transmute::<[u8; 4], u32>(len_buf).to_be() };
+
+            //println!("Read packet with length {}", len);
+
+            let mut tmp = vec![0; len as usize];
+
+
+            let nread = file.read(&mut tmp).unwrap();
+            //data.truncate(nread);
+
+            data.extend_from_slice(&len_buf);
+            data.extend_from_slice(&tmp[0..nread]);
+
+            //println!("Length: {}", data.len());
+
+            if data.len() > 2048 {
+                break;
+            }
+        }
 
         data
         

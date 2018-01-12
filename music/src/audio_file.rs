@@ -2,6 +2,7 @@ use std::fs::File;
 use std::process::Command;
 use std::path::Path;
 use std::io::Write;
+use std::mem;
 use uuid::Uuid;
 
 use error::{Result, Error};
@@ -88,13 +89,13 @@ impl AudioFile {
         };
             
         let mut opus_data: Vec<u8> = Vec::new();
-        let mut tmp = vec![0u8; 1024];
+        let mut tmp = vec![0u8; 4000];
 
         let mut encoder = opus::Encoder::new(48000, channel, Application::Audio)
             .map_err(|_| Error::Internal)?;
         
         for i in samples.chunks(1920) {
-            let nread = {
+            let nbytes = {
                 if i.len() < 1920 {
                     let mut filled_up_buf = vec![0i16; 1920];
                     filled_up_buf[0..i.len()].copy_from_slice(i);
@@ -107,8 +108,13 @@ impl AudioFile {
                 }
             };
 
-            info!("Opus frame size: {}", nread);
+            println!("Opus frame size: {}", nbytes);
 
+            tmp.truncate(nbytes);
+
+            let nbytes_raw: [u8; 4] = unsafe { mem::transmute((nbytes as u32).to_be()) };
+
+            opus_data.extend_from_slice(&nbytes_raw);
             opus_data.extend_from_slice(&tmp);
         }
 

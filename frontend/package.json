@@ -102,7 +102,8 @@
     "promise-polyfill": "^6.0.2",
     "proptypes": "^1.0.0",
     "react-autocomplete": "^1.7.2",
-    "serve": "^6.0.0"
+    "serve": "^6.0.0",
+    "wasm-loader": "^1.1.0"
   },
   "main": "webpack.config.babel.js",
   "directories": {

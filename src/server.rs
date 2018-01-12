@@ -13,7 +13,7 @@ pub fn start() {
 	let mut core = Core::new().unwrap();
 	let handle = core.handle();
 	// bind to the server
-	let server = Server::bind("127.0.0.1:2794", &handle).unwrap();
+	let server = Server::bind("192.168.1.11:2794", &handle).unwrap();
 
 	// time to build the server's future
 	// this will be a struct containing everything the server is going to do

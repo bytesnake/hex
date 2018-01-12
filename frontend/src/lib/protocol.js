@@ -2,7 +2,7 @@ import { guid } from './uuid.js'
 
 class Protocol {
     constructor() {
-        this.socket = new WebSocket('ws://localhost:2794', 'rust-websocket');
+        this.socket = new WebSocket('ws://192.168.1.11:2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
 
         var self = this;
@@ -99,12 +99,12 @@ class Protocol {
         var promise = new Promise(function(resolv, reject) {
             //self.socket.onmessage = function(e) {
             self.socket.addEventListener('message', function(e) {
-                console.log("Message type: " + e.type);
+                //console.log("Message type: " + e.type);
 
                 if(typeof e.data === "string") {
                     var parsed = JSON.parse(e.data);
 
-                    console.log("Got: " + e.data);
+                    //console.log("Got: " + e.data);
 
                     if(parsed.id == uuid) {
                         if(parsed.fn != fn)
@@ -117,7 +117,7 @@ class Protocol {
 
             }, {once: true});
 
-            console.log("Send: " + proto_str);
+            //console.log("Send: " + proto_str);
 
             if(self.socket.readyState === WebSocket.OPEN)
                 self.socket.send(proto_str);

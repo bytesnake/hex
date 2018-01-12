@@ -36,6 +36,10 @@ module.exports = {
 
 	module: {
 		rules: [
+            {
+                test: /\.wasm$/,
+                use: 'wasm-loader'
+            },
 			{
 				test: /\.jsx?$/,
 				exclude: path.resolve(__dirname, 'src'),
@@ -197,7 +201,7 @@ module.exports = {
 
 	devServer: {
 		port: process.env.PORT || 8080,
-		host: '127.0.0.1',
+		host: '192.168.1.11',
 		publicPath: '/',
 		contentBase: './src',
 		historyApiFallback: true,

@@ -18,6 +18,12 @@ export default class App extends Component {
 		this.currentUrl = e.url;
 	};
 
+    componentDidMount() {
+        setTimeout(function() {
+            window.player.play("5fc1d01ec41c440e90fc9dc880e38402");
+        }, 500);
+    }
+
 	render() {
 		return (
 			<div id="app">
