@@ -44,10 +44,9 @@ impl State {
         let mut remove = false;
         let mut binary_data: Option<Vec<u8>> = None;
 
-
-        let payload = match packet.payload {
+        let payload = match packet.msg {
             proto::Incoming::GetTrack { key } => { 
-                proto::Outgoing::Track(self.collection.get_track(&key))
+                ("get_track", proto::Outgoing::Track(self.collection.get_track(&key)))
             },
             proto::Incoming::Search { query } => {
                 let prior_state = self.reqs.entry(packet.id.clone())
@@ -69,17 +68,17 @@ impl State {
                 *seek += res.len() + 1;
 
                 // create a struct containing all results
-                proto::Outgoing::SearchResult {
+                ("search", proto::Outgoing::SearchResult {
                     query: query.clone(),
                     answ: res,
                     more: more
-                }
+                })
             },
-            proto::Incoming::StreamNext { stream_key } => {
+            proto::Incoming::StreamNext { key } => {
                 let prior_state = self.reqs.entry(packet.id.clone())
                     .or_insert(RequestState::Stream {
-                        file: self.collection.stream_start(&stream_key).unwrap(),
-                        track: self.collection.get_track(&stream_key).unwrap()
+                        file: self.collection.stream_start(&key).unwrap(),
+                        track: self.collection.get_track(&key).unwrap()
                     });
 
                 let mut file = match prior_state {
@@ -91,7 +90,7 @@ impl State {
 
                 binary_data = Some(data);
 
-                proto::Outgoing::StreamNext
+                ("stream_next", proto::Outgoing::StreamNext)
             },
 
             proto::Incoming::StreamSeek { pos } => {
@@ -106,41 +105,59 @@ impl State {
                 
                 let pos = self.collection.stream_seek(pos, &track, &mut file);
 
-                proto::Outgoing::StreamSeek {
+                ("stream_seek", proto::Outgoing::StreamSeek {
                     pos: pos
-                }
+                })
             },
 
             proto::Incoming::StreamEnd => {
                 remove = true;
 
-                proto::Outgoing::StreamEnd
+                ("stream_end", proto::Outgoing::StreamEnd)
             },
             proto::Incoming::ClearBuffer => {
                 self.buffer.clear();
 
-                proto::Outgoing::ClearBuffer
+                ("clear_buffer", proto::Outgoing::ClearBuffer)
             },
 
             proto::Incoming::AddTrack { format } => {
                 let res = self.collection.add_track(&format, &self.buffer);
 
-                proto::Outgoing::AddTrack {
+                ("add_track", proto::Outgoing::AddTrack {
                     key: res.key
-                }
+                })
             },
 
-            proto::Incoming::UpdateTrack { update_key, title, album, interpret, conductor, composer } => {
-                proto::Outgoing::UpdateTrack(self.collection.update_track(&update_key, title, album, interpret, conductor, composer))
+            proto::Incoming::UpdateTrack { key, title, album, interpret, conductor, composer } => {
+                ("update_track", 
+                    proto::Outgoing::UpdateTrack(self.collection.update_track(&key, title, album, interpret, conductor, composer))
+                )
             },
 
-            proto::Incoming::GetSuggestion { track_key } => {
-                println!("Get suggestion: {}", track_key);
+            proto::Incoming::GetSuggestion { key } => {
+                ("get_suggestion", proto::Outgoing::GetSuggestion {
+                    key: key.clone(),
+                    data: self.collection.get_suggestion(&key)
+                })
+            },
 
-                proto::Outgoing::GetSuggestion {
-                    key: track_key.clone(),
-                    data: self.collection.get_suggestion(&track_key)
-                }
+            proto::Incoming::AddPlaylist { name } => {
+                ("add_playlist", proto::Outgoing::AddPlaylist {
+                    key: "blub".into()
+                })
+            },
+
+            proto::Incoming::SetPlaylistImage { key } => {
+                ("set_playlist_image", proto::Outgoing::SetPlaylistImage)
+            },
+
+            proto::Incoming::AddToPlaylist { key } => {
+                ("add_to_playlist", proto::Outgoing::AddToPlaylist)
+            },
+
+            proto::Incoming::GetPlaylists => {
+                ("get_playlists", proto::Outgoing::GetPlaylists(self.collection.get_playlists()))
             }
         };
 
@@ -155,7 +172,7 @@ impl State {
             Ok(OwnedMessage::Binary(data))
         } else {
             // wrap the payload to a full packet and convert to a string
-            payload.to_string(&packet.id, &packet.fnc).map(|x| OwnedMessage::Text(x))
+            payload.1.to_string(&packet.id, payload.0).map(|x| OwnedMessage::Text(x))
         }
     }
 

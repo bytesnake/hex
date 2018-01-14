@@ -170,12 +170,7 @@ export default class Upload extends Component {
                     </div>
                 </div>
             );
-        } else
-            return (
-                    <Button id="fab" fab colored onClick={this.handleFab}>
-                        <Icon icon="create" />
-                    </Button>
-            );
+        }
 
                     
     }

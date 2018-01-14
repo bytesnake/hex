@@ -25,7 +25,7 @@ use std::io::Read;
 use std::fs::File;
 use std::mem;
 
-use database::Track;
+use database::{Playlist, Track};
 
 pub struct Collection {
     socket: database::Connection
@@ -118,5 +118,9 @@ impl Collection {
     /// Goto in a certain position in the file
     pub fn stream_seek(&self, pos: f64, track: &Track, file: &mut File) -> f64 {
         0.0
+    }
+
+    pub fn get_playlists(&self) -> Vec<Playlist> {
+        self.socket.get_playlists()
     }
 }

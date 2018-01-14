@@ -26,6 +26,14 @@ pub struct Track {
     channels: u32
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub struct Playlist {
+    pub key: String,
+    pub title: String,
+    desc: Option<String>,
+    count: u32
+}
+
 impl Track {
     pub fn empty(key: &str, fingerprint: &str, duration: f64) -> Track {
         Track {
@@ -100,6 +108,20 @@ impl Connection {
                 channels: row.get(9)
             }
         }).unwrap().filter_map(|x| x.ok()).map(|x| x.clone())
+    }
+
+    pub fn get_playlists(&self) -> Vec<Playlist> {
+        let mut tmp = self.socket.prepare("SELECT Key, Title, Desc, Count FROM Playlists").unwrap();
+        let res = tmp.query_map(&[], |row| {
+                Playlist {
+                    key: row.get(0),
+                    title: row.get(1),
+                    desc: row.get(2),
+                    count: row.get(3)
+                }
+            }).unwrap().filter_map(|x| x.ok()).collect();
+
+        res
     }
 
     pub fn insert_track(&self, track: Track) {

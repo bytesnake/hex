@@ -133,9 +133,14 @@ export default class Player {
 
     // clear the playlist
     clear() {
-        this.playlist.length = 0;
+        this.stop();
+
+        this.playlist = [];
         this.playlist_pos = 0;
         this.uuid = null;
+        this.time = 0.0;
+        this.buffer.length = 0;
+        this.nbytes = 0;
     }
 
     // add a new track to play
@@ -150,20 +155,23 @@ export default class Player {
     }
 
     play() {
-        if(this.uuid == null)
-            this.uuid = guid();
-
         if(this.playing)
             return;
 
-        this.playing = true;
+        if(this.uuid == null)
+            this.uuid = guid();
 
+        console.log("Play with uuid: " + this.uuid);
+
+        this.playing = true;
         this.processor.connect(this.audioContext.destination);
     }
 
     stop() {
+        if(!this.playing)
+            return;
+
         this.playing = false;
-        
         this.processor.disconnect(this.audioContext.destination);
     }
 

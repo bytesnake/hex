@@ -1,9 +1,8 @@
 use serde_json::{self, Value};
-use hex_music::database::Track;
+use hex_music::database::{Track, Playlist};
 
 #[derive(Deserialize)]
-//#[serde(tag = "fn", content="payload")]
-#[serde(untagged)]
+#[serde(tag = "fn")]
 pub enum Incoming {
     #[serde(rename="search")]
     Search {
@@ -21,7 +20,7 @@ pub enum Incoming {
     },
     #[serde(rename="stream_next")]
     StreamNext {
-        stream_key: String
+        key: String
     },
     #[serde(rename="stream_end")]
     StreamEnd,
@@ -31,7 +30,7 @@ pub enum Incoming {
     },
     #[serde(rename="update_track")]
     UpdateTrack {
-        update_key: String,
+        key: String,
         title: Option<String>,
         album: Option<String>,
         interpret: Option<String>,
@@ -40,16 +39,28 @@ pub enum Incoming {
     },
     #[serde(rename="get_suggestion")]
     GetSuggestion {
-        track_key: String
-    }
+        key: String
+    },
+    #[serde(rename="add_playlist")]
+    AddPlaylist {
+        name: String
+    },
+    #[serde(rename="set_playlist_image")]
+    SetPlaylistImage {
+        key: String
+    },
+    #[serde(rename="add_to_playlist")]
+    AddToPlaylist {
+        key: String
+    },
+    #[serde(rename="get_playlists")]
+    GetPlaylists
 }
 
 #[derive(Deserialize)]
 pub struct IncomingWrapper {
     pub id: String,
-    #[serde(rename="fn")]
-    pub fnc: String,
-    pub payload: Incoming
+    pub msg: Incoming
 }
 
 #[derive(Serialize, Debug)]
@@ -74,7 +85,13 @@ pub enum Outgoing {
     GetSuggestion {
         key: String,
         data: Result<String, ()>
-    }
+    },
+    AddPlaylist {
+        key: String
+    },
+    SetPlaylistImage,
+    AddToPlaylist,
+    GetPlaylists(Vec<Playlist>)
 }
 
 #[derive(Serialize)]

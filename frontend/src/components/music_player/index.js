@@ -15,7 +15,18 @@ export default class MusicPlayer extends Component {
     componentWillMount() {
         this.player = new Player(2);
 
-        setInterval(this.update_time.bind(this), 300);
+        this.update = setInterval(this.update_time.bind(this), 300);
+
+        console.log("MOUNT");
+    }
+
+    componentWillUmount() {
+        clearInterval(this.update);
+
+        this.player.stop();
+        this.player.clear();
+
+        console.log("UMOUNT");
     }
 
     play(key) {
@@ -25,10 +36,6 @@ export default class MusicPlayer extends Component {
 
             this.setState({is_playing: true, track: x});
         });
-    }
-
-    stop() {
-        this.player.stop();
     }
 
     play_click(e) {
@@ -79,7 +86,7 @@ export default class MusicPlayer extends Component {
                     <div class={sbottom.music_player_right}>
                         {track != undefined &&
                             <div>
-                                {track.duration}
+                                {Math.round(track.duration)}s
                             </div>
                         }
                         <Icon style="font-size: 30px; " icon="queue music" />

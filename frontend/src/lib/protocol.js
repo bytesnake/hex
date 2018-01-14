@@ -2,7 +2,7 @@ import { guid } from './uuid.js'
 
 class Protocol {
     constructor() {
-        this.socket = new WebSocket('ws://192.168.1.11:2794', 'rust-websocket');
+        this.socket = new WebSocket('ws://127.0.0.1:2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
 
         var self = this;
@@ -26,9 +26,15 @@ class Protocol {
         return this.send_msg(uuid, 'update_track', track);
     }
 
+    get_playlists() {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'get_playlists', {});
+    }
+
     async *stream(uuid, track_key) {
         while(true) {
-            const buf = await this.send_msg(uuid, 'stream_next', {'stream_key': track_key});
+            const buf = await this.send_msg(uuid, 'stream_next', {'key': track_key});
 
             if(buf.length == 0)
                 break;
@@ -79,18 +85,19 @@ class Protocol {
         for(const key of keys) {
             let uuid = guid();
 
-            let res = await this.send_msg(uuid, 'get_suggestion', {'track_key': key});
+            let res = await this.send_msg(uuid, 'get_suggestion', {'key': key});
             suggestions.push(res);
         }
 
         return suggestions;
     }
 
-    send_msg(uuid, fn, payload) {
+    send_msg(uuid, fn, msg) {
+        msg['fn'] = fn;
+
         var proto = {
             'id': uuid,
-            'fn': fn,
-            'payload': payload
+            'msg': msg
         };
 
         var proto_str = JSON.stringify(proto);
@@ -104,7 +111,7 @@ class Protocol {
                 if(typeof e.data === "string") {
                     var parsed = JSON.parse(e.data);
 
-                    //console.log("Got: " + e.data);
+                    console.log("Got: " + e.data);
 
                     if(parsed.id == uuid) {
                         if(parsed.fn != fn)

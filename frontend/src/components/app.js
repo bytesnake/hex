@@ -8,6 +8,7 @@ import Home from './home';
 import Search from './search';
 import Upload from './upload';
 import MusicPlayer from './music_player';
+import Playlist from './playlist';
 
 export default class App extends Component {
 	/** Gets fired when the route changes.
@@ -19,24 +20,27 @@ export default class App extends Component {
 	};
 
     componentDidMount() {
-        setTimeout(function() {
-            window.player.play("5fc1d01ec41c440e90fc9dc880e38402");
-        }, 500);
+        //setTimeout(function() {
+        //    window.player.play("5fc1d01ec41c440e90fc9dc880e38402");
+        //}, 500);
+
+        this.header.props.upload = this.upload;
     }
 
 	render() {
 		return (
 			<div id="app">
-                <Layout fixed-header fixed-drawer>
-                    <Header />
+                <Layout fixed-header>
+                    <Header ref={ x => this.header = x} />
                     <Sidebar />
 
                     <Layout.Content>
                         <Router onChange={this.handleRoute}>
                             <Home path="/" />
                             <Search path="/search/:query" />
+                            <Playlist path="/playlist/:key" />
                         </Router>
-                        <Upload />
+                        <Upload ref={x => this.upload = x} />
                         <MusicPlayer ref={ x => window.player = x } />
                     </Layout.Content>
 
