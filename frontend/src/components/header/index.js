@@ -10,7 +10,7 @@ export default class Header extends Component {
             <Layout.Header class={style.header}>
             <Layout.HeaderRow>
 			<Layout.Title>
-				<a href="/">Hex music</a>
+				<a href="/">Music</a>
 			</Layout.Title>
 			<Layout.Spacer />
 			<TextField

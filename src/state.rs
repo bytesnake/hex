@@ -37,12 +37,13 @@ impl State {
     }
 
     pub fn process(&mut self, msg: String) -> Result<OwnedMessage,()> {
-        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).expect("Couldnt parse!");
+        println!("Got: {}", &msg);
+
+        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).map_err(|_| ())?;
     
         let mut remove = false;
         let mut binary_data: Option<Vec<u8>> = None;
 
-        println!("Got: {}", &msg);
 
         let payload = match packet.payload {
             proto::Incoming::GetTrack { key } => { 

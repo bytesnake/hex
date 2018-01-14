@@ -1,5 +1,6 @@
 import {h, Component} from 'preact';
 import style from './style.less';
+import PlayButton from '../play_button';
 
 export default class Track extends Component {
     state = {
@@ -10,7 +11,7 @@ export default class Track extends Component {
         this.setState({ minimal: !this.state.minimal });
     }
 
-    render({title, album, interpret, conductor, composer}, {minimal}) {
+    render({track_key, title, album, interpret, conductor, composer}, {minimal}) {
         if(minimal)
             return (
                 <tr onClick={this.onClick}>
@@ -50,6 +51,7 @@ export default class Track extends Component {
                             </table>
                         </div>
                         <div class={style.playlists}>Playlists</div>
+                        <PlayButton track_key={track_key} />
                     </td>
                 </tr>
             );

@@ -14,10 +14,10 @@ class Protocol {
         return this;
     }
 
-    get_song(hash) {
+    get_track(key) {
         var uuid = guid();
 
-        return this.send_msg(uuid, 'get_song', {'hash': hash});
+        return this.send_msg(uuid, 'get_track', {'key': key});
     }
 
     update_track(track) {
@@ -109,15 +109,21 @@ class Protocol {
                     if(parsed.id == uuid) {
                         if(parsed.fn != fn)
                             reject("Wrong header!");
-                        else
-                            resolv(parsed.payload);
+                        else {
+                            if('Ok' in parsed.payload)
+                                resolv(parsed.payload.Ok);
+                            else if('Err' in parsed.payload)
+                                reject("Got error: " + parsed.payload.Err);
+                            else
+                                resolv(parsed.payload);
+                        }
                      }
                 } else
                     resolv(new Uint8Array(e.data));
 
             }, {once: true});
 
-            //console.log("Send: " + proto_str);
+            console.log("Send: " + proto_str);
 
             if(self.socket.readyState === WebSocket.OPEN)
                 self.socket.send(proto_str);

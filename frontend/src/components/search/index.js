@@ -51,7 +51,7 @@ export default class Profile extends Component {
                         </tr>
 
                         { tracks.map( x => (
-                            <Track minimal {...x} />
+                            <Track minimal track_key={x.key} {...x} />
                         )) }
                     </table>
                 </div>

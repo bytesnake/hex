@@ -1,151 +1,92 @@
 import {h, Component} from 'preact';
-import Decoder from '../../lib/opus/decoder.js';
-import Protocol from '../../lib/protocol.js';
-import {guid} from '../../lib/uuid.js';
+import {Icon, Button} from 'preact-mdl';
+import Player from '../../lib/player.js';
+import sbottom from './style_bottom.less';
 
 const BUFFER_SIZE = 8192*2;
 const BUFFER_FILL = 4;
 
 export default class MusicPlayer extends Component {
     state = {
-        uuid: null,
-        key: null,
-        proto_id: null
+        is_playing: false,
+        track: null
     };
     
-    process(e) {
-        let ouBuf = e.outputBuffer;
-        
-        const buf = this.buffer.shift();
+    componentWillMount() {
+        this.player = new Player(2);
 
-        if(buf == undefined)
+        setInterval(this.update_time.bind(this), 300);
+    }
+
+    play(key) {
+        this.player.clear();
+        this.player.add_track(key).then(x => {
+            this.player.play();
+
+            this.setState({is_playing: true, track: x});
+        });
+    }
+
+    stop() {
+        this.player.stop();
+    }
+
+    play_click(e) {
+        if(this.state.is_playing) {
+            this.player.stop();
+            this.setState({is_playing: false });
+        } else {
+            this.player.play();
+            this.setState({is_playing: true });
+        }
+    }
+
+    update_time() {
+        if(this.timer == null)
             return;
 
-        for(let channel = 0; channel < ouBuf.numberOfChannels; channel++) {
-            const buf_channel = buf[channel];
-            let out = ouBuf.getChannelData(channel);
+        let inner = this.timer.children[0];
+        let knob = inner.children[0];
 
-            for(let sample = 0; sample < BUFFER_SIZE; sample++)
-                out[sample] = buf_channel[sample];
-        }
+        const time = this.player.time_percentage();
 
-        this.fill_buffer();
+        inner.style.width = time * this.timer.offsetWidth + "px";
+        knob.style.left = time * this.timer.offsetWidth + "px";
     }
 
-    async fill_buffer() {
-        if(this.buffer.length >= BUFFER_FILL)
-            return;
+    render({}, {is_playing, track}) {
+        let play_pause = null;
+        if(!is_playing)
+            play_pause = <Icon style="font-size: 4vw;" icon="play circle outline" onClick={this.play_click.bind(this)} onMouseOver={e => e.target.innerHTML = "play_circle_filled"} onMouseLeave={e => e.target.innerHTML = "play_circle_outline"} />;
+        else
+            play_pause = <Icon style="font-size: 4vw;" icon="pause circle outline" onClick={this.play_click.bind(this)} onMouseOver={e => e.target.innerHTML = "pause_circle_filled"} onMouseLeave={e => e.target.innerHTML = "pause_circle_outline"} />;
 
-        let rem = BUFFER_FILL - this.buffer.length;
+        let track_name = "Unbekannt";
+        if(track && track.title)
+            track_name = track.title;
 
-        // create a new array in the case there was no yet
-        if(this.tArr == null) {
-            this.nbytes = 0;
-            this.tArr = [];
-            for(let i = 0; i < this.numChannel; i++)
-                this.tArr.push(new Float32Array(BUFFER_SIZE));
-        }
-
-
-        for await (const buf_raw of Protocol.stream(this.state.uuid, this.state.key)) {
-            let buf;
-            try {
-                buf = this.decoder.decode(buf_raw);
-            } catch(e) {
-                console.error("Couldn't parse opus packet: " + e);
-            }
-
-            // TODO: more than two channels
-            // number of bytes written in a temporary buffer
-            const nbytes = this.nbytes;
-            const nbuf = buf.length / 2;
-
-            const length = Math.min(BUFFER_SIZE, nbytes + nbuf);
-
-            // the values are interleaved, therefore copy in each step both two the channels
-            for(var i=0; i < length - nbytes; i++) {
-                this.tArr[0][nbytes+i] = buf[i*2];
-                this.tArr[1][nbytes+i] = buf[i*2+1];
-            }
-
-
-            // push a finished buffer and prepare for the next session
-            if(nbytes + nbuf >= BUFFER_SIZE) {
-                rem --;
-                this.buffer.push([this.tArr[0], this.tArr[1]]);
-
-                this.tArr.length = 0;
-
-                for(let i = 0; i < this.numChannel; i++)
-                    this.tArr[i] = new Float32Array(BUFFER_SIZE);
-
-                // remaining samples for a single channel
-                const more = nbytes + nbuf - BUFFER_SIZE;
-
-                // initialize the buffer with the remaining data
-                for(let i=0; i < more; i++) {
-                    this.tArr[0][i] = buf[2*(nbuf - more + i)];
-                    this.tArr[1][i] = buf[2*(nbuf - more + i) + 1];
-                }
-
-                this.nbytes = more;
-            } else
-                this.nbytes = length;
-
-            if(rem == 0)
-                break;
-        }
-
-    }
-
-    async componentDidMount() {
-        try {
-            this.audioContext = new AudioContext();
-            this.processor = this.audioContext.createScriptProcessor(BUFFER_SIZE, 2, 2);
-            this.source = this.audioContext.createBufferSource(2, 2*48000, 48000);
-
-            this.processor.onaudioprocess = this.process.bind(this);
-        } catch(e) {
-            throw new Error("Web Audio API is not supported: " + e);
-        }
-
-        this.buffer = [];
-
-        // TODO: wait until module loaded, not an arbitrary timespan
-        let self = this;
-        try {
-            setTimeout(function() {
-                self.decoder = new Decoder(2);
-            }, 500);
-
-        } catch(e) {
-            console.error("Couldn't create the decoder: " + e);
-        }
-    }
-
-    async play(key) {
-        if(this.state.key != null) {
-            Protocol.stream_end(this.state.uuid);
-            this.buffer.length = 0;
-        }
-
-        const uuid = guid();
-        this.stream = Protocol.stream(uuid, key);
-        this.numChannel = 2;
-
-        this.setState({ uuid: uuid, key: key, stream: this.stream });
-
-        await this.fill_buffer();
-
-        this.source.connect(this.processor);
-        this.processor.connect(this.audioContext.destination);
-        this.source.start();
-
-    }
-
-    render({}, {}) {
         return (
-            <div></div>
+            <div class={sbottom.outer}>
+            <div class={sbottom.music_player}>
+                <div class={sbottom.progress_bar} ref={x => this.timer = x}><div class={sbottom.progress_bar_inner}><div class={sbottom.round_button} /></div></div>
+                <div class={sbottom.music_player_inner}>
+                    <div class={sbottom.music_player_left}>{track_name}</div>
+                    <div class={sbottom.music_player_center}>
+                        <Icon style="font-size: 2.5vw;" icon="skip previous" onClick={this.player.next} />
+                        {play_pause}
+                        <Icon style="font-size: 2.5vw;" icon="skip next" onClick={this.player.prev}/>
+                    </div>
+                    <div class={sbottom.music_player_right}>
+                        {track != undefined &&
+                            <div>
+                                {track.duration}
+                            </div>
+                        }
+                        <Icon style="font-size: 30px; " icon="queue music" />
+                    </div>
+                </div>
+            </div>
+            </div>
         );
     }
 }

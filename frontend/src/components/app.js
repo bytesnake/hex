@@ -37,9 +37,9 @@ export default class App extends Component {
                             <Search path="/search/:query" />
                         </Router>
                         <Upload />
+                        <MusicPlayer ref={ x => window.player = x } />
                     </Layout.Content>
 
-                    <MusicPlayer ref={ x => window.player = x } />
                 </Layout>
 			</div>
 		);
