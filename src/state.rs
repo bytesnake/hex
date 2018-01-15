@@ -143,9 +143,7 @@ impl State {
             },
 
             proto::Incoming::AddPlaylist { name } => {
-                ("add_playlist", proto::Outgoing::AddPlaylist {
-                    key: "blub".into()
-                })
+                ("add_playlist", proto::Outgoing::AddPlaylist(self.collection.add_playlist(&name)))
             },
 
             proto::Incoming::SetPlaylistImage { key } => {

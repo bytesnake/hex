@@ -123,4 +123,8 @@ impl Collection {
     pub fn get_playlists(&self) -> Vec<Playlist> {
         self.socket.get_playlists()
     }
+
+    pub fn add_playlist(&self, name: &str) -> Playlist {
+        self.socket.add_playlist(name)
+    }
 }

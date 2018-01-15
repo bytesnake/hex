@@ -12,6 +12,8 @@ use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 
+use uuid::Uuid;
+
 #[derive(Serialize, Clone, Debug)]
 pub struct Track {
     title: Option<String>,
@@ -122,6 +124,19 @@ impl Connection {
             }).unwrap().filter_map(|x| x.ok()).collect();
 
         res
+    }
+
+    pub fn add_playlist(&self, title: &str) -> Playlist {
+        let key = Uuid::new_v4().simple().to_string();
+
+        self.socket.execute("INSERT INTO playlists (key, title, count) VALUES (?1, ?2, ?3)", &[&key, &title, &0]).unwrap();
+
+        Playlist {
+            key: key,
+            title: title.into(),
+            desc: None,
+            count: 0
+        }
     }
 
     pub fn insert_track(&self, track: Track) {

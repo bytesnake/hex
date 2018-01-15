@@ -86,9 +86,7 @@ pub enum Outgoing {
         key: String,
         data: Result<String, ()>
     },
-    AddPlaylist {
-        key: String
-    },
+    AddPlaylist(Playlist),
     SetPlaylistImage,
     AddToPlaylist,
     GetPlaylists(Vec<Playlist>)
