@@ -2,8 +2,9 @@ import { h, Component } from 'preact';
 import style from './style.less';
 import Protocol from '../../lib/protocol.js';
 import { Card } from 'preact-mdl';
-import Track from '../track';
+import TrackList from '../tracklist';
 
+// TODO advanced search method
 // gets called when this route is navigated to
 async function search(query) {
     var tracks = [];
@@ -32,28 +33,12 @@ export default class Profile extends Component {
         this.update(props);
     }
 
-	// gets called just before navigating away from the route
-	componentWillUnmount() {
-	}
-
 	// Note: `user` comes from the URL, courtesy of our router
 	render({}, { query, updating, tracks }) {
         if(tracks && tracks.length > 0) {
             return (
                 <div class={style.search}>
-                    <table>
-                        <tr>
-                            <th>Title</th>
-                            <th>Album</th>
-                            <th>Interpret</th>
-                            <th>Conductor</th>
-                            <th>Composer</th>
-                        </tr>
-
-                        { tracks.map( x => (
-                            <Track minimal track_key={x.key} {...x} />
-                        )) }
-                    </table>
+                    <TrackList tracks={tracks} />
                 </div>
             );
         } else {

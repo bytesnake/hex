@@ -38,7 +38,7 @@ export default class App extends Component {
                         <Router onChange={this.handleRoute}>
                             <Home path="/" />
                             <Search path="/search/:query" />
-                            <Playlist path="/playlist/:key" />
+                            <Playlist path="/playlist/:playlist" />
                         </Router>
                         <Upload ref={x => this.upload = x} />
                         <MusicPlayer ref={ x => window.player = x } />

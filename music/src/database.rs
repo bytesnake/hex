@@ -126,6 +126,21 @@ impl Connection {
         res
     }
 
+    pub fn get_playlist_tracks(&self, key: &str) -> Vec<Track> {
+        let mut stmt = self.socket.prepare("SELECT tracks FROM Playlists WHERE key=?;").unwrap();
+        let mut rows = stmt.query(&[&key]).unwrap();;
+
+        let keys: String = rows.next().unwrap().unwrap().get(0);
+
+        println!("Got keys: {}", keys);
+
+        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys)).unwrap();
+
+        let res = self.search(&mut stmt).collect();
+
+        res
+    }
+
     pub fn add_playlist(&self, title: &str) -> Playlist {
         let key = Uuid::new_v4().simple().to_string();
 
