@@ -15,7 +15,7 @@ async function search(query) {
     return tracks;
 }
 
-export default class Profile extends Component {
+export default class Search extends Component {
     update = (props) => {
         if(this.state.query != props.query) {
             this.setState({ query: props.query, updating: true });
@@ -37,9 +37,7 @@ export default class Profile extends Component {
 	render({}, { query, updating, tracks }) {
         if(tracks && tracks.length > 0) {
             return (
-                <div class={style.search}>
-                    <TrackList tracks={tracks} />
-                </div>
+                <TrackList tracks={tracks} />
             );
         } else {
             return (

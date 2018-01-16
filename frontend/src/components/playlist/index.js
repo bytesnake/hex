@@ -1,17 +1,11 @@
 import {h, Component} from 'preact';
+import {Icon} from 'preact-mdl';
 import style from './style.less';
 import TrackList from '../tracklist';
 import Protocol from '../../lib/protocol.js';
 
 export default class Playlist extends Component {
-    state = {
-        playlist: null,
-        updating: false,
-    };
-
-    update(props) {
-        console.log("Update: " + props);
-
+    update = (props) => {
         if(this.state.pl_key != props.pl_key) {
             this.setState({pl_key: props.pl_key, updating: true});
 
@@ -21,7 +15,10 @@ export default class Playlist extends Component {
         }
     }
 
-    componentDidMount() {
+    shouldComponentUpdate() {
+		return true;
+	}
+    componentWillMount() {
         this.update(this.props);
     }
 
@@ -30,15 +27,19 @@ export default class Playlist extends Component {
     }
 
     render({}, {pl_key, playlist, updating}) {
-        console.log(playlist);
-
-        if(playlist) {
+        if(!updating && playlist) {
             const header = playlist[0];
             const tracks = playlist[1];
 
             return (
                 <div class={style.playlist}>
-                    <div class={style.header}></div>
+                    <div class={style.header}>
+                        <Icon icon="queue music" />
+                        <div class={style.header_text}>
+                            <b>{header.title}</b>
+                            <i>{header.desc}</i>
+                        </div>
+                    </div>
                     <div class={style.tracks}>
                         {tracks && tracks.length > 0 && (
                             <TrackList tracks={tracks} />
@@ -46,13 +47,11 @@ export default class Playlist extends Component {
                     </div>
                 </div>
             );
-        } else {
-
-            return (
-                <div class={style.playlist}>
-                    Loading ...
-                </div>
-            );
         }
+        return (
+            <div class={style.playlist}>
+                Loading ...
+            </div>
+        );
     }
 }

@@ -117,15 +117,16 @@ class Protocol {
         var self = this;
         var promise = new Promise(function(resolv, reject) {
             //self.socket.onmessage = function(e) {
-            self.socket.addEventListener('message', function(e) {
-                //console.log("Message type: " + e.type);
+            self.socket.addEventListener('message', function listener(e) {
 
                 if(typeof e.data === "string") {
                     var parsed = JSON.parse(e.data);
 
-                    console.log("Got: " + e.data);
-
                     if(parsed.id == uuid) {
+                        console.log("Got: " + e.data);
+
+                        // remove listener
+                        self.socket.removeEventListener('message', listener);
                         if(parsed.fn != fn)
                             reject("Wrong header!");
                         else {
@@ -140,16 +141,20 @@ class Protocol {
                 } else
                     resolv(new Uint8Array(e.data));
 
-            }, {once: true});
+            });
 
             console.log("Send: " + proto_str);
 
             if(self.socket.readyState === WebSocket.OPEN)
                 self.socket.send(proto_str);
             else 
+                self.socket.addEventListener('open', function() {
+                    self.socket.send(proto_str);
+                }, {once: true});
+                /*
                 self.socket.onopen = function() {
                     self.socket.send(proto_str);
-                }
+                }*/
         });
 
 

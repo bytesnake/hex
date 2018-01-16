@@ -12,6 +12,12 @@ export default class Track extends Component {
     }
 
     render({track_key, title, album, interpret, conductor, composer}, {minimal}) {
+        if(!title) title = "Unbekannt";
+        if(!album) album = "Unbekannt";
+        if(!interpret) interpret = "Unbekannt";
+        if(!conductor) conductor = "Unbekannt";
+        if(!composer) composer = "Unbekannt";
+
         if(minimal)
             return (
                 <tr onClick={this.onClick}>

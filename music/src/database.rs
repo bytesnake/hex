@@ -143,7 +143,10 @@ impl Connection {
         println!("Got keys: {:?}", keys);
 
         if let Some(keys) = keys {
-            let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys)).unwrap();
+            let query = format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys.split(",").map(|row| { format!("'{}'", row) }).collect::<Vec<String>>().join(","));
+            println!("{}", query);
+
+            let mut stmt = self.socket.prepare(&query).unwrap();
 
             let res = self.search(&mut stmt).collect();
 

@@ -14,6 +14,9 @@ export default class Sidebar extends Component {
 	}
 
 	hide = () => {
+        console.log("Close");
+
+        console.log(this.base.classList);
 		this.base.classList.remove('is-visible');
 	};
 
