@@ -55,8 +55,8 @@ pub enum Incoming {
     },
     #[serde(rename="get_playlists")]
     GetPlaylists,
-    #[serde(rename="get_playlist_tracks")]
-    GetPlaylistTracks {
+    #[serde(rename="get_playlist")]
+    GetPlaylist {
         key: String
     }
 }
@@ -94,7 +94,7 @@ pub enum Outgoing {
     SetPlaylistImage,
     AddToPlaylist,
     GetPlaylists(Vec<Playlist>),
-    GetPlaylistTracks(Vec<Track>)
+    GetPlaylist((Playlist,Vec<Track>))
 }
 
 #[derive(Serialize)]

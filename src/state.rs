@@ -158,8 +158,8 @@ impl State {
                 ("get_playlists", proto::Outgoing::GetPlaylists(self.collection.get_playlists()))
             }
 
-            proto::Incoming::GetPlaylistTracks { key }=> {
-                ("get_playlist_tracks", proto::Outgoing::GetPlaylistTracks(self.collection.get_playlist_tracks(&key)))
+            proto::Incoming::GetPlaylist { key }=> {
+                ("get_playlist", proto::Outgoing::GetPlaylist(self.collection.get_playlist(&key)))
             }
         };
 

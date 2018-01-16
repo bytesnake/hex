@@ -126,19 +126,31 @@ impl Connection {
         res
     }
 
-    pub fn get_playlist_tracks(&self, key: &str) -> Vec<Track> {
-        let mut stmt = self.socket.prepare("SELECT tracks FROM Playlists WHERE key=?;").unwrap();
-        let mut rows = stmt.query(&[&key]).unwrap();;
+    pub fn get_playlist(&self, key: &str) -> (Playlist, Vec<Track>) {
+        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count, tracks FROM Playlists WHERE key=?;").unwrap();
+        let mut rows = stmt.query(&[&key]).unwrap();
+        let row = rows.next().unwrap().unwrap();
 
-        let keys: String = rows.next().unwrap().unwrap().get(0);
+        let playlist = Playlist {
+            key: row.get(0),
+            title: row.get(1),
+            desc: row.get(2),
+            count: row.get(3)
+        };
 
-        println!("Got keys: {}", keys);
+        let keys: Option<String> = row.get(4);
 
-        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys)).unwrap();
+        println!("Got keys: {:?}", keys);
 
-        let res = self.search(&mut stmt).collect();
+        if let Some(keys) = keys {
+            let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys)).unwrap();
 
-        res
+            let res = self.search(&mut stmt).collect();
+
+            (playlist, res)
+        } else {
+            (playlist, Vec::new())
+        }
     }
 
     pub fn add_playlist(&self, title: &str) -> Playlist {

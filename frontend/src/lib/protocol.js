@@ -38,10 +38,10 @@ class Protocol {
         return this.send_msg(uuid, 'add_playlist', {'name': name});
     }
 
-    get_playlist_tracks(key) {
+    get_playlist(key) {
         const uuid = guid();
 
-        return this.send_msg(uuid, 'get_playlist_tracks', {'key': key});
+        return this.send_msg(uuid, 'get_playlist', {'key': key});
     }
 
     async *stream(uuid, track_key) {

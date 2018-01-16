@@ -4,3 +4,5 @@
 /music/Cargo.lock
 **/*.rs.bk
 /Cargo.lock
+*.swp
+*.swo

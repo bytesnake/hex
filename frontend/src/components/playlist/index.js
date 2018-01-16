@@ -7,17 +7,16 @@ export default class Playlist extends Component {
     state = {
         playlist: null,
         updating: false,
-        tracks: null
     };
 
     update(props) {
         console.log("Update: " + props);
 
-        if(this.state.playlist != props.playlist) {
-            this.setState({playlist: props.playlist, updating: true});
+        if(this.state.pl_key != props.pl_key) {
+            this.setState({pl_key: props.pl_key, updating: true});
 
-            Protocol.get_playlist_tracks(playlist.key).then(x => {
-                this.setState({tracks: x, updating: false});
+            Protocol.get_playlist(props.pl_key).then(x => {
+                this.setState({playlist: x, updating: false});
             });
         }
     }
@@ -30,16 +29,30 @@ export default class Playlist extends Component {
         this.update(props);
     }
 
-    render({}, {playlist, updating, tracks}) {
-        return (
-            <div class={style.playlist}>
-                <div class={style.header}></div>
-                <div class={style.tracks}>
-                    {tracks && tracks.length > 0 && (
-                        <TrackList tracks={tracks} />
-                    )}
+    render({}, {pl_key, playlist, updating}) {
+        console.log(playlist);
+
+        if(playlist) {
+            const header = playlist[0];
+            const tracks = playlist[1];
+
+            return (
+                <div class={style.playlist}>
+                    <div class={style.header}></div>
+                    <div class={style.tracks}>
+                        {tracks && tracks.length > 0 && (
+                            <TrackList tracks={tracks} />
+                        )}
+                    </div>
                 </div>
-            </div>
-        );
+            );
+        } else {
+
+            return (
+                <div class={style.playlist}>
+                    Loading ...
+                </div>
+            );
+        }
     }
 }
