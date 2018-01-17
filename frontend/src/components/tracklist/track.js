@@ -1,10 +1,57 @@
 import {h, Component} from 'preact';
 import style from './style.less';
 import PlayButton from '../play_button';
+import Protocol from '../../lib/protocol.js';
+
+class Element extends Component {
+    state = {
+        edit: false,
+        value: (this.props.value?this.props.value:"Unbekannt")
+    };
+
+    keypress(e) {
+        if(e.keyCode === 13) {
+            this.blur(e);
+        }
+    }
+    blur(e) {
+        if(this.state.value != this.input.value) {
+            let vals = {};
+            vals[this.props.kind] = this.input.value;
+            vals['key'] = this.props.track_key;
+
+            Protocol.update_track(vals);
+        }
+
+        this.setState({edit: false, value: this.input.value});
+    }
+
+    click(e) {
+        this.setState({edit: true});
+
+        e.stopPropagation();
+    }
+
+    componentWillReceiveProps(newProps) {
+        console.log("PROPS");
+
+        if(newProps.value != this.props.value)
+            this.setState({ value: newProps.value });
+    }
+
+    render({track_key, kind},{edit, value}) {
+        if(edit) return (
+            <td style="border: #000 1px solid;"><input value={value} onClick={e => e.stopPropagation()} onKeyPress={this.keypress.bind(this)} ref={x => {this.input = x;}} onBlur={this.blur.bind(this)} autoFocus /></td>
+        );
+        else return (
+            <td><span onClick={this.click.bind(this)}>{value}</span></td>
+        );
+    }
+}
 
 export default class Track extends Component {
     state = {
-        minimal: true
+        minimal: true,
     };
 
     onClick = (e) => {
@@ -12,20 +59,14 @@ export default class Track extends Component {
     }
 
     render({track_key, title, album, interpret, conductor, composer}, {minimal}) {
-        if(!title) title = "Unbekannt";
-        if(!album) album = "Unbekannt";
-        if(!interpret) interpret = "Unbekannt";
-        if(!conductor) conductor = "Unbekannt";
-        if(!composer) composer = "Unbekannt";
-
         if(minimal)
             return (
                 <tr onClick={this.onClick}>
-                    <td>{title}</td>
-                    <td>{album}</td>
-                    <td>{interpret}</td>
-                    <td>{conductor}</td>
-                    <td>{composer}</td>
+                    <Element track_key={track_key} kind="title" value={title} />
+                    <Element track_key={track_key} kind="album" value={album} />
+                    <Element track_key={track_key} kind="interpret" value={interpret} />
+                    <Element track_key={track_key} kind="conductor" value={conductor} />
+                    <Element track_key={track_key} kind="composer" value={composer} />
                 </tr>
             );
         else
@@ -36,23 +77,23 @@ export default class Track extends Component {
                             <table>
                                 <tr>
                                     <th>Title</th>
-                                    <td>{title}</td>
-                                </tr>
-                                <tr>
-                                    <th>Interpret</th>
-                                    <td>{interpret}</td>
+                                    <Element track_key={track_key} kind="title" value={title} />
                                 </tr>
                                 <tr>
                                     <th>Album</th>
-                                    <td>{album}</td>
+                                    <Element track_key={track_key} kind="album" value={album} />
+                                </tr>
+                                <tr>
+                                    <th>Interpret</th>
+                                    <Element track_key={track_key} kind="interpret" value={interpret} />
                                 </tr>
                                 <tr>
                                     <th>Conductor</th>
-                                    <td>{conductor}</td>
+                                    <Element track_key={track_key} kind="conductor" value={conductor} />
                                 </tr>
                                 <tr>
                                     <th>Composer</th>
-                                    <td>{composer}</td>
+                                    <Element track_key={track_key} kind="composer" value={composer} />
                                 </tr>
                             </table>
                         </div>
