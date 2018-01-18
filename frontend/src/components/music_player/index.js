@@ -1,6 +1,7 @@
 import {h, Component} from 'preact';
 import {Icon, Button} from 'preact-mdl';
 import Player from '../../lib/player.js';
+import get_album_cover from '../../lib/get_cover.js';
 import sbottom from './style_bottom.less';
 
 const BUFFER_SIZE = 8192*2;
@@ -35,6 +36,12 @@ export default class MusicPlayer extends Component {
             this.player.play();
 
             this.setState({is_playing: true, track: x});
+            return get_album_cover(x.interpret, x.album);
+        }).then(cover => {
+            this.setState({ cover });
+        }, x => {
+            console.error("Could not load cover: " + x);
+            this.setState({ cover: null});
         });
     }
 
@@ -61,27 +68,36 @@ export default class MusicPlayer extends Component {
         knob.style.left = time * this.timer.offsetWidth + "px";
     }
 
-    render({}, {is_playing, track}) {
+    render({}, {is_playing, track, cover}) {
         let play_pause = null;
         if(!is_playing)
-            play_pause = <Icon style="font-size: 4vw;" icon="play circle outline" onClick={this.play_click.bind(this)} onMouseOver={e => e.target.innerHTML = "play_circle_filled"} onMouseLeave={e => e.target.innerHTML = "play_circle_outline"} />;
+            play_pause = <Icon style="font-size: 5em;" icon="play circle outline" onClick={this.play_click.bind(this)} onMouseOver={e => e.target.innerHTML = "play_circle_filled"} onMouseLeave={e => e.target.innerHTML = "play_circle_outline"} />;
         else
-            play_pause = <Icon style="font-size: 4vw;" icon="pause circle outline" onClick={this.play_click.bind(this)} onMouseOver={e => e.target.innerHTML = "pause_circle_filled"} onMouseLeave={e => e.target.innerHTML = "pause_circle_outline"} />;
-
-        let track_name = "Unbekannt";
-        if(track && track.title)
-            track_name = track.title;
+            play_pause = <Icon style="font-size: 5em;" icon="pause circle outline" onClick={this.play_click.bind(this)} onMouseOver={e => e.target.innerHTML = "pause_circle_filled"} onMouseLeave={e => e.target.innerHTML = "pause_circle_outline"} />;
 
         return (
             <div class={sbottom.outer}>
             <div class={sbottom.music_player}>
                 <div class={sbottom.progress_bar} ref={x => this.timer = x}><div class={sbottom.progress_bar_inner}><div class={sbottom.round_button} /></div></div>
                 <div class={sbottom.music_player_inner}>
-                    <div class={sbottom.music_player_left}>{track_name}</div>
+                    <div class={sbottom.music_player_left}>
+                        {cover && (
+                            <img src={cover} />
+                        )}
+                        {!cover && (
+                            <Icon style="font-size: 5em" icon="audiotrack" />
+                        )}
+                        {track && (
+                            <span>
+                                <b>{track.title?track.title:"Unbekannt"}</b>
+                                {track.interpret}
+                            </span>
+                        )}
+                    </div>
                     <div class={sbottom.music_player_center}>
-                        <Icon style="font-size: 2.5vw;" icon="skip previous" onClick={this.player.next} />
+                        <Icon style="font-size: 3em;" icon="skip previous" onClick={this.player.next} />
                         {play_pause}
-                        <Icon style="font-size: 2.5vw;" icon="skip next" onClick={this.player.prev}/>
+                        <Icon style="font-size: 3em;" icon="skip next" onClick={this.player.prev}/>
                     </div>
                     <div class={sbottom.music_player_right}>
                         {track != undefined &&

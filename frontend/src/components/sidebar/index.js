@@ -9,10 +9,6 @@ export default class Sidebar extends Component {
         create: false
     };
     
-    shouldComponentUpdate() {
-		return true;
-	}
-
 	hide = () => {
         let elm = this.base.parentNode.getElementsByClassName("mdl-layout__obfuscator")[0];
         elm.classList.remove('is-visible');

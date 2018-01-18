@@ -31,7 +31,27 @@
 
 .music_player_left {
     height: 100%;
-    width: 100px;
+
+    display: flex;
+
+    span {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+
+
+        color: #AAA;
+        b {
+            color: black;
+        }
+    }
+
+    img {
+        margin: 5px;
+        width: 65px;
+        height: 100%;
+        object-fit: contain;
+    }
 }
 
 .music_player_center {
@@ -42,6 +62,10 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
+
+    i {
+        cursor: pointer;
+    }
 }
 
 .music_player_right {
