@@ -68,6 +68,20 @@ export default class MusicPlayer extends Component {
         knob.style.left = time * this.timer.offsetWidth + "px";
     }
 
+    dur_to_string(duration) {
+        let min = Math.floor(duration/60);
+        let sec =  Math.round(duration) % 60;
+
+        return min + ":" + sec;
+    }
+
+    show_lyrics() {
+        let artist = this.state.track.interpret.replace(/ /g,'').toLowerCase();
+        let title = this.state.track.title.replace(/ /g,'').toLowerCase();
+
+        window.open('https://www.azlyrics.com/lyrics/'+artist+'/'+title+'.html', '_blank');
+    }
+
     render({}, {is_playing, track, cover}) {
         let play_pause = null;
         if(!is_playing)
@@ -85,7 +99,7 @@ export default class MusicPlayer extends Component {
                             <img src={cover} />
                         )}
                         {!cover && (
-                            <Icon style="font-size: 5em" icon="audiotrack" />
+                            <Icon style="font-size: 5em" icon="art track" />
                         )}
                         {track && (
                             <span>
@@ -100,12 +114,18 @@ export default class MusicPlayer extends Component {
                         <Icon style="font-size: 3em;" icon="skip next" onClick={this.player.prev}/>
                     </div>
                     <div class={sbottom.music_player_right}>
-                        {track != undefined &&
+                        {track &&
                             <div>
-                                {Math.round(track.duration)}s
+                                {this.dur_to_string(track.duration)}
                             </div>
                         }
-                        <Icon style="font-size: 30px; " icon="queue music" />
+                        <div>
+                            {track && (
+                                <Icon onClick={this.show_lyrics.bind(this)} style="font-size: 40px;" icon="textsms" />
+                            )}
+
+                            <Icon style="font-size: 40px;" icon="queue music" />
+                        </div>
                     </div>
                 </div>
             </div>
