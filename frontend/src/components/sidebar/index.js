@@ -14,9 +14,8 @@ export default class Sidebar extends Component {
 	}
 
 	hide = () => {
-        console.log("Close");
-
-        console.log(this.base.classList);
+        let elm = this.base.parentNode.getElementsByClassName("mdl-layout__obfuscator")[0];
+        elm.classList.remove('is-visible');
 		this.base.classList.remove('is-visible');
 	};
 
@@ -48,7 +47,7 @@ export default class Sidebar extends Component {
 
 	render({},{playlists, create}) {
 		return (
-			<Layout.Drawer onClick={this.hide}>
+			<Layout.Drawer onClick={this.hide.bind(this)}>
 				<Layout.Title>Example App</Layout.Title>
 				<Navigation>
 					<Navigation.Link href="/" class={style.link}><Icon icon="home" /><b>Übersicht</b></Navigation.Link>

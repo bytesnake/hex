@@ -55,6 +55,9 @@ export default class Track extends Component {
     };
 
     onClick = (e) => {
+        Protocol.get_playlists_of_track(this.props.track_key).then(x => {
+            console.log("Playlists: " + x);
+        });
         this.setState({ minimal: !this.state.minimal });
     }
 

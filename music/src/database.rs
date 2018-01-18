@@ -156,6 +156,21 @@ impl Connection {
         }
     }
 
+    pub fn get_playlists_of_track(&self, key: &str) -> Vec<Playlist> {
+        let mut stmt = self.socket.prepare(&format!("SELECT Key, Title, Desc, Count FROM Playlists WHERE tracks like '%{}%'", key)).unwrap();
+        let res = stmt.query_map(&[], |row| {
+            Playlist {
+                key: row.get(0),
+                title: row.get(1),
+                desc: row.get(2),
+                count: row.get(3)
+            }
+        }).unwrap().filter_map(|x| x.ok()).collect();
+
+        res
+    }
+
+
     pub fn add_playlist(&self, title: &str) -> Playlist {
         let key = Uuid::new_v4().simple().to_string();
 
