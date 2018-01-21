@@ -2,7 +2,7 @@ import { guid } from './uuid.js'
 
 class Protocol {
     constructor() {
-        this.socket = new WebSocket('ws://127.0.0.1:2794', 'rust-websocket');
+        this.socket = new WebSocket('ws://192.168.1.13:2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
 
         var self = this;
@@ -129,7 +129,7 @@ class Protocol {
                     var parsed = JSON.parse(e.data);
 
                     if(parsed.id == uuid) {
-                        console.log("Got: " + e.data);
+                        //console.log("Got: " + e.data);
 
                         // remove listener
                         self.socket.removeEventListener('message', listener);
@@ -149,7 +149,7 @@ class Protocol {
 
             });
 
-            console.log("Send: " + proto_str);
+            //console.log("Send: " + proto_str);
 
             if(self.socket.readyState === WebSocket.OPEN)
                 self.socket.send(proto_str);
@@ -175,7 +175,7 @@ class Protocol {
 
                 var parsed = JSON.parse(e.data);
 
-                console.log("Got: " + e.data);
+                //console.log("Got: " + e.data);
 
                 if(parsed.fn != 'upload')
                     reject("Wrong header!");

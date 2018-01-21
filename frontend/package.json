@@ -89,7 +89,8 @@
     "style-loader": "^0.18.1",
     "url-loader": "^0.6.1",
     "webpack": "^3.10.0",
-    "webpack-dev-server": "^2.4.4"
+    "webpack-dev-server": "^2.4.4",
+    "worker-loader": "^1.1.0"
   },
   "dependencies": {
     "accessible-autocomplete": "^1.6.1",
@@ -103,7 +104,8 @@
     "proptypes": "^1.0.0",
     "react-autocomplete": "^1.7.2",
     "serve": "^6.0.0",
-    "wasm-loader": "^1.1.0"
+    "wasm-loader": "^1.1.0",
+    "worker-loader": "^1.1.0"
   },
   "main": "webpack.config.babel.js",
   "directories": {

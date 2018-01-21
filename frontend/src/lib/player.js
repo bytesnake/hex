@@ -1,135 +1,117 @@
-import Decoder from 'opus/decoder.js';
+import Worker from 'worker-loader!./worker.js';
 import Protocol from 'protocol.js';
-import {guid} from 'uuid.js';
 
-const BUFFER_SIZE = 8192*2;
-const BUFFER_FILL = 4;
+class AudioBuffer {
+    constructor(sample_rate, channel, samples, finished)  {
+        this.channel = channel;
+        this.sample_rate = sample_rate;
+
+        this.worker = new Worker();
+
+        this.pos = 0;
+
+        //this.worker.postMessage({kind: 0, channel: channel, samples: samples});
+        this.worker.onmessage = this.on_packet.bind(this);
+        this.finished = finished;
+    }
+
+    next(length) {
+        if(this.pos+length > this.buffer[0].length) {
+            length = this.buffer[0].length - this.pos;
+            this.finished();
+        }
+
+        const slice1 = this.buffer[0].slice(this.pos, this.pos+length);
+        const slice2 = this.buffer[1].slice(this.pos, this.pos+length);
+        this.pos += length;
+
+        //console.log(this.pos);
+
+        return [slice1,slice2];
+    }
+
+    next_track(track) {
+        const samples = track.duration * this.sample_rate;
+
+        this.buffer = [new Float32Array(samples), new Float32Array(samples)];
+        this.pos = 0;
+
+        this.worker.postMessage({kind: 0, channel: this.channel, samples: samples, track: track, sample_rate: this.sample_rate});
+    }
+
+    set pos(new_pos) {
+        this.worker.postMessage({kind: 1, pos: new_pos});
+        this._pos = new_pos;
+    }
+
+    get pos() {
+        return this._pos;
+    }
+
+    bitmap() {
+        let self = this;
+        return new Promise(function(resolve, reject) {
+            self.worker.addEventListener('message', function fnc(e){
+                if(e.data && e.data.kind == 1) {
+                    self.worker.removeEventListener('message', fnc);
+                    resolve(e.data.bitmap);
+                }
+            });
+        });
+    }
+
+    on_packet(e) {
+        if(e.data.kind == 0) {
+            //console.log("Set new one");
+            //console.log(e.data.data);
+
+            if(this.buffer[0].length - e.data.offset < e.data.data[0].length) {
+
+                this.buffer[0].set(e.data.data[0].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
+                this.buffer[1].set(e.data.data[1].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
+            } else {
+                this.buffer[0].set(e.data.data[0], e.data.offset);
+                this.buffer[1].set(e.data.data[1], e.data.offset);
+            }
+        }
+    }
+}
+
+const PLAY_BUFFER_SIZE = 2*8192;
 
 export default class Player {
     constructor(numChannel) {
         try {
             this.audioContext = new AudioContext();
-            this.processor = this.audioContext.createScriptProcessor(BUFFER_SIZE, numChannel, numChannel);
+            this.processor = this.audioContext.createScriptProcessor(PLAY_BUFFER_SIZE, 0, numChannel);
 
             this.processor.onaudioprocess = this.process.bind(this);
         } catch(e) {
             throw new Error("Web Audio API is not supported: " + e);
         }
 
-        this.time = 0.0;
+        this.buffer = new AudioBuffer(this.audioContext.sampleRate, 0, numChannel, this.next.bind(this));
         this.playing = false;
         this.numChannel = numChannel;
         this.playlist = [];
         this.playlist_pos = 0;
-        this.buffer = [];
-        this.nbytes = 0;
-        this.tArr = [];
-        for(let i = 0; i < numChannel; i++)
-            this.tArr.push(new Float32Array(BUFFER_SIZE));
-
-        // TODO: wait until module loaded, not an arbitrary timespan
-        let self = this;
-        try {
-            setTimeout(function() {
-                self.decoder = new Decoder(numChannel);
-            }, 500);
-
-        } catch(e) {
-            console.error("Couldn't create the decoder: " + e);
-        }
     }
 
     // forward to audio output
     process(e) {
         let ouBuf = e.outputBuffer;
         
-        // get the oldest element in the buffer
-        const buf = this.buffer.shift();
-
         // if there is no buffer, then we can just write an empty result
-        if(buf == undefined || !this.playing) {
-            for(let channel = 0; channel < ouBuf.numberOfChannels; channel++) {
-                let out = ouBuf.getChannelData(channel);
-                for(let sample = 0; sample < BUFFER_SIZE; sample++)
-                    out[sample] = 0.0;
-            }
-        } else {
-            this.time += BUFFER_SIZE / 44100;
+        if(this.playing) {
+            // get the oldest element in the buffer
+            const buf = this.buffer.next(PLAY_BUFFER_SIZE);
 
             for(let channel = 0; channel < ouBuf.numberOfChannels; channel++) {
-                const buf_channel = buf[channel];
-                let out = ouBuf.getChannelData(channel);
-
-                for(let sample = 0; sample < BUFFER_SIZE; sample++)
-                    out[sample] = buf_channel[sample];
+                ouBuf.copyToChannel(buf[channel], channel);
             }
         }
-
-        // we have used a buffer or it was empty, refill it
-        if(this.playing)
-            this.fill_buffer();
     }
 
-    async fill_buffer() {
-        if(this.buffer.length >= BUFFER_FILL || !this.playing || this.playlist.length == 0)
-            return;
-
-        let rem = BUFFER_FILL - this.buffer.length;
-        const key = this.playlist[this.playlist_pos].key;
-
-        if(key == undefined)
-            return;
-
-        for await (const buf_raw of Protocol.stream(this.uuid, key)) {
-            let buf;
-            try {
-                buf = this.decoder.decode(buf_raw);
-            } catch(e) {
-                console.error("Couldn't parse opus packet: " + e);
-            }
-
-            // TODO: more than two channels
-            // number of bytes written in a temporary buffer
-            const nbytes = this.nbytes;
-            const nbuf = buf.length / 2;
-
-            const length = Math.min(BUFFER_SIZE, nbytes + nbuf);
-
-            // the values are interleaved, therefore copy in each step both two the channels
-            for(var i=0; i < length - nbytes; i++) {
-                this.tArr[0][nbytes+i] = buf[i*2];
-                this.tArr[1][nbytes+i] = buf[i*2+1];
-            }
-
-
-            // push a finished buffer and prepare for the next session
-            if(nbytes + nbuf >= BUFFER_SIZE) {
-                rem --;
-                this.buffer.push([this.tArr[0], this.tArr[1]]);
-
-                this.tArr.length = 0;
-
-                for(let i = 0; i < this.numChannel; i++)
-                    this.tArr[i] = new Float32Array(BUFFER_SIZE);
-
-                // remaining samples for a single channel
-                const more = nbytes + nbuf - BUFFER_SIZE;
-
-                // initialize the buffer with the remaining data
-                for(let i=0; i < more; i++) {
-                    this.tArr[0][i] = buf[2*(nbuf - more + i)];
-                    this.tArr[1][i] = buf[2*(nbuf - more + i) + 1];
-                }
-
-                this.nbytes = more;
-            } else
-                this.nbytes = length;
-
-            if(rem == 0)
-                break;
-        }
-
-    }
 
     // clear the playlist
     clear() {
@@ -137,18 +119,19 @@ export default class Player {
 
         this.playlist = [];
         this.playlist_pos = 0;
-        this.uuid = null;
-        this.time = 0.0;
-        this.buffer.length = 0;
-        this.nbytes = 0;
     }
 
     // add a new track to play
     add_track(key) {
         let playlist = this.playlist;
+        let buffer = this.buffer;
+
         let tmp = Protocol.get_track(key);
         tmp.then(x => {
             playlist.push(x);
+
+            if(playlist.length == 1)
+                buffer.next_track(x);
         });
 
         return tmp;
@@ -157,11 +140,6 @@ export default class Player {
     play() {
         if(this.playing)
             return;
-
-        if(this.uuid == null)
-            this.uuid = guid();
-
-        console.log("Play with uuid: " + this.uuid);
 
         this.playing = true;
         this.processor.connect(this.audioContext.destination);
@@ -176,25 +154,26 @@ export default class Player {
     }
 
     next() {
-        Protocol.stream_end(this.uuid);
+        if(this.playlist_pos == this.playlist.length - 1) {
+            this.stop();
+            return;
+        }
 
-        this.time = 0.0;
-        this.buffer.length = 0;
         this.playlist_pos ++;
-        this.uuid = guid();
+        this.buffer.next_track(this.playlist[this.playlist_pos]);
     }
 
     prev() {
-        Protocol.stream_end(this.uuid);
+        if(this.playlist_pos - 1 < 0)
+            return;
 
-        this.time = 0.0;
-        this.buffer.lenght = 0;
         this.playlist_pos --;
-        this.uuid = guid();
+        this.buffer.next_track(this.playlist[this.playlist_pos]);
     }
 
-    time() {
-        return this.time;
+
+    get time() {
+        return this.buffer.pos / this.audioContext.sampleRate;
     }
 
     time_percentage() {

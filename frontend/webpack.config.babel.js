@@ -11,7 +11,7 @@ const CSS_MAPS = ENV!=='production';
 
 module.exports = {
 	context: path.resolve(__dirname, "src"),
-	entry: './index.js',
+	entry: ['babel-polyfill', './index.js'],
 
 	output: {
 		path: path.resolve(__dirname, "build"),
@@ -51,6 +51,10 @@ module.exports = {
 				exclude: /node_modules/,
 				use: 'babel-loader'
 			},
+            {
+                test: /\.worker\.js$/,
+                use: { loader: 'worker-loader', options: { inline: true } }
+            },
 			{
 				// Transform our own .(less|css) files with PostCSS and CSS-modules
 				test: /\.(less|css)$/,
@@ -201,7 +205,7 @@ module.exports = {
 
 	devServer: {
 		port: process.env.PORT || 8080,
-		host: '127.0.0.1',
+		host: '192.168.1.13',
 		publicPath: '/',
 		contentBase: './src',
 		historyApiFallback: true,

@@ -5,8 +5,6 @@ export default function(_artist, _album) {
     return fetch('http://ws.audioscrobbler.com/2.0/?format=json&api_key=4cb074e4b8ec4ee9ad3eb37d6f7eb240&method=album.getinfo&artist=' + artist + '&album=' + album)
     .then(x => x.json())
     .then(json => {
-        console.log(json.album.image);
-
         if('error' in json)
             return Promise.reject('JSON error: ' + json.message);
         else {
