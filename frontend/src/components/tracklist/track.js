@@ -3,6 +3,12 @@ import style from './style.less';
 import PlayButton from '../play_button';
 import Protocol from '../../lib/protocol.js';
 
+const Size = {
+    FULL: 0,
+    OMIT_COMP_COND: 1,
+    ONLY_TITLE: 2
+};
+
 class Element extends Component {
     state = {
         edit: false,
@@ -33,8 +39,6 @@ class Element extends Component {
     }
 
     componentWillReceiveProps(newProps) {
-        console.log("PROPS");
-
         if(newProps.value != this.props.value)
             this.setState({ value: newProps.value });
     }
@@ -61,15 +65,15 @@ export default class Track extends Component {
         this.setState({ minimal: !this.state.minimal });
     }
 
-    render({track_key, title, album, interpret, conductor, composer}, {minimal}) {
+    render({size, track_key, title, album, interpret, conductor, composer}, {minimal}) {
         if(minimal)
             return (
                 <tr onClick={this.onClick}>
                     <Element track_key={track_key} kind="title" value={title} />
-                    <Element track_key={track_key} kind="album" value={album} />
-                    <Element track_key={track_key} kind="interpret" value={interpret} />
-                    <Element track_key={track_key} kind="conductor" value={conductor} />
-                    <Element track_key={track_key} kind="composer" value={composer} />
+                    {size != Size.ONLY_TITLE && (<Element track_key={track_key} kind="album" value={album} />)}
+                    {size != Size.ONLY_TITLE && (<Element track_key={track_key} kind="interpret" value={interpret} />)}
+                    {size == Size.FULL && (<Element track_key={track_key} kind="conductor" value={conductor} />)}
+                    {size == Size.FULL && (<Element track_key={track_key} kind="composer" value={composer} />)}
                 </tr>
             );
         else

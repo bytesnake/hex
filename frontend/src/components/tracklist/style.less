@@ -18,7 +18,8 @@
 }
 
 .tracklist {
-	padding: 80px 20px;
+	padding: 70px 8px;
+    padding-right: 20px;
 	min-height: 100%;
 	width: 100%;
 	background: #EEE;
@@ -43,6 +44,10 @@
 .tracklist td, .tracklist th {
     border: 1px solid #ddd;
     padding: 8px;
+    text-overflow: ellipsis;
+    max-width: 100px;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 .tracklist tr:hover {background-color: #ddd;}
