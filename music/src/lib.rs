@@ -129,6 +129,10 @@ impl Collection {
         self.socket.add_playlist(name)
     }
 
+    pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist, ()> {
+        self.socket.add_to_playlist(key, playlist).map_err(|_| ())
+    }
+
     pub fn get_playlist(&self, key: &str) -> (Playlist, Vec<Track>) {
         self.socket.get_playlist(key)
     }

@@ -38,6 +38,11 @@ class Protocol {
         return this.send_msg(uuid, 'add_playlist', {'name': name});
     }
 
+    add_to_playlist(key, playlist) {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'add_to_playlist', {'key': key, 'playlist': playlist});
+    }
     get_playlist(key) {
         const uuid = guid();
 

@@ -46,14 +46,15 @@
 
 .playlist_inner {
     flex: 10;
-    border: solid 1px #000;
+    border: solid 1px #AAA;
+    border-bottom: none;
+    border-radius: 5px 5px 0 0;
     display: flex;
     flex-direction: row;
     padding: 10px;
 
     span {
         height: 25px;
-        border: solid 1px #000;
         border-radius: 10px;
         padding: 2px;
         margin-right: 5px;
@@ -69,16 +70,20 @@
 
 .playlist_add {
     flex: 1;
-    border: solid 1px #000;
     display: flex;
     flex-direction: row;
+    align-items: flex-end;
+    border: solid 1px #AAA;
+    border-bottom: none;
+    border-radius: 0 0 5px 5px;
 
     input {
-        flex: 8;
+    border-radius: 0 0 5px 5px;
     }
 
     span {
-        flex: 1;
+        cursor: pointer;
+        font-size: 20px;
     }
 
 }

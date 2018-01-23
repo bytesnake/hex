@@ -184,6 +184,31 @@ impl Connection {
         }
     }
 
+    pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
+        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count, tracks FROM Playlists WHERE Title=?;").unwrap();
+        let mut rows = stmt.query(&[&playlist]).unwrap();
+        let row = rows.next().ok_or(Error::Internal)?.map_err(|_| Error::Internal)?;
+
+        let mut _playlist = Playlist {
+            key: row.get(0),
+            title: row.get(1),
+            desc: row.get(2),
+            count: row.get(3)
+        };
+
+        _playlist.count += 1;
+
+        let keys: Option<String> = row.get(4);
+        let keys: String = keys.map(|x| format!("{},{}", x, key)).unwrap_or(key.into());
+
+        println!("Track: {}", keys);
+
+        
+        self.socket.execute("UPDATE playlists SET Count = ?1, tracks = ?2 WHERE Key = ?3", &[&_playlist.count, &keys, &_playlist.key]).unwrap();
+
+        Ok(_playlist)
+    }
+
     pub fn insert_track(&self, track: Track) {
         self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration, FavsCount, Channels) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels]).unwrap();
     }

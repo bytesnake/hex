@@ -83,6 +83,21 @@ export default class Track extends Component {
         });
     }
 
+    addToPlaylist = (e) => {
+        const playlist = this.add_playlist.value;
+
+        if(playlist) {
+            Protocol.add_to_playlist(this.props.track_key, playlist).then(x => {
+                let playlists = this.state.playlists;
+                playlists.push(x);
+
+                this.setState({ playlists: playlists });
+            });
+        }
+
+        e.stopPropagation();
+    }
+
     render({size, track_key, title, album, interpret, conductor, composer}, {minimal, hide, playlists}) {
         if(hide)
             return;
@@ -119,7 +134,7 @@ export default class Track extends Component {
                                     <span onClick={e => {e.stopPropagation(); route("/playlist/" + x.key);}} >{x.title}</span>
                                 ))}
                             </div>
-                            <div class={style.playlist_add}><input ref={x => {this.add_playlist = x;}} onClick={e => e.stopPropagation()}/><span><Icon icon="add circle" /></span> </div>
+                            <div class={style.playlist_add}><input ref={x => {this.add_playlist = x;}} onClick={e => e.stopPropagation()}/><span onClick={this.addToPlaylist} ><Icon icon="add circle" /></span> </div>
                             </div>
                         </div>
                     </td>

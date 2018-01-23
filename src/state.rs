@@ -150,8 +150,8 @@ impl State {
                 ("set_playlist_image", proto::Outgoing::SetPlaylistImage)
             },
 
-            proto::Incoming::AddToPlaylist { key } => {
-                ("add_to_playlist", proto::Outgoing::AddToPlaylist)
+            proto::Incoming::AddToPlaylist { key, playlist } => {
+                ("add_to_playlist", proto::Outgoing::AddToPlaylist(self.collection.add_to_playlist(&key, &playlist)))
             },
 
             proto::Incoming::GetPlaylists => {
