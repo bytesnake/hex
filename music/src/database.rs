@@ -188,6 +188,10 @@ impl Connection {
         self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration, FavsCount, Channels) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels]).unwrap();
     }
 
+    pub fn delete_track(&self, key: &str) {
+        self.socket.execute("DELETE FROM music WHERE key = ?", &[&key]).unwrap();
+    }
+
     pub fn get_track(&self, key: &str) -> Result<Track> {
         let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE Key = '{}'", key)).map_err(|_| Error::Internal)?;
         

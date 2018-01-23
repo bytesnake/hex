@@ -1,4 +1,6 @@
 import {h, Component} from 'preact';
+import {Button, Icon} from 'preact-mdl';
+import {route} from 'preact-router';
 import style from './style.less';
 import {PlayButton, AddToQueueButton} from '../play_button';
 import Protocol from '../../lib/protocol.js';
@@ -15,12 +17,14 @@ class Element extends Component {
         value: (this.props.value?this.props.value:"Unbekannt")
     };
 
-    keypress(e) {
+    keypress = (e) => {
         if(e.keyCode === 13) {
             this.blur(e);
         }
+
+        e.target.style.width = ((e.target.value.length)) + 'ch';
     }
-    blur(e) {
+    blur = (e) => {
         if(this.state.value != this.input.value) {
             let vals = {};
             vals[this.props.kind] = this.input.value;
@@ -32,7 +36,7 @@ class Element extends Component {
         this.setState({edit: false, value: this.input.value});
     }
 
-    click(e) {
+    click = (e) => {
         this.setState({edit: true});
 
         e.stopPropagation();
@@ -43,29 +47,46 @@ class Element extends Component {
             this.setState({ value: newProps.value });
     }
 
-    render({track_key, kind},{edit, value}) {
-        if(edit) return (
-            <td style="border: #000 1px solid;"><input value={value} onClick={e => e.stopPropagation()} onKeyPress={this.keypress.bind(this)} ref={x => {this.input = x;}} onBlur={this.blur.bind(this)} autoFocus /></td>
-        );
-        else return (
-            <td><span onClick={this.click.bind(this)}>{value}</span></td>
-        );
+    render({track_key, kind, vertical},{edit, value}) {
+        if(!vertical)
+            if(edit) return (
+            <td><input value={value} onClick={e => e.stopPropagation()} onKeyPress={this.keypress.bind(this)} ref={x => {this.input = x;}} onBlur={this.blur.bind(this)} autoFocus /></td>
+            );
+            else return (
+                <td><span onClick={this.click}>{value}</span></td>
+            );
+        else
+            if(edit) return(<div class={style.element_vertical}><b>{kind.toUpperCase()}</b><input value={value} onClick={e => e.stopPropagation()} onKeyPress={this.keypress} ref={x => {this.input = x;}} onBlub={this.blur} /></div>);
+            else return (
+                <div class={style.element_vertical} onClick={this.click}><b>{kind.toUpperCase()}</b>{value}</div>
+            );
     }
 }
 
 export default class Track extends Component {
     state = {
         minimal: true,
+        hide: false,
+        playlists: null
     };
 
     onClick = (e) => {
-        Protocol.get_playlists_of_track(this.props.track_key).then(x => {
-            console.log("Playlists: " + x);
+        Protocol.get_playlists_of_track(this.props.track_key).then(playlists => {
+            this.setState({ playlists });
         });
         this.setState({ minimal: !this.state.minimal });
     }
 
-    render({size, track_key, title, album, interpret, conductor, composer}, {minimal}) {
+    delete_forever = (e) => {
+        Protocol.delete_track(this.props.track_key).then(x => {
+            this.setState({ hide: true });
+        });
+    }
+
+    render({size, track_key, title, album, interpret, conductor, composer}, {minimal, hide, playlists}) {
+        if(hide)
+            return;
+
         if(minimal)
             return (
                 <tr onClick={this.onClick}>
@@ -84,31 +105,23 @@ export default class Track extends Component {
                             <div class={style.desc_ctr}>
                                 <PlayButton track_key={track_key} />
                                 <AddToQueueButton track_key={track_key} />
+                                <Button onClick={this.delete_forever}><Icon icon="delete forever" /></Button>
                             </div>
-                            <table>
-                                <tr>
-                                    <th>Title</th>
-                                    <Element track_key={track_key} kind="title" value={title} />
-                                </tr>
-                                <tr>
-                                    <th>Album</th>
-                                    <Element track_key={track_key} kind="album" value={album} />
-                                </tr>
-                                <tr>
-                                    <th>Interpret</th>
-                                    <Element track_key={track_key} kind="interpret" value={interpret} />
-                                </tr>
-                                <tr>
-                                    <th>Conductor</th>
-                                    <Element track_key={track_key} kind="conductor" value={conductor} />
-                                </tr>
-                                <tr>
-                                    <th>Composer</th>
-                                    <Element track_key={track_key} kind="composer" value={composer} />
-                                </tr>
-                            </table>
+                            <div class={style.desc_content}>
+                                <Element vertical track_key={track_key} kind="title" value={title} />
+                                <Element vertical track_key={track_key} kind="album" value={album} />
+                                <Element vertical track_key={track_key} kind="interpret" value={interpret} />
+                                <Element vertical track_key={track_key} kind="conductor" value={conductor} />
+                                <Element vertical track_key={track_key} kind="composer" value={composer} />
+                            </div>
+                            <div class={style.playlists}><b>Playlists</b><div class={style.playlist_inner}>
+                                { playlists && playlists.length > 0 && playlists.map(x => (
+                                    <span onClick={e => {e.stopPropagation(); route("/playlist/" + x.key);}} >{x.title}</span>
+                                ))}
+                            </div>
+                            <div class={style.playlist_add}><input ref={x => {this.add_playlist = x;}} onClick={e => e.stopPropagation()}/><span><Icon icon="add circle" /></span> </div>
+                            </div>
                         </div>
-                        <div class={style.playlists}>Playlists</div>
                     </td>
                 </tr>
             );

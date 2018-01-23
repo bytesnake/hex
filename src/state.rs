@@ -164,6 +164,11 @@ impl State {
 
             proto::Incoming::GetPlaylistsOfTrack { key } => {
                 ("get_playlists_of_track", proto::Outgoing::GetPlaylistsOfTrack(self.collection.get_playlists_of_track(&key)))
+            },
+            proto::Incoming::DeleteTrack { key } => {
+                self.collection.delete_track(&key);
+
+                ("delete_track", proto::Outgoing::DeleteTrack)
             }
 
         };

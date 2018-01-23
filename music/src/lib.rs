@@ -23,6 +23,7 @@ pub mod error;
 use std::env;
 use std::io::Read;
 use std::fs::File;
+use std::fs;
 use std::mem;
 
 use database::{Playlist, Track};
@@ -134,5 +135,15 @@ impl Collection {
 
     pub fn get_playlists_of_track(&self, key: &str) -> Vec<Playlist> {
         self.socket.get_playlists_of_track(key)
+    }
+
+    pub fn delete_track(&self, key: &str) {
+        let mut path = env::home_dir().ok_or(()).unwrap();
+        path.push(".music");
+        path.push(key);
+
+        fs::remove_file(path);
+
+        self.socket.delete_track(key);
     }
 }

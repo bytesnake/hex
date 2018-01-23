@@ -62,6 +62,10 @@ pub enum Incoming {
     #[serde(rename="get_playlists_of_track")]
     GetPlaylistsOfTrack {
         key: String
+    },
+    #[serde(rename="delete_track")]
+    DeleteTrack {
+        key: String
     }
 }
 
@@ -99,7 +103,8 @@ pub enum Outgoing {
     AddToPlaylist,
     GetPlaylists(Vec<Playlist>),
     GetPlaylist((Playlist,Vec<Track>)),
-    GetPlaylistsOfTrack(Vec<Playlist>)
+    GetPlaylistsOfTrack(Vec<Playlist>),
+    DeleteTrack
 }
 
 #[derive(Serialize)]

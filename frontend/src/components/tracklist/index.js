@@ -36,7 +36,7 @@ export default class TrackList extends Component {
         return (
             <div class={style.tracklist} ref={x => this.list = x}>
             <table>
-                <tr>
+                <tr class={style.header}>
                     <th>Title</th>
                     {size != Size.ONLY_TITLE && (<th>Album</th>)}
                     {size != Size.ONLY_TITLE && (<th>Interpret</th>)}

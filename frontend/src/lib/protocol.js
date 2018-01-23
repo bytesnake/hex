@@ -50,6 +50,13 @@ class Protocol {
         return this.send_msg(uuid, 'get_playlists_of_track', {'key': key});
     }
 
+    delete_track(key) {
+        const uuid = guid();
+        console.log("DELETE");
+
+        return this.send_msg(uuid, 'delete_track', {'key': key});
+    }
+
     async *stream(uuid, track_key) {
         while(true) {
             const buf = await this.send_msg(uuid, 'stream_next', {'key': track_key});
@@ -136,9 +143,9 @@ class Protocol {
                         if(parsed.fn != fn)
                             reject("Wrong header!");
                         else {
-                            if('Ok' in parsed.payload)
+                            if(parsed.payload && 'Ok' in parsed.payload)
                                 resolv(parsed.payload.Ok);
-                            else if('Err' in parsed.payload)
+                            else if(parsed.payload && 'Err' in parsed.payload)
                                 reject("Got error: " + parsed.payload.Err);
                             else
                                 resolv(parsed.payload);
