@@ -8,9 +8,8 @@ class AudioBuffer {
 
         this.worker = new Worker();
 
-        this.pos = 0;
+        this._pos = 0;
 
-        //this.worker.postMessage({kind: 0, channel: channel, samples: samples});
         this.worker.onmessage = this.on_packet.bind(this);
         this.finished = finished;
     }
@@ -23,9 +22,7 @@ class AudioBuffer {
 
         const slice1 = this.buffer[0].slice(this.pos, this.pos+length);
         const slice2 = this.buffer[1].slice(this.pos, this.pos+length);
-        this.pos += length;
-
-        //console.log(this.pos);
+        this._pos += length;
 
         return [slice1,slice2];
     }
@@ -34,7 +31,7 @@ class AudioBuffer {
         const samples = track.duration * this.sample_rate;
 
         this.buffer = [new Float32Array(samples), new Float32Array(samples)];
-        this.pos = 0;
+        this._pos = 0;
 
         this.worker.postMessage({kind: 0, channel: this.channel, samples: samples, track: track, sample_rate: this.sample_rate});
     }
@@ -62,9 +59,6 @@ class AudioBuffer {
 
     on_packet(e) {
         if(e.data.kind == 0) {
-            //console.log("Set new one");
-            //console.log(e.data.data);
-
             if(this.buffer[0].length - e.data.offset < e.data.data[0].length) {
 
                 this.buffer[0].set(e.data.data[0].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
@@ -80,7 +74,7 @@ class AudioBuffer {
 const PLAY_BUFFER_SIZE = 2*8192;
 
 export default class Player {
-    constructor(numChannel) {
+    constructor(numChannel, new_track_cb, set_playing_cb) {
         try {
             this.audioContext = new AudioContext();
             this.processor = this.audioContext.createScriptProcessor(PLAY_BUFFER_SIZE, 0, numChannel);
@@ -95,6 +89,8 @@ export default class Player {
         this.numChannel = numChannel;
         this.playlist = [];
         this.playlist_pos = 0;
+        this.new_track_cb = new_track_cb;
+        this.set_playing_cb = set_playing_cb;
     }
 
     // forward to audio output
@@ -130,11 +126,17 @@ export default class Player {
         tmp.then(x => {
             playlist.push(x);
 
-            if(playlist.length == 1)
+            if(playlist.length == 1) {
+                this.new_track_cb(x);
                 buffer.next_track(x);
+            }
         });
 
         return tmp;
+    }
+
+    is_empty() {
+        return this.playlist.length == 0;
     }
 
     play() {
@@ -153,22 +155,38 @@ export default class Player {
         this.processor.disconnect(this.audioContext.destination);
     }
 
-    next() {
+    next = () => {
         if(this.playlist_pos == this.playlist.length - 1) {
-            this.stop();
-            return;
+            this.set_playing_cb(false);
+            return false;
         }
 
         this.playlist_pos ++;
-        this.buffer.next_track(this.playlist[this.playlist_pos]);
+
+        // if we are playing the same track again, just reset the position
+        if(this.playlist[this.playlist_pos].key == this.playlist[this.playlist_pos-1].key)
+            this.buffer.pos = 0;
+        else {
+            this.new_track_cb(this.playlist[this.playlist_pos]);
+            this.buffer.next_track(this.playlist[this.playlist_pos]);
+        }
+
+        return true;
     }
 
-    prev() {
+    prev = () => {
         if(this.playlist_pos - 1 < 0)
-            return;
+            return false;
 
         this.playlist_pos --;
-        this.buffer.next_track(this.playlist[this.playlist_pos]);
+        if(this.playlist[this.playlist_pos].key == this.playlist[this.playlist_pos-1].key)
+            this.buffer.pos = 0;
+        else {
+            this.new_track_cb(this.playlist[this.playlist_pos]);
+            this.buffer.next_track(this.playlist[this.playlist_pos]);
+        }
+
+        return true;
     }
 
 
@@ -180,6 +198,10 @@ export default class Player {
         if(this.playlist.length == 0)
             return 0.0;
 
-        return this.time / this.playlist[this.playlist_pos].duration;
+        const val = this.time / this.playlist[this.playlist_pos].duration;
+        if(val == 100)
+            this.next();
+
+        return val;
     }
 }

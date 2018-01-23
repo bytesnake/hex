@@ -1,6 +1,6 @@
 import {h, Component} from 'preact';
 import style from './style.less';
-import PlayButton from '../play_button';
+import {PlayButton, AddToQueueButton} from '../play_button';
 import Protocol from '../../lib/protocol.js';
 
 const Size = {
@@ -81,6 +81,10 @@ export default class Track extends Component {
                 <tr onClick={this.onClick}>
                     <td colspan="5">
                         <div class={style.desc}>
+                            <div class={style.desc_ctr}>
+                                <PlayButton track_key={track_key} />
+                                <AddToQueueButton track_key={track_key} />
+                            </div>
                             <table>
                                 <tr>
                                     <th>Title</th>
@@ -105,7 +109,6 @@ export default class Track extends Component {
                             </table>
                         </div>
                         <div class={style.playlists}>Playlists</div>
-                        <PlayButton track_key={track_key} />
                     </td>
                 </tr>
             );

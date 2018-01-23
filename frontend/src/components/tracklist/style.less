@@ -1,11 +1,31 @@
 .desc {
-    text-align: left;
+    display: flex;
+    flex-direction: row;
+}
+
+.desc_ctr {
+    margin: 5px;
+    padding: 5px;
+    background-color: white;
+    display: flex;
+    flex-direction: column;
 }
 
 .desc table {
-    width: auto;
-    float: left;
+    padding: 0px !important;
+    margin: 0px !important;
+    width: auto !important;
+    flex: 1;
+}
 
+.desc th {
+    max-width: 100px !important;
+    border: none !important;
+    text-align: center;
+}
+
+.desc td {
+    max-width: none !important;
 }
 
 .playlists {

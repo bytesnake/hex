@@ -14,11 +14,9 @@ export default class MusicPlayer extends Component {
     };
     
     componentWillMount() {
-        this.player = new Player(2);
+        this.player = new Player(2, this.new_track, (x) => this.setState({ is_playing: x }));
 
         this.update = setInterval(this.update_time.bind(this), 300);
-
-        console.log("MOUNT");
     }
 
     componentWillUmount() {
@@ -30,18 +28,27 @@ export default class MusicPlayer extends Component {
         console.log("UMOUNT");
     }
 
+    new_track = (track) => {
+        this.setState({ track });
+        get_album_cover(track.interpret, track.album).then(cover => {
+            this.setState({ cover });
+        }, err => {
+            console.error("Could not load cover: " + err);
+            this.setState({ cover: null});
+        });
+    }
+
     play(key) {
         this.player.clear();
         this.player.add_track(key).then(x => {
             this.player.play();
 
-            this.setState({is_playing: true, track: x});
-            return get_album_cover(x.interpret, x.album);
-        }).then(cover => {
-            this.setState({ cover });
-        }, x => {
-            console.error("Could not load cover: " + x);
-            this.setState({ cover: null});
+            this.setState({is_playing: true});
+        });
+    }
+
+    add_track(key) {
+        this.player.add_track(key).then(x => {
         });
     }
 
@@ -109,9 +116,9 @@ export default class MusicPlayer extends Component {
                         )}
                     </div>
                     <div class={sbottom.music_player_center}>
-                        <Icon style="font-size: 3em;" icon="skip previous" onClick={this.player.next} />
+                        <Icon style="font-size: 3em;" icon="skip previous" onClick={this.player.prev} />
                         {play_pause}
-                        <Icon style="font-size: 3em;" icon="skip next" onClick={this.player.prev}/>
+                        <Icon style="font-size: 3em;" icon="skip next" onClick={this.player.next}/>
                     </div>
                     <div class={sbottom.music_player_right}>
                         {track &&

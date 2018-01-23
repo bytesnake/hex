@@ -19,6 +19,20 @@ let resampler = null;
 let resampler_length = 0;
 let sample_rate = null;
 
+let abort = null;
+let finished = true;
+
+function reg_abort(fnc) {
+    if(finished)
+        fnc();
+    else
+        abort = fnc;
+}
+
+function clear_abort() {
+    abort = null;
+}
+
 // TODO: wait until module loaded, not an arbitrary timespan
 let decoder;
 try {
@@ -30,6 +44,13 @@ try {
 }
 
 function fill_buf() {
+    finished = false;
+    // abort the buffering if the track has changed
+    if(abort && typeof abort == "function") {
+        abort();
+        return;
+    }
+
     Protocol.stream(uuid, track.key).next().then(buf_raw => {
         // if we got all packets, then send the last block
         if(buf_raw.done) {
@@ -41,6 +62,9 @@ function fill_buf() {
 
             // set the bit
             bitmap.set(bitmap_pos, true);
+
+            // we are finished here
+            finished = true;
 
             // stop the stream
             return;
@@ -111,7 +135,6 @@ function fill_buf() {
             buf_size = new_size;
 
         setImmediate(fill_buf);
-
     });
 }
 
@@ -119,15 +142,32 @@ function fill_buf() {
 onmessage = function(e) {
     const kind = e.data.kind;
     if(kind == 0) {
-        // create a new buffer for a new track
-        sample_rate = e.data.sample_rate;
-        track = e.data.track;
-        buffer = [new Float32Array(BUF_SIZE), new Float32Array(BUF_SIZE)];
-        uuid = guid();
-        stream = Protocol.stream(uuid, track.key);
-        bitmap = new Bitmap(Math.trunc(track.duration * sample_rate / BUF_SIZE)+1);
+        reg_abort(() => {
+            // create a new buffer for a new track
+            sample_rate = e.data.sample_rate;
+            track = e.data.track;
+            buffer = [new Float32Array(BUF_SIZE), new Float32Array(BUF_SIZE)];
+            uuid = guid();
+            stream = Protocol.stream(uuid, track.key);
+            bitmap = new Bitmap(Math.trunc(track.duration * sample_rate / BUF_SIZE)+1);
+            buf_size = 0;
+            bitmap_pos = 0;
 
-        fill_buf();
+            clear_abort();
+
+            fill_buf();
+        });
+    } else if(kind == 1) {
+        console.log("change pos to " + e.data.pos);
+        reg_abort(() => {
+            buf_size = 0;
+            bitmap_pos = 0;
+
+            clear_abort();
+
+            fill_buf();
+        });
+
     }
 
 }
