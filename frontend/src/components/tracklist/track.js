@@ -4,6 +4,7 @@ import {route} from 'preact-router';
 import style from './style.less';
 import {PlayButton, AddToQueueButton} from '../play_button';
 import Protocol from '../../lib/protocol.js';
+import { InlineSuggest } from 'react-inline-suggest';
 
 const Size = {
     FULL: 0,
@@ -67,13 +68,18 @@ export default class Track extends Component {
     state = {
         minimal: true,
         hide: false,
-        playlists: null
+        playlists: null,
+        suggestions: null
     };
 
     onClick = (e) => {
-        Protocol.get_playlists_of_track(this.props.track_key).then(playlists => {
-            this.setState({ playlists });
+        let pl_of_track = Protocol.get_playlists_of_track(this.props.track_key);
+        let all_playlists = Protocol.get_playlists();
+        
+        Promise.all([pl_of_track, all_playlists]).then(values => {
+            this.setState({ playlists: values[0], suggestions: values[1].map(x => x.title) });
         });
+
         this.setState({ minimal: !this.state.minimal });
     }
 
@@ -83,22 +89,42 @@ export default class Track extends Component {
         });
     }
 
-    addToPlaylist = (e) => {
-        const playlist = this.add_playlist.value;
+    suggest = (query) => {
+        if(!this.state.suggestions)
+            return;
 
-        if(playlist) {
-            Protocol.add_to_playlist(this.props.track_key, playlist).then(x => {
-                let playlists = this.state.playlists;
-                playlists.push(x);
+        const suggestions = this.state.suggestions.filter(x => !this.state.playlists.some(y => y.title === x));
 
-                this.setState({ playlists: playlists });
-            });
-        }
-
-        e.stopPropagation();
+        if(this.state.playlists.some(y => y.title === query)) {
+            return;
+        } else
+            return query;
     }
 
-    render({size, track_key, title, album, interpret, conductor, composer}, {minimal, hide, playlists}) {
+    addToPlaylist = (playlist) => {
+        if(playlist && this.state.playlists.indexOf(playlist) === -1) {
+            console.log(playlist);
+            console.log(this.state.suggestions);
+
+            if(playlist in this.state.suggestions)
+                Protocol.add_to_playlist(this.props.track_key, playlist).then(x => {
+                    let playlists = this.state.playlists;
+                    playlists.push(x);
+
+                    this.setState({ playlists: playlists });
+                });
+            else {
+                Protocol.add_playlist(playlist).then(x => Protocol.add_to_playlist(this.props.track_key, playlist)).then(x => {
+                    let playlists = this.state.playlists;
+                    playlists.push(x);
+
+                    this.setState({ playlists: playlists });
+                });
+            }
+        }
+    }
+
+    render({size, track_key, title, album, interpret, conductor, composer}, {minimal, hide, playlists, suggestions}) {
         if(hide)
             return;
 
@@ -134,7 +160,9 @@ export default class Track extends Component {
                                     <span onClick={e => {e.stopPropagation(); route("/playlist/" + x.key);}} >{x.title}</span>
                                 ))}
                             </div>
-                            <div class={style.playlist_add}><input ref={x => {this.add_playlist = x;}} onClick={e => e.stopPropagation()}/><span onClick={this.addToPlaylist} ><Icon icon="add circle" /></span> </div>
+                            <div class={style.playlist_add}>
+                                <div onClick={e => e.stopPropagation()}><InlineSuggest haystack={playlists} getFn={this.suggest}/></div>
+                                </div>
                             </div>
                         </div>
                     </td>
