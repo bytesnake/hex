@@ -1,19 +1,19 @@
 import { h, Component } from 'preact';
 import style from './style.less';
 import Spinner from '../spinner';
+import InputSuggest from '../suggest_input';
 
 export default class Home extends Component {
-    state = {
-        clicked: false
-    };
-
-    click() {
-        this.setState({ clicked: true });
+    suggest(val) {
+        return ["Baumhaus", "Raumwand"].filter(x => x.indexOf(val) !== -1);
     }
 
     render({}, { clicked }) {
-        if(clicked) return (<div class={style.home}>Hey</div>);
-        else return (<div class={style.home}><span onClick={this.click.bind(this)}>Click me</span></div>);
+        return (
+            <div class={style.home}>
+                <InputSuggest onEnter={x => alert(x)} suggest={this.suggest} />
+            </div>
+        );
     }
 
 }

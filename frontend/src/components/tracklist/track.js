@@ -4,7 +4,7 @@ import {route} from 'preact-router';
 import style from './style.less';
 import {PlayButton, AddToQueueButton} from '../play_button';
 import Protocol from '../../lib/protocol.js';
-import { InlineSuggest } from 'react-inline-suggest';
+import InputSuggest from '../suggest_input/';
 
 const Size = {
     FULL: 0,
@@ -91,22 +91,16 @@ export default class Track extends Component {
 
     suggest = (query) => {
         if(!this.state.suggestions)
-            return;
+            return [];
 
-        const suggestions = this.state.suggestions.filter(x => !this.state.playlists.some(y => y.title === x));
+        const suggestions = this.state.suggestions.filter(x => x.indexOf(query) === 0).filter(x => !this.state.playlists.some(y => y.title === x));
 
-        if(this.state.playlists.some(y => y.title === query)) {
-            return;
-        } else
-            return query;
+        return suggestions;
     }
 
     addToPlaylist = (playlist) => {
-        if(playlist && this.state.playlists.indexOf(playlist) === -1) {
-            console.log(playlist);
-            console.log(this.state.suggestions);
-
-            if(playlist in this.state.suggestions)
+        if(playlist && !this.state.playlists.map(x => x.title).includes(playlist)) {
+            if(this.state.suggestions.includes(playlist))
                 Protocol.add_to_playlist(this.props.track_key, playlist).then(x => {
                     let playlists = this.state.playlists;
                     playlists.push(x);
@@ -161,7 +155,7 @@ export default class Track extends Component {
                                 ))}
                             </div>
                             <div class={style.playlist_add}>
-                                <div onClick={e => e.stopPropagation()}><InlineSuggest haystack={playlists} getFn={this.suggest}/></div>
+                                <div onClick={e => e.stopPropagation()}><InputSuggest onEnter={this.addToPlaylist} suggest={this.suggest} /></div>
                                 </div>
                             </div>
                         </div>
