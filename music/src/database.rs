@@ -1,4 +1,5 @@
-use error::{Error, Result};
+use error::{ErrorKind, Result};
+use failure::ResultExt;
 
 use rusqlite;
 use rusqlite::Statement;
@@ -77,24 +78,35 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new() -> Connection {
-        let mut dir = env::home_dir().expect("Could not find the home directory!");
-        dir.push(".music.db");
+    pub fn open_file(path: &str) -> Connection {
+        //let mut dir = env::home_dir().expect("Could not find the home directory!");
+        //dir.push(".music.db");
 
-        Connection { socket: rusqlite::Connection::open(dir.to_str().unwrap()).unwrap() }
+        Connection { socket: rusqlite::Connection::open(path).unwrap() }
     }
 
-    pub fn search_prep(&self, query: SearchQuery) -> Statement {
-        if query.is_empty() {
-            self.socket.prepare("SELECT Title, Album, Interpret, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music").unwrap()
-        } else {
-            let query = query.to_sql_query();
+    /// Search for a certain track. The SearchQuery ensures that a valid string is generated.
+    /// TODO: search for tracks in a certain playlist
 
-            println!("Query: {}", query);
-            self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE {};", query)).unwrap()
-        }
+    pub fn search_prep(&self, query: SearchQuery) -> Result<Statement> {
+        let tmp = {
+            if query.is_empty() {
+                self.socket.prepare("SELECT Title, Album, Interpret, Conductor, Composer, Key, Duration, FavsCount, Channels 
+                                     FROM music").context(ErrorKind::Database)
+            } else {
+                let query = query.to_sql_query();
+
+                println!("Query: {}", query);
+                self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels 
+                                              FROM music 
+                                              WHERE {};", query)).context(ErrorKind::Database)
+            }
+        };
+
+        Ok(tmp?)
     }
 
+    /// Execute the search and returns an iterator over tracks.
     pub fn search<'a>(&self, stmt: &'a mut Statement) -> impl Iterator<Item = Track> + 'a {
         stmt.query_map(&[], |row| {
             Track {
@@ -112,24 +124,31 @@ impl Connection {
         }).unwrap().filter_map(|x| x.ok()).map(|x| x.clone())
     }
 
+    /// Returns the metadata of all available playlists
     pub fn get_playlists(&self) -> Vec<Playlist> {
         let mut tmp = self.socket.prepare("SELECT Key, Title, Desc, Count FROM Playlists").unwrap();
+
         let res = tmp.query_map(&[], |row| {
-                Playlist {
-                    key: row.get(0),
-                    title: row.get(1),
-                    desc: row.get(2),
-                    count: row.get(3)
-                }
-            }).unwrap().filter_map(|x| x.ok()).collect();
+            Playlist {
+                key: row.get(0),
+                title: row.get(1),
+                desc: row.get(2),
+                count: row.get(3)
+            }
+        }).unwrap().filter_map(|x| x.ok()).collect();
 
         res
     }
 
-    pub fn get_playlist(&self, key: &str) -> (Playlist, Vec<Track>) {
-        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count, tracks FROM Playlists WHERE key=?;").unwrap();
-        let mut rows = stmt.query(&[&key]).unwrap();
-        let row = rows.next().unwrap().unwrap();
+    /// Get the metadata and tracks for a certain playlist
+    pub fn get_playlist(&self, key: &str) -> Result<(Playlist, Vec<Track>)> {
+        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count, tracks FROM Playlists WHERE key=?;").context(ErrorKind::Database)?;
+
+        let mut rows = stmt.query(&[&key]).context(ErrorKind::Database)?;
+        let row = match rows.next() {
+            Some(x) => x,
+            None => return Err(format_err!("No element found with key {}", key).context(ErrorKind::Database).into())
+        }.unwrap();
 
         let playlist = Playlist {
             key: row.get(0),
@@ -144,20 +163,19 @@ impl Connection {
 
         if let Some(keys) = keys {
             let query = format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys.split(",").map(|row| { format!("'{}'", row) }).collect::<Vec<String>>().join(","));
-            println!("{}", query);
 
-            let mut stmt = self.socket.prepare(&query).unwrap();
+            let mut stmt = self.socket.prepare(&query).context(ErrorKind::Database)?;
 
             let res = self.search(&mut stmt).collect();
 
-            (playlist, res)
+            Ok((playlist, res))
         } else {
-            (playlist, Vec::new())
+            Ok((playlist, Vec::new()))
         }
     }
 
-    pub fn get_playlists_of_track(&self, key: &str) -> Vec<Playlist> {
-        let mut stmt = self.socket.prepare(&format!("SELECT Key, Title, Desc, Count FROM Playlists WHERE tracks like '%{}%'", key)).unwrap();
+    pub fn get_playlists_of_track(&self, key: &str) -> Result<Vec<Playlist>> {
+        let mut stmt = self.socket.prepare(&format!("SELECT Key, Title, Desc, Count FROM Playlists WHERE tracks like '%{}%'", key)).context(ErrorKind::Database)?;
         let res = stmt.query_map(&[], |row| {
             Playlist {
                 key: row.get(0),
@@ -167,27 +185,27 @@ impl Connection {
             }
         }).unwrap().filter_map(|x| x.ok()).collect();
 
-        res
+        Ok(res)
     }
 
 
-    pub fn add_playlist(&self, title: &str) -> Playlist {
+    pub fn add_playlist(&self, title: &str) -> Result<Playlist> {
         let key = Uuid::new_v4().simple().to_string();
 
-        self.socket.execute("INSERT INTO playlists (key, title, count) VALUES (?1, ?2, ?3)", &[&key, &title, &0]).unwrap();
+        self.socket.execute("INSERT INTO playlists (key, title, count) VALUES (?1, ?2, ?3)", &[&key, &title, &0]).context(ErrorKind::Database)?;
 
-        Playlist {
+        Ok(Playlist {
             key: key,
             title: title.into(),
             desc: None,
             count: 0
-        }
+        })
     }
 
     pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
-        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count, tracks FROM Playlists WHERE Title=?;").unwrap();
-        let mut rows = stmt.query(&[&playlist]).unwrap();
-        let row = rows.next().ok_or(Error::Internal)?.map_err(|_| Error::Internal)?;
+        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count, tracks FROM Playlists WHERE Title=?;").context(ErrorKind::Database)?;
+        let mut rows = stmt.query(&[&playlist]).context(ErrorKind::Database)?;
+        let row = rows.next().ok_or(ErrorKind::Database)?.context(ErrorKind::Database)?;
 
         let mut _playlist = Playlist {
             key: row.get(0),
@@ -204,41 +222,49 @@ impl Connection {
         println!("Track: {}", keys);
 
         
-        self.socket.execute("UPDATE playlists SET Count = ?1, tracks = ?2 WHERE Key = ?3", &[&_playlist.count, &keys, &_playlist.key]).unwrap();
+        self.socket.execute("UPDATE playlists SET Count = ?1, tracks = ?2 WHERE Key = ?3", &[&_playlist.count, &keys, &_playlist.key]).context(ErrorKind::Database)?;
 
         Ok(_playlist)
     }
 
-    pub fn insert_track(&self, track: Track) {
-        self.socket.execute("INSERT INTO music (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration, FavsCount, Channels) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)", &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels]).unwrap();
+    pub fn insert_track(&self, track: Track) -> Result<()> {
+        self.socket.execute("INSERT INTO music 
+                                    (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration, FavsCount, Channels) 
+                                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)", 
+                                    &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels])
+            .context(ErrorKind::Database)?;
+
+        Ok(())
     }
 
-    pub fn delete_track(&self, key: &str) {
-        self.socket.execute("DELETE FROM music WHERE key = ?", &[&key]).unwrap();
+    pub fn delete_track(&self, key: &str) -> Result<()> {
+        self.socket.execute("DELETE FROM music WHERE key = ?", &[&key]).context(ErrorKind::Database)?;
+
+        Ok(())
     }
 
     pub fn get_track(&self, key: &str) -> Result<Track> {
-        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE Key = '{}'", key)).map_err(|_| Error::Internal)?;
+        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE Key = '{}'", key)).context(ErrorKind::Database)?;
         
-        let res = self.search(&mut stmt).next().ok_or(Error::Internal);
+        let res = self.search(&mut stmt).next().ok_or(ErrorKind::Database);
 
-        res
+        Ok(res?)
     }
     pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String> {
         if let Some(title) = title {
-            self.socket.execute("UPDATE music SET Title = ? WHERE Key = ?", &[&title, &key]).map_err(|_| Error::Internal)?;
+            self.socket.execute("UPDATE music SET Title = ? WHERE Key = ?", &[&title, &key]).context(ErrorKind::Database)?;
         }
         if let Some(album) = album {
-            self.socket.execute("UPDATE music SET Album = ? WHERE Key = ?", &[&album, &key]).map_err(|_| Error::Internal)?;
+            self.socket.execute("UPDATE music SET Album = ? WHERE Key = ?", &[&album, &key]).context(ErrorKind::Database)?;
         }
         if let Some(interpret) = interpret {
-            self.socket.execute("UPDATE music SET Interpret = ? WHERE Key = ?", &[&interpret, &key]).map_err(|_| Error::Internal)?;
+            self.socket.execute("UPDATE music SET Interpret = ? WHERE Key = ?", &[&interpret, &key]).context(ErrorKind::Database)?;
         }
         if let Some(conductor) = conductor {
-            self.socket.execute("UPDATE music SET Conductor = ? WHERE Key = ?", &[&conductor, &key]).map_err(|_| Error::Internal)?;
+            self.socket.execute("UPDATE music SET Conductor = ? WHERE Key = ?", &[&conductor, &key]).context(ErrorKind::Database)?;
         }
         if let Some(composer) = composer {
-            self.socket.execute("UPDATE music SET Composer = ? WHERE Key = ?", &[&composer, &key]).map_err(|_| Error::Internal)?;
+            self.socket.execute("UPDATE music SET Composer = ? WHERE Key = ?", &[&composer, &key]).context(ErrorKind::Database)?;
         }
 
         return Ok(key.into());

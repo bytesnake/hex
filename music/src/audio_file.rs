@@ -5,7 +5,8 @@ use std::io::Write;
 use std::mem;
 use uuid::Uuid;
 
-use error::{Result, Error};
+use error::{Result, ErrorKind, MyError};
+use failure::ResultExt;
 
 use acousticid;
 use database::Track;
@@ -27,13 +28,13 @@ impl AudioFile {
         // convert to wave file
         let file_name = format!("/tmp/temp_music.{}", format);
         let mut file = File::create(&file_name)
-            .map_err(|x| Error::InvalidFile)?;
+            .context(ErrorKind::Conversion)?;
 
         file.write_all(data)
-            .map_err(|x| Error::InvalidFile)?;
+            .context(ErrorKind::Conversion)?;
 
         file.sync_all()
-            .map_err(|x| Error::InvalidFile)?;
+            .context(ErrorKind::Conversion)?;
 
         let mut output = Command::new("ffmpeg")
             .arg("-y")
@@ -41,21 +42,19 @@ impl AudioFile {
             .arg("-ar").arg("48000")
             .arg("/tmp/temp_music_new.wav")
             .spawn()
-            .map_err(|_| Error::CommandFailed)?;
+            .context(ErrorKind::Conversion)?;
 
-        output.wait().map_err(|_| Error::CommandFailed)?;
+        output.wait()
+            .context(ErrorKind::Conversion)?;
 
         AudioFile::from_wav_48k("/tmp/temp_music_new.wav")
     }
 
     /// a wave audio file with 48k sample rate is assumed
     pub fn from_wav_48k(path: &str) -> Result<AudioFile> {
-        // read the metadata
-        //let tag = v1::Tag::from_path(path).map_err(|_| Error::InvalidFile)?;
-
         // read the whole wave file
         let mut reader = WavReader::open(path)
-            .map_err(|x| Error::InvalidFile)?;
+            .context(ErrorKind::Conversion)?;
 
         let samples = reader.samples::<i16>().map(|x| x.unwrap()).collect::<Vec<i16>>();
 
@@ -79,7 +78,7 @@ impl AudioFile {
         debug!("The corresponding key is {}", key);
 
         if Path::new(&format!("/home/lorenz/.music/{}", key)).exists() {
-            return Err(Error::AlreadyExists);
+            return Err(format_err!("File with key {} already exists!", key).context(ErrorKind::Conversion).into());
         }
 
         // now convert to the opus file format
@@ -92,19 +91,19 @@ impl AudioFile {
         let mut tmp = vec![0u8; 4000];
 
         let mut encoder = opus::Encoder::new(48000, channel, Application::Audio)
-            .map_err(|_| Error::Internal)?;
+            .context(ErrorKind::Conversion)?;
         
         for i in samples.chunks(1920) {
-            let nbytes = {
+            let nbytes: usize = {
                 if i.len() < 1920 {
                     let mut filled_up_buf = vec![0i16; 1920];
                     filled_up_buf[0..i.len()].copy_from_slice(i);
 
                     encoder.encode(&filled_up_buf, &mut tmp)
-                        .map_err(|_| Error::OpusEncode)?
+                        .context(ErrorKind::Conversion)?
                 } else {
                     encoder.encode(&i, &mut tmp)
-                        .map_err(|_| Error::OpusEncode)?
+                        .context(ErrorKind::Conversion)?
                 }
             };
 
@@ -126,10 +125,10 @@ impl AudioFile {
     
     pub fn to_db(&mut self) -> Result<Track> {
         let mut file = File::create(&format!("/home/lorenz/.music/{}", self.key))
-            .map_err(|_| Error::InvalidFile)?;
+            .context(ErrorKind::Conversion)?;
 
         file.write_all(&self.opus_data)
-            .map_err(|_| Error::InvalidFile)?;
+            .context(ErrorKind::Conversion)?;
 
         Ok(Track::empty(&self.key, &self.fingerprint, self.duration))
     }

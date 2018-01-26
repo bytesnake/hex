@@ -8,6 +8,8 @@ extern crate hound;
 #[macro_use] extern crate log;
 extern crate simple_logger;
 extern crate uuid;
+#[macro_use] extern crate failure;
+#[macro_use] extern crate failure_derive;
 
 #[macro_use]
 extern crate serde_derive;
@@ -27,6 +29,8 @@ use std::fs;
 use std::mem;
 
 use database::{Playlist, Track};
+use error::{Result, ErrorKind};
+use failure::ResultExt;
 
 pub struct Collection {
     socket: database::Connection
@@ -35,48 +39,48 @@ pub struct Collection {
 impl Collection {
     pub fn new() -> Collection {
         Collection {
-            socket: database::Connection::new()
+            socket: database::Connection::open_file("/home/lorenz/.music.db")
         }
     }
 
-    pub fn search(&self, query: &str, start: usize) -> Vec<database::Track> {
-        let query = music_search::SearchQuery::new(query).unwrap();
+    pub fn search(&self, query: &str, start: usize) -> Result<Vec<database::Track>> {
+        let query = music_search::SearchQuery::new(query).ok_or(format_err!("Invalid query: {}", query))?;
 
-        let mut stmt = self.socket.search_prep(query);
+        let mut stmt = self.socket.search_prep(query)?;
         let res = self.socket.search(&mut stmt).skip(start).take(50).collect();
 
-        res
+        Ok(res)
     }
 
-    pub fn add_track(&self, format: &str, data: &[u8]) -> database::Track {
-        let track = audio_file::AudioFile::new(data, format).unwrap().to_db().unwrap();
+    pub fn add_track(&self, format: &str, data: &[u8]) -> Result<database::Track> {
+        let track = audio_file::AudioFile::new(data, format)?.to_db()?;
 
-        self.socket.insert_track(track.clone());
+        self.socket.insert_track(track.clone())?;
 
-        track
+        Ok(track)
     }
 
-    pub fn get_track(&self, key: &str) -> Result<database::Track, ()> {
-        self.socket.get_track(key).map_err(|_| ())
+    pub fn get_track(&self, key: &str) -> Result<database::Track> {
+        self.socket.get_track(key)
     }
 
-    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String, ()> {
-        self.socket.update_track(key, title, album, interpret, conductor, composer).map_err(|_| ())
+    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String> {
+        self.socket.update_track(key, title, album, interpret, conductor, composer)
     }
 
-    pub fn get_suggestion(&self, key: &str) -> Result<String, ()> {
-        let track = self.socket.get_track(key).map_err(|_| ())?;
+    pub fn get_suggestion(&self, key: &str) -> Result<String> {
+        let track = self.socket.get_track(key)?;
 
-        track.suggestion().map_err(|_| ())
+        track.suggestion()
     }
 
     /// Create a new stream with track
-    pub fn stream_start(&self, key: &str) -> Result<File, ()> {
-        let mut path = env::home_dir().ok_or(())?;
+    pub fn stream_start(&self, key: &str) -> Result<File> {
+        let mut path = env::home_dir().ok_or(format_err!("Invalid home path!"))?;
         path.push(".music");
         path.push(key);
 
-        File::open(path).map_err(|_| ())
+        Ok(File::open(path).context(ErrorKind::Database)?)
     }
 
     /// Get the next opus package
@@ -125,29 +129,29 @@ impl Collection {
         self.socket.get_playlists()
     }
 
-    pub fn add_playlist(&self, name: &str) -> Playlist {
+    pub fn add_playlist(&self, name: &str) -> Result<Playlist> {
         self.socket.add_playlist(name)
     }
 
-    pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist, ()> {
-        self.socket.add_to_playlist(key, playlist).map_err(|_| ())
+    pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
+        self.socket.add_to_playlist(key, playlist)
     }
 
-    pub fn get_playlist(&self, key: &str) -> (Playlist, Vec<Track>) {
+    pub fn get_playlist(&self, key: &str) -> Result<(Playlist, Vec<Track>)> {
         self.socket.get_playlist(key)
     }
 
-    pub fn get_playlists_of_track(&self, key: &str) -> Vec<Playlist> {
+    pub fn get_playlists_of_track(&self, key: &str) -> Result<Vec<Playlist>> {
         self.socket.get_playlists_of_track(key)
     }
 
-    pub fn delete_track(&self, key: &str) {
+    pub fn delete_track(&self, key: &str) -> Result<()> {
         let mut path = env::home_dir().ok_or(()).unwrap();
         path.push(".music");
         path.push(key);
 
         fs::remove_file(path);
 
-        self.socket.delete_track(key);
+        self.socket.delete_track(key)
     }
 }

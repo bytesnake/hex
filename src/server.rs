@@ -8,12 +8,14 @@ use tokio_core::reactor::{Handle, Core};
 use futures::{Future, Sink, Stream};
 
 use state::State;
+use conf::Conf;
 
-pub fn start() {
+pub fn start(conf: Conf) {
 	let mut core = Core::new().unwrap();
 	let handle = core.handle();
 	// bind to the server
-	let server = Server::bind("127.0.0.1:2794", &handle).unwrap();
+    let addr = (conf.server.host.as_str(), conf.server.port);
+	let server = Server::bind(addr, &handle).unwrap();
 
 	// time to build the server's future
 	// this will be a struct containing everything the server is going to do

@@ -9,6 +9,8 @@ use hex_music::database::Track;
 
 use proto;
 
+use error::{Result, ErrorKind};
+
 enum RequestState {
     Search {
         query: String,
@@ -36,10 +38,10 @@ impl State {
         }
     }
 
-    pub fn process(&mut self, msg: String) -> Result<OwnedMessage,()> {
+    pub fn process(&mut self, msg: String) -> Result<OwnedMessage> {
         println!("Got: {}", &msg);
 
-        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).map_err(|_| ())?;
+        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).context(ErrorKind::InvalidMsg)?;
     
         let mut remove = false;
         let mut binary_data: Option<Vec<u8>> = None;

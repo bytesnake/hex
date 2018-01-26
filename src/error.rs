@@ -10,14 +10,14 @@ pub struct MyError {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
-    #[fail(display = "AcousticID generator failed")]
-    AcousticID,
-    #[fail(display = "Was unable to get AcousticID metadata")]
-    AcousticIDMetadata,
-    #[fail(display = "The conversion of a audio file failed")]
-    Conversion,
-    #[fail(display = "In the database occurred an error!")]
-    Database
+    #[fail(display = "Something failed inside the music library")]
+    Music,
+    #[fail(display = "Could not configure the application")]
+    Configuration,
+    #[fail(display = "Could not start the websocket server")]
+    Server,
+    #[fail(display = "Message parsing failed")]
+    Parsing
 }
 
 impl Fail for MyError {
