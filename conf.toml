@@ -1,7 +1,12 @@
 [server]
 host = "192.168.1.13"
-port = 2798
+port = 2794
 
 [music]
 data_path = "/home/lorenz/.music/"
 db_path  = "/home/lorenz/.music.db"
+
+#[webserver]
+#path = "./frontend/build/"
+#host = "192.168.1.13"
+#port = 8081

@@ -36,11 +36,12 @@ impl fmt::Display for MyError {
     }
 }
 
+/*
 impl MyError {
     pub fn kind(&self) -> ErrorKind {
         *self.inner.get_context()
     }
-}
+}*/
 
 impl From<ErrorKind> for MyError {
     fn from(kind: ErrorKind) -> MyError {

@@ -19,6 +19,7 @@ pub struct Server {
 
 fn default_addr() -> String { "127.0.0.1".into() }
 fn default_port() -> u16 { 2798 }
+fn default_port_web() -> u16 { 80 }
 
 impl Default for Server {
     fn default() -> Self {
@@ -47,12 +48,22 @@ impl Default for Music {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct WebServer {
+    pub path: String,
+    #[serde(default = "default_addr")]
+    pub host: String,
+    #[serde(default = "default_port_web")]
+    pub port: u16
+}
+
 #[derive(Deserialize, Default, Debug)]
 pub struct Conf {
     #[serde(default)]
     pub server: Server,
     #[serde(default)]
-    pub music: Music
+    pub music: Music,
+    pub webserver: Option<WebServer>
 }
 
 impl Conf {

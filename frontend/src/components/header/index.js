@@ -6,10 +6,6 @@ import Protocol from '../../lib/protocol.js';
 import Upload from '../upload';
 
 export default class Header extends Component {
-    upload_cb() {
-        this.props.upload.handleFab();
-    }
-
 	render(props) {
         return (
             <Layout.Header class={style.header}>
@@ -30,8 +26,8 @@ export default class Header extends Component {
                     <Icon icon="search" />
                 </div>
             </div>
-            <div class={style.upload} onClick={this.upload_cb.bind(this)}>
-                <Icon icon="file upload" />
+            <div class={style.upload}>
+                <Upload />
                 <Icon icon="info outline" />
             </div>
             </Layout.HeaderRow>

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use websocket::message::{Message, OwnedMessage};
+use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
 use websocket::async::Server;
 
@@ -73,6 +73,8 @@ pub fn start(conf: Conf) {
             spawn_future(f, "Client Status", &handle);
             Ok(())
         });
+
+    println!("Server is running!");
 
 	core.run(f).unwrap();
 }

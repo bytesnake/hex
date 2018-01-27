@@ -1,7 +1,6 @@
 use serde_json::{self, Value};
 use hex_music::database::{Track, Playlist};
 use error::{ErrorKind, Result};
-use failure::ResultExt;
 use failure::Fail;
 use std::result;
 

@@ -89,6 +89,10 @@ export default class Track extends Component {
         });
     }
 
+    upvote = (e) => {
+        Protocol.upvote_track(this.props.track_key);
+    }
+
     suggest = (query) => {
         if(!this.state.suggestions)
             return [];
@@ -140,7 +144,10 @@ export default class Track extends Component {
                             <div class={style.desc_ctr}>
                                 <PlayButton track_key={track_key} />
                                 <AddToQueueButton track_key={track_key} />
-                                <Button onClick={this.delete_forever}><Icon icon="delete forever" /></Button>
+                                <Button onClick={this.upvote}><Icon icon="insert emoticon" /></Button>
+                                <Button onClick={this.upvote}><Icon icon="file download" /></Button>
+                                <Button onClick={this.upvote}><Icon icon="language" /></Button>
+                                <Button onClick={this.delete_forever} style="flex-grow: 1"><Icon icon="delete forever" /></Button>
                             </div>
                             <div class={style.desc_content}>
                                 <Element vertical track_key={track_key} kind="title" value={title} />

@@ -24,7 +24,6 @@ export default class App extends Component {
         //    window.player.play("5fc1d01ec41c440e90fc9dc880e38402");
         //}, 500);
 
-        this.header.props.upload = this.upload;
     }
 
 	render() {
@@ -40,7 +39,6 @@ export default class App extends Component {
                             <Playlist path="/playlist/:pl_key" />
                             <Search path="/search/:query" />
                         </Router>
-                        <Upload ref={x => this.upload = x} />
                         <MusicPlayer ref={ x => window.player = x } />
                     </Layout.Content>
 

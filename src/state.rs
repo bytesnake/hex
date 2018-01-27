@@ -1,11 +1,11 @@
 use std::fs::File;
 use std::collections::HashMap;
-use serde_json::{self, Value};
-use failure::{Error, ResultExt};
+use serde_json;
+use failure::ResultExt;
 
 use websocket::message::OwnedMessage;
 
-use hex_music::{self, database};
+use hex_music;
 use hex_music::database::Track;
 
 use proto;
@@ -209,7 +209,7 @@ impl State {
             Ok(OwnedMessage::Binary(data))
         } else {
             // wrap the payload to a full packet and convert to a string
-            proto::OutgoingResult(payload.1.map_err(|err| "".into())).to_string(&packet.id, payload.0).map(|x| OwnedMessage::Text(x))
+            proto::OutgoingResult(payload.1.map_err(|err| format!("{}", err))).to_string(&packet.id, payload.0).map(|x| OwnedMessage::Text(x))
         }
     }
 

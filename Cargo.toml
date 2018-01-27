@@ -13,6 +13,8 @@ serde_derive = "1.0"
 failure = "0.1"
 failure_derive = "0.1"
 toml = "0.4"
+hyper = "0.11"
+hyper-staticfile = "0.1.1"
 
 [dependencies.chromaprint]
 git = "https://github.com/bytesnake/rust-chromaprint"
