@@ -1,12 +1,15 @@
 use std::env;
 use std::fs::File;
+use std::io::Read;
 
 use toml;
 use std::default::Default;
 
 use error::{ErrorKind, Result};
+use failure::ResultExt;
+use failure::Fail;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Server {
     #[serde(default = "default_addr")]
     pub host: String,
@@ -14,7 +17,7 @@ pub struct Server {
     pub port: u16
 }
 
-fn default_addr() -> &'static str { "127.0.0.1" }
+fn default_addr() -> String { "127.0.0.1".into() }
 fn default_port() -> u16 { 2798 }
 
 impl Default for Server {
@@ -26,7 +29,7 @@ impl Default for Server {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Music {
     pub data_path: String,
     pub db_path: String
@@ -34,16 +37,17 @@ pub struct Music {
 
 impl Default for Music {
     fn default() -> Self {
-        let home = env::home_dir().expect("Could not found a home directory!").to_str().unwrap();
+        let home = env::home_dir().expect("Could not found a home directory!");
+        let home_str = home.to_str().unwrap();
 
         Music {
-            data_path: format!("{}/.music/", home),
-            db_path: format!("{}/.music.db", home)
+            data_path: format!("{}/.music/", home_str),
+            db_path: format!("{}/.music.db", home_str)
         }
     }
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Debug)]
 pub struct Conf {
     #[serde(default)]
     pub server: Server,
@@ -57,6 +61,7 @@ impl Conf {
         let mut contents = String::new();
         file.read_to_string(&mut contents).context(ErrorKind::Configuration)?;
 
-        toml::from_str(contents).context(ErrorKind::Configuration)
+        toml::from_str(&contents)
+            .map_err(|err| err.context(ErrorKind::Configuration).into())
     }
 }

@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::collections::HashMap;
 use serde_json::{self, Value};
+use failure::{Error, ResultExt};
 
 use websocket::message::OwnedMessage;
 
@@ -41,14 +42,14 @@ impl State {
     pub fn process(&mut self, msg: String) -> Result<OwnedMessage> {
         println!("Got: {}", &msg);
 
-        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).context(ErrorKind::InvalidMsg)?;
+        let packet: proto::IncomingWrapper = serde_json::from_str(&msg).context(ErrorKind::Parsing)?;
     
         let mut remove = false;
         let mut binary_data: Option<Vec<u8>> = None;
 
-        let payload = match packet.msg {
+        let payload: (&str, Result<proto::Outgoing>) = match packet.msg {
             proto::Incoming::GetTrack { key } => { 
-                ("get_track", proto::Outgoing::Track(self.collection.get_track(&key)))
+                ("get_track", self.collection.get_track(&key).map(|x| proto::Outgoing::Track(x)))
             },
             proto::Incoming::Search { query } => {
                 let prior_state = self.reqs.entry(packet.id.clone())
@@ -62,19 +63,23 @@ impl State {
                     _ => panic!("blub")
                 };
 
-                let res = self.collection.search(&query, *seek);
+                let res = self.collection.search(&query, *seek)
+                    .map(|x| {
+                        // update information about position in stream
+                        let more = x.len() >= 50;
+                        remove = !more;
+                        *seek += x.len() + 1;
 
-                // update information about position in stream
-                let more = res.len() >= 50;
-                remove = !more;
-                *seek += res.len() + 1;
+                        // create a struct containing all results
+                        proto::Outgoing::SearchResult {
+                            query: query.clone(),
+                            answ: x,
+                            more: more
+                        }
+                    })
+                    .map_err(|err| err.context(ErrorKind::Music).into());
 
-                // create a struct containing all results
-                ("search", proto::Outgoing::SearchResult {
-                    query: query.clone(),
-                    answ: res,
-                    more: more
-                })
+                ("search", res)
             },
             proto::Incoming::StreamNext { key } => {
                 let prior_state = self.reqs.entry(packet.id.clone())
@@ -92,7 +97,7 @@ impl State {
 
                 binary_data = Some(data);
 
-                ("stream_next", proto::Outgoing::StreamNext)
+                ("stream_next", Ok(proto::Outgoing::StreamNext))
             },
 
             proto::Incoming::StreamSeek { pos } => {
@@ -107,70 +112,88 @@ impl State {
                 
                 let pos = self.collection.stream_seek(pos, &track, &mut file);
 
-                ("stream_seek", proto::Outgoing::StreamSeek {
+                ("stream_seek", Ok(proto::Outgoing::StreamSeek {
                     pos: pos
-                })
+                }))
             },
 
             proto::Incoming::StreamEnd => {
                 remove = true;
 
-                ("stream_end", proto::Outgoing::StreamEnd)
+                ("stream_end", Ok(proto::Outgoing::StreamEnd))
             },
             proto::Incoming::ClearBuffer => {
                 self.buffer.clear();
 
-                ("clear_buffer", proto::Outgoing::ClearBuffer)
+                ("clear_buffer", Ok(proto::Outgoing::ClearBuffer))
             },
 
             proto::Incoming::AddTrack { format } => {
-                let res = self.collection.add_track(&format, &self.buffer);
-
-                ("add_track", proto::Outgoing::AddTrack {
-                    key: res.key
-                })
+                ("add_track", self.collection.add_track(&format, &self.buffer)
+                    .map(|x| proto::Outgoing::AddTrack(x.key))
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
             },
 
             proto::Incoming::UpdateTrack { key, title, album, interpret, conductor, composer } => {
                 ("update_track", 
-                    proto::Outgoing::UpdateTrack(self.collection.update_track(&key, title, album, interpret, conductor, composer))
+                    self.collection.update_track(&key, title, album, interpret, conductor, composer)
+                        .map(|x| proto::Outgoing::UpdateTrack(x))
+                        .map_err(|err| err.context(ErrorKind::Music).into())
+
                 )
             },
 
             proto::Incoming::GetSuggestion { key } => {
-                ("get_suggestion", proto::Outgoing::GetSuggestion {
-                    key: key.clone(),
-                    data: self.collection.get_suggestion(&key)
-                })
+                ("get_suggestion", self.collection.get_suggestion(&key)
+                    .map(|x| proto::Outgoing::GetSuggestion {
+                        key: key.clone(),
+                        data: x
+                    })
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
             },
 
             proto::Incoming::AddPlaylist { name } => {
-                ("add_playlist", proto::Outgoing::AddPlaylist(self.collection.add_playlist(&name)))
+                ("add_playlist", self.collection.add_playlist(&name)
+                    .map(|x| proto::Outgoing::AddPlaylist(x))
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
             },
 
             proto::Incoming::SetPlaylistImage { key } => {
-                ("set_playlist_image", proto::Outgoing::SetPlaylistImage)
+                ("set_playlist_image", Ok(proto::Outgoing::SetPlaylistImage))
             },
 
             proto::Incoming::AddToPlaylist { key, playlist } => {
-                ("add_to_playlist", proto::Outgoing::AddToPlaylist(self.collection.add_to_playlist(&key, &playlist)))
+                ("add_to_playlist", self.collection.add_to_playlist(&key, &playlist)
+                    .map(|x| proto::Outgoing::AddToPlaylist(x))
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
             },
 
             proto::Incoming::GetPlaylists => {
-                ("get_playlists", proto::Outgoing::GetPlaylists(self.collection.get_playlists()))
+                ("get_playlists", Ok(proto::Outgoing::GetPlaylists(self.collection.get_playlists())))
             },
 
             proto::Incoming::GetPlaylist { key }=> {
-                ("get_playlist", proto::Outgoing::GetPlaylist(self.collection.get_playlist(&key)))
+                ("get_playlist", self.collection.get_playlist(&key)
+                    .map(|x| proto::Outgoing::GetPlaylist(x))
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
             },
 
             proto::Incoming::GetPlaylistsOfTrack { key } => {
-                ("get_playlists_of_track", proto::Outgoing::GetPlaylistsOfTrack(self.collection.get_playlists_of_track(&key)))
+                ("get_playlists_of_track", self.collection.get_playlists_of_track(&key)
+                    .map(|x| proto::Outgoing::GetPlaylistsOfTrack(x))
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
             },
             proto::Incoming::DeleteTrack { key } => {
-                self.collection.delete_track(&key);
-
-                ("delete_track", proto::Outgoing::DeleteTrack)
+                ("delete_track", self.collection.delete_track(&key)
+                    .map(|x| proto::Outgoing::DeleteTrack(x))
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
             }
 
         };
@@ -186,7 +209,7 @@ impl State {
             Ok(OwnedMessage::Binary(data))
         } else {
             // wrap the payload to a full packet and convert to a string
-            payload.1.to_string(&packet.id, payload.0).map(|x| OwnedMessage::Text(x))
+            proto::OutgoingResult(payload.1.map_err(|err| "".into())).to_string(&packet.id, payload.0).map(|x| OwnedMessage::Text(x))
         }
     }
 

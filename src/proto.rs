@@ -2,6 +2,8 @@ use serde_json::{self, Value};
 use hex_music::database::{Track, Playlist};
 use error::{ErrorKind, Result};
 use failure::ResultExt;
+use failure::Fail;
+use std::result;
 
 #[derive(Deserialize)]
 #[serde(tag = "fn")]
@@ -86,27 +88,30 @@ pub enum Outgoing {
         answ: Vec<Track>,
         more: bool
     },
-    Track(Result<Track>),
+    Track(Track),
     ClearBuffer,
-    AddTrack(Result<String>),
+    AddTrack(String),
     StreamNext,
     StreamSeek {
         pos: f64
     },
     StreamEnd,
-    UpdateTrack(Result<String>),
+    UpdateTrack(String),
     GetSuggestion {
         key: String,
-        data: Result<String>
+        data: String
     },
     AddPlaylist(Playlist),
     SetPlaylistImage,
-    AddToPlaylist(Result<Playlist>),
+    AddToPlaylist(Playlist),
     GetPlaylists(Vec<Playlist>),
-    GetPlaylist(Result<(Playlist,Vec<Track>)>),
-    GetPlaylistsOfTrack(Result<Vec<Playlist>>),
-    DeleteTrack(Result<()>)
+    GetPlaylist((Playlist,Vec<Track>)),
+    GetPlaylistsOfTrack(Vec<Playlist>),
+    DeleteTrack(())
 }
+
+#[derive(Serialize)]
+pub struct OutgoingResult(pub result::Result<Outgoing, String>);
 
 #[derive(Serialize)]
 struct OutgoingWrapper {
@@ -116,7 +121,7 @@ struct OutgoingWrapper {
     payload: Value
 }
 
-impl Outgoing {
+impl OutgoingResult {
     pub fn to_string(&self, id: &str, fnc: &str) -> Result<String> {
         let wrapper = OutgoingWrapper {
             id: id.into(),
@@ -124,6 +129,7 @@ impl Outgoing {
             payload: serde_json::to_value(self).unwrap()
         };
 
-        serde_json::to_string(&wrapper).context(ErrorKind::Parsing)
+        serde_json::to_string(&wrapper)
+            .map_err(|err| err.context(ErrorKind::Parsing).into())
     }
 }

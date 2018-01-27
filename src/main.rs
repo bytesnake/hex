@@ -25,5 +25,7 @@ pub fn main() {
         None => conf::Conf::default()
     };
 
+    println!("Configuration: {:#?}", conf);
+
     server::start(conf);
 }
