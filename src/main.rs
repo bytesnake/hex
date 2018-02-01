@@ -1,6 +1,11 @@
+#![feature(conservative_impl_trait)]
+
 extern crate websocket;
 extern crate futures;
 extern crate tokio_core;
+extern crate tokio_io;
+extern crate tokio_process;
+extern crate bytes;
 extern crate hyper;
 extern crate hyper_staticfile;
 #[macro_use]
@@ -18,6 +23,7 @@ mod proto;
 mod state;
 mod conf;
 mod webserver;
+mod youtube;
 
 use std::env;
 use std::thread;

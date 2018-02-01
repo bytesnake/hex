@@ -13,6 +13,7 @@ use conf::Conf;
 pub fn start(conf: Conf) {
 	let mut core = Core::new().unwrap();
 	let handle = core.handle();
+
 	// bind to the server
     let addr = (conf.server.host.as_str(), conf.server.port);
 	let server = Server::bind(addr, &handle).unwrap();
@@ -33,6 +34,7 @@ pub fn start(conf: Conf) {
                 return Ok(());
             }
 
+            let handle2 = handle.clone();
             // accept the request to be a ws connection if it does
             let f = upgrade
                 .use_protocol("rust-websocket")
@@ -41,8 +43,8 @@ pub fn start(conf: Conf) {
                 //.and_then(|(s, _)| s.send(Message::text("Hello World!").into()))
                 // simple echo server impl
                 .and_then(|(s,_)| {
-                    let mut state = State::new();
-                    
+                    let mut state = State::new(handle2);
+
                     let (sink, stream) = s.split();
                     stream
                     .take_while(|m| Ok(!m.is_close()))

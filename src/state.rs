@@ -1,7 +1,16 @@
 use std::fs::File;
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use serde_json;
 use failure::ResultExt;
+
+use futures::{Sink, Stream, IntoFuture, Future};
+
+use tokio_core::reactor::Handle;
+use websocket;
+use tokio_io;
 
 use websocket::message::OwnedMessage;
 
@@ -11,6 +20,7 @@ use hex_music::database::Track;
 use proto;
 
 use error::{Result, ErrorKind};
+use youtube;
 
 enum RequestState {
     Search {
@@ -21,18 +31,48 @@ enum RequestState {
     Stream {
         file: File,
         track: Track
+    },
+
+    Youtube {
+        downloader: youtube::Downloader,
+        state: Rc<RefCell<youtube::State>>
+    }
+}
+
+impl RequestState {
+    pub fn stream(path: &str, handle: Handle) -> RequestState {
+        let mut dwnd = youtube::Downloader::new(handle.clone(), path);
+
+        let state = Rc::new(RefCell::new(youtube::State::empty()));
+        let state2 = state.clone();
+
+        let hnd = dwnd.state().map(move |x| {
+            *state2.borrow_mut() = x;
+
+            ()
+        });
+
+        dwnd.spawn(hnd);
+        handle.spawn(dwnd.child().into_future().map(|_| ()).map_err(|_| ()));
+
+        RequestState::Youtube {
+            downloader: dwnd,
+            state: state
+        }
     }
 }
 
 pub struct State {
+    handle: Handle,
     reqs: HashMap<String, RequestState>,
     collection: hex_music::Collection,
     buffer: Vec<u8>
 }
 
 impl State {
-    pub fn new() -> State {
+    pub fn new(handle: Handle) -> State {
         State {
+            handle: handle,
             reqs: HashMap::new(),
             collection: hex_music::Collection::new(),
             buffer: Vec::new()
@@ -194,6 +234,37 @@ impl State {
                     .map(|x| proto::Outgoing::DeleteTrack(x))
                     .map_err(|err| err.context(ErrorKind::Music).into())
                 )
+            },
+
+            proto::Incoming::FromYoutube { path } => {
+                println!("YOUTUBE ID {}", packet.id);
+
+                let handle = self.handle.clone();
+                let prior_state = self.reqs.entry(packet.id.clone())
+                    .or_insert_with(|| {
+                        RequestState::stream(&path, handle)
+                    });
+
+                let state = match prior_state {
+                    &mut RequestState::Youtube { ref state, .. } => state,
+                    _ => panic!("blub")
+                };
+
+                let val = Ok(state.borrow().clone());
+                ("from_youtube", val.map(|x|  proto::Outgoing::FromYoutube(x)))
+            },
+
+            proto::Incoming::FinishYoutube => {
+                remove = true;
+
+                ("finish_youtube", self.reqs.get(&packet.id).ok_or(ErrorKind::Youtube.into()).and_then(|state| {
+                    let state = match state {
+                        &RequestState::Youtube { ref state, .. } => state.borrow(),
+                        _ => panic!("blub")
+                    };
+
+                    self.collection.add_track(state.format(), &state.get_content().unwrap())
+                }).map(|x| proto::Outgoing::FinishYoutube(x)))
             }
 
         };

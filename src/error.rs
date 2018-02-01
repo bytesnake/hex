@@ -17,7 +17,9 @@ pub enum ErrorKind {
     #[fail(display = "Could not start the websocket server")]
     Server,
     #[fail(display = "Message parsing failed")]
-    Parsing
+    Parsing,
+    #[fail(display = "Youtube downloader")]
+    Youtube
 }
 
 impl Fail for MyError {

@@ -64,7 +64,7 @@ impl AudioFile {
         let num_channel = reader.spec().channels;
         let duration = reader.duration() as f64 / sample_rate as f64;
 
-        debug!("Open file {} ({} samples) with sample rate {} and {} channels", path, samples.len(),sample_rate, num_channel);
+        //println!("Open file {} ({} samples) with sample rate {} and {} channels", path, samples.len(),sample_rate, num_channel);
 
         AudioFile::from_raw_48k(samples, duration, num_channel)
     }
@@ -109,12 +109,10 @@ impl AudioFile {
 
             //println!("Opus frame size: {}", nbytes);
 
-            tmp.truncate(nbytes);
-
             let nbytes_raw: [u8; 4] = unsafe { mem::transmute((nbytes as u32).to_be()) };
 
             opus_data.extend_from_slice(&nbytes_raw);
-            opus_data.extend_from_slice(&tmp);
+            opus_data.extend_from_slice(&tmp[0..nbytes]);
         }
 
         info!("Size: {}", opus_data.len());

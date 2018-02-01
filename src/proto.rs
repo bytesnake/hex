@@ -3,6 +3,8 @@ use hex_music::database::{Track, Playlist};
 use error::{ErrorKind, Result};
 use failure::Fail;
 use std::result;
+use youtube;
+
 
 #[derive(Deserialize)]
 #[serde(tag = "fn")]
@@ -70,7 +72,13 @@ pub enum Incoming {
     #[serde(rename="delete_track")]
     DeleteTrack {
         key: String
-    }
+    },
+    #[serde(rename="from_youtube")]
+    FromYoutube {
+        path: String
+    },
+    #[serde(rename="finish_youtube")]
+    FinishYoutube
 }
 
 #[derive(Deserialize)]
@@ -106,7 +114,9 @@ pub enum Outgoing {
     GetPlaylists(Vec<Playlist>),
     GetPlaylist((Playlist,Vec<Track>)),
     GetPlaylistsOfTrack(Vec<Playlist>),
-    DeleteTrack(())
+    DeleteTrack(()),
+    FromYoutube(youtube::State),
+    FinishYoutube(Track)
 }
 
 #[derive(Serialize)]

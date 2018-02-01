@@ -53,14 +53,14 @@ export default class Upload extends Component {
             case Showing.Youtube:
                 inner = (
                     <Portal into="body">
-                        <Youtube onClose={this.close} />
+                        <div class={style.overlay} onClick={this.close}><Youtube onClose={this.close} /></div>
                     </Portal>
                 );
                 break;
             case Showing.Files:
                 inner = (
                     <Portal into="body">
-                        <Files onClose={this.close} />
+                        <div class={style.overlay} onClick={this.close}><Files onClose={this.close} /></div>
                     </Portal>
                 );
                 break;
