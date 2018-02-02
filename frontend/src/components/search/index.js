@@ -26,6 +26,7 @@ export default class Search extends Component {
     }
 
     componentDidMount() {
+        console.log("LALAL");
         this.update(this.props);
     }
 
@@ -35,6 +36,7 @@ export default class Search extends Component {
 
 	// Note: `user` comes from the URL, courtesy of our router
 	render({}, { query, updating, tracks }) {
+        console.log("QUERY: " + query);
         if(tracks && tracks.length > 0) {
             return (
                 <TrackList tracks={tracks} />

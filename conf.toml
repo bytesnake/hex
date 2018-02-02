@@ -6,7 +6,7 @@ port = 2794
 data_path = "/home/lorenz/.music/"
 db_path  = "/home/lorenz/.music.db"
 
-#[webserver]
-#path = "./frontend/build/"
-#host = "192.168.1.13"
-#port = 8081
+[webserver]
+path = "./frontend/build/"
+host = "127.0.0.1"
+port = 8081

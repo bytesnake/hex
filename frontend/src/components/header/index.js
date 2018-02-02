@@ -19,6 +19,7 @@ export default class Header extends Component {
                     class={style.search_input}
                     placeholder="Suchen"
                     type="search"
+                    onClick={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
                     onInput={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
                     style="background-color:#FFF; color:#000; padding:10px; width: 100%;"
                 />
