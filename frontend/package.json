@@ -101,6 +101,7 @@
     "preact-portal": "^1.1.2",
     "preact-render-to-string": "^3.6.0",
     "preact-router": "^2.5.1",
+    "preact-token-input": "^0.3.0",
     "promise-polyfill": "^6.0.2",
     "proptypes": "^1.0.0",
     "react-autocomplete": "^1.7.2",

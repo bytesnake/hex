@@ -82,7 +82,7 @@ export default class TrackView extends Component {
         if(!tracks) return (<div />);
 
         return (
-            <div class={style.upload_data} onClick={e => e.stopPropagation()}>
+            <div class={style.files_data} onClick={e => e.stopPropagation()}>
                 <b>Title</b>
                 <Autocomplete id='autocomplete_title' source={(a,b) => this.suggest(a, b, "title")} showAllValues={true} 
                     onConfirm={(x) => this.update(document.getElementById("autocomplete_title").value, "title")} displayMenu='overlay' />

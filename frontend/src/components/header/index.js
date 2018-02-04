@@ -4,9 +4,10 @@ import style from './style.less';
 import {Layout, TextField, Icon} from 'preact-mdl';
 import Protocol from '../../lib/protocol.js';
 import Upload from '../upload';
+import TokenInput from 'preact-token-input';
 
 export default class Header extends Component {
-	render(props) {
+	render(props, {tags}) {
         return (
             <Layout.Header class={style.header}>
             <Layout.HeaderRow>
@@ -15,14 +16,14 @@ export default class Header extends Component {
 				<a href="/">Musik</a>
 			</Layout.Title>
             <div class={style.search}>
-                <TextField
+                <TokenInput 
                     class={style.search_input}
                     placeholder="Suchen"
-                    type="search"
                     onClick={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
-                    onInput={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
+                    onChange={(vals) => {route('/search/' + encodeURIComponent(vals.value.join(",")))}}
                     style="background-color:#FFF; color:#000; padding:10px; width: 100%;"
                 />
+
                 <div class={style.search_button}>
                     <Icon icon="search" />
                 </div>
@@ -36,3 +37,11 @@ export default class Header extends Component {
         );
 	}
 }
+                /*<TextField
+                    class={style.search_input}
+                    placeholder="Suchen"
+                    type="search"
+                    onClick={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
+                    onInput={(e) => {route('/search/' + encodeURIComponent(e.target.value))}}
+                    style="background-color:#FFF; color:#000; padding:10px; width: 100%;"
+                />*/

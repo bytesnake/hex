@@ -28,7 +28,6 @@ export default class Upload extends Component {
     }
 
     filesDropped = (e) => {
-        console.log("BLUB");
         e.stopPropagation();
         e.preventDefault();
 
@@ -52,9 +51,11 @@ export default class Upload extends Component {
             files.push([name, file.slice()]);
         }
 
+        console.log(files);
+
         Protocol.upload_files(files)
-        .then(tracks => {
-            this.setState({ tracks, intern: State.UploadDone });/*: keys.map(x => {
+        .then(keys => {
+            this.setState({ intern: State.UploadDone, tracks: keys.map(x => {
                 return {
                     "key": x,
                     "album": null,
@@ -63,11 +64,13 @@ export default class Upload extends Component {
                     "conductor": null,
                     "composer": null
                 };
-            }), intern: State.UploadDone });*/
+            })});
 
-            return new Promise((resolve) => setTimeout(resolve(x), 1500));
+            return new Promise((resolve) => setTimeout(resolve(keys), 1500));
         })
-        .then(suggestions => {
+        .then(keys => {
+            console.log(keys);
+
             this.setState({ intern: State.Tracks });
         });
     }
@@ -76,8 +79,8 @@ export default class Upload extends Component {
         console.log("State: " + intern);
 
         if(intern == State.Open) return (
-            <div class={style.files_inner}>
-                <input type="file" webkitdirectory allowdirs mozdirectory onChange={this.filesDropped}></input>
+            <div class={style.files_inner} onClick={e => e.stopPropagation()}>
+                <input type="file" webkitdirectory allowdir mozdirectory onChange={this.filesDropped} />
                 <div class={style.drop}>
                     <b>Drop your file/folder here!</b>
                 </div>

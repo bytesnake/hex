@@ -118,7 +118,7 @@ class Protocol {
         //return Promise.all([].map.call(files, function(file) {
             let uuid = guid();
 
-            let res = await self.send_msg(uuid, 'clear_buffer', null)
+            let res = await self.send_msg(uuid, 'clear_buffer', {})
             .then(() => self.send_binary(file[1]))
             .then(() => self.send_msg(uuid, 'add_track', {'format': file[0]}));
 

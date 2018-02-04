@@ -90,17 +90,10 @@ impl Connection {
 
     pub fn search_prep(&self, query: SearchQuery) -> Result<Statement> {
         let tmp = {
-            if query.is_empty() {
-                self.socket.prepare("SELECT Title, Album, Interpret, Conductor, Composer, Key, Duration, FavsCount, Channels 
-                                     FROM music").context(ErrorKind::Database)
-            } else {
-                let query = query.to_sql_query();
+            let query = query.to_sql_query();
 
-                println!("Query: {}", query);
-                self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels 
-                                              FROM music 
-                                              WHERE {};", query)).context(ErrorKind::Database)
-            }
+            println!("Query: {}", query);
+            self.socket.prepare(&query).context(ErrorKind::Database)
         };
 
         Ok(tmp?)

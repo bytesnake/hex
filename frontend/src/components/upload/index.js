@@ -33,6 +33,8 @@ export default class Upload extends Component {
     }
 
     close = () => {
+        console.trace();
+
         this.setState({show: Showing.Nothing});
     }
 

@@ -7,6 +7,39 @@ pub enum Tag {
     Composer(String)
 }
 
+pub enum Order {
+    ByID,
+    ByTitle,
+    ByFavs
+}
+
+impl Order {
+    pub fn from_search_query(query: &str) -> Option<Order> {
+        let elms = query.split(':').collect::<Vec<&str>>();
+
+        if elms.len() == 2 && elms[0] == "order" {
+            return match elms[1] {
+                "id" => Some(Order::ByID),
+                "title" => Some(Order::ByTitle),
+                "favs" => Some(Order::ByFavs),
+                _ => None
+            };
+        }
+
+        None
+    }
+
+    pub fn name(&self) -> String {
+        let tmp = match *self {
+            Order::ByID => "Title",
+            Order::ByTitle => "Title",
+            Order::ByFavs => "FavsCount"
+        };
+
+        tmp.into()
+    }
+}
+
 impl Tag {
     pub fn from_search_query(query: &str) -> Option<Tag> {
         let elms = query.split(':').collect::<Vec<&str>>();
@@ -38,14 +71,16 @@ impl Tag {
 }
 
 pub struct SearchQuery {
-    tags: Vec<Tag>
+    tags: Vec<Tag>,
+    order: Order
 }
 
 impl SearchQuery {
     pub fn new(input: &str) -> Option<SearchQuery> {
         let tags = input.split(',').filter_map(Tag::from_search_query).collect();
+        let order = input.split(',').filter_map(Order::from_search_query).next().unwrap_or(Order::ByID);
 
-        Some(SearchQuery { tags: tags })
+        Some(SearchQuery { tags: tags, order: order })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -53,6 +88,22 @@ impl SearchQuery {
     }
 
     pub fn to_sql_query(self) -> String {
-        self.tags.into_iter().map(|x| x.to_sql_query()).collect::<Vec<String>>().join(" OR ")
+        let mut tmp: String = "SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music".into();
+        
+        if !self.tags.is_empty() {
+            tmp.push_str(" WHERE ");
+            tmp.push_str(&self.tags.into_iter().map(|x| x.to_sql_query()).collect::<Vec<String>>().join(" AND "));
+        }
+
+        match self.order {
+            Order::ByTitle | Order::ByFavs => {
+                tmp.push_str(" ORDER BY ");
+                tmp.push_str(&self.order.name());
+                tmp.push_str(" DESC");
+            }
+            _ => {}
+        }
+
+        tmp
     }
 }
