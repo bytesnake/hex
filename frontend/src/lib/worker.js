@@ -78,7 +78,7 @@ function fill_buf() {
             console.error("Couldn't parse opus packet: " + e);
         }
 
-        console.log(buf.length);
+        //console.log(buf.length);
 
         if(resampler == null || resampler_length != buf.length) {
             resampler = new Resampler(48000, sample_rate, 2, buf.length);

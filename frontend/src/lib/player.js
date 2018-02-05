@@ -155,6 +155,14 @@ export default class Player {
         this.processor.disconnect(this.audioContext.destination);
     }
 
+    seek(pos) {
+        pos = Math.round(pos);
+        if(pos < 0 || pos > this.playlist[this.playlist_pos].duration)
+            return;
+
+        this.buffer.pos = pos * this.audioContext.sampleRate;
+    }
+
     next = () => {
         if(this.playlist_pos == this.playlist.length - 1) {
             this.set_playing_cb(false);
@@ -175,16 +183,16 @@ export default class Player {
     }
 
     prev = () => {
-        if(this.playlist_pos - 1 < 0)
-            return false;
+        if(this.time < 4) {
+            if(this.playlist_pos - 1 < 0)
+                return false;
 
-        this.playlist_pos --;
-        if(this.playlist[this.playlist_pos].key == this.playlist[this.playlist_pos-1].key)
-            this.buffer.pos = 0;
-        else {
+            this.playlist_pos --;
+
             this.new_track_cb(this.playlist[this.playlist_pos]);
             this.buffer.next_track(this.playlist[this.playlist_pos]);
-        }
+        } else
+            this.buffer.pos = 0;
 
         return true;
     }
@@ -192,6 +200,10 @@ export default class Player {
 
     get time() {
         return this.buffer.pos / this.audioContext.sampleRate;
+    }
+
+    get duration() {
+        return this.playlist[this.playlist_pos].duration;
     }
 
     time_percentage() {

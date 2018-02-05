@@ -62,6 +62,46 @@ export default class MusicPlayer extends Component {
         }
     }
 
+    seek = (e) => {
+        let rect = this.timer.getBoundingClientRect();
+
+        let slider_pos;
+        if(e.screenX < rect.x)
+            slider_pos = 0;
+        else if(e.screenX > rect.x && e.screenX < rect.x+rect.width)
+            slider_pos = (e.screenX - rect.x) / rect.width;
+        else
+            slider_pos = 1.0;
+
+        let inner = this.timer.children[0];
+        let knob = inner.children[0];
+
+        inner.style.width = slider_pos*rect.width + "px";
+        knob.style.left = slider_pos*rect.width + "px";
+
+        if(this.seek_timer)
+            clearTimeout(this.seek_timer)
+
+        this.seek_timer = setTimeout(() => {
+            this.player.seek(slider_pos * this.player.duration);
+            this.update = setInterval(this.update_time.bind(this), 300);
+            console.log("Set to " + slider_pos);
+        }, 500);
+    }
+
+    start_seek = (e) => {
+        if(this.player.playlist.length == 0)
+            return;
+
+        clearInterval(this.update);
+
+        window.addEventListener("mousemove", this.seek);
+        window.addEventListener("mouseup", _ => {
+            window.removeEventListener("mousemove", this.seek);
+        });
+
+    }
+
     update_time() {
         if(this.timer == null)
             return;
@@ -99,7 +139,7 @@ export default class MusicPlayer extends Component {
         return (
             <div class={sbottom.outer}>
             <div class={sbottom.music_player}>
-                <div class={sbottom.progress_bar} ref={x => this.timer = x}><div class={sbottom.progress_bar_inner}><div class={sbottom.round_button} /></div></div>
+                <div class={sbottom.progress_bar} ref={x => this.timer = x}><div class={sbottom.progress_bar_inner}><div class={sbottom.round_button} onMouseDown={this.start_seek} ref={x => this.timer_button = x}/></div></div>
                 <div class={sbottom.music_player_inner}>
                     <div class={sbottom.music_player_left}>
                         {cover && (

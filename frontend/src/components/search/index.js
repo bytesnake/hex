@@ -6,28 +6,49 @@ import TrackList from '../tracklist';
 
 // TODO advanced search method
 // gets called when this route is navigated to
-async function search(query) {
-    var tracks = [];
-    for await (const i of Protocol.search(query)) {
-        tracks.push(JSON.parse(JSON.stringify(i)));
-    }
-
+async function search(stream) {
     return tracks;
 }
 
 export default class Search extends Component {
+    state = {
+        updating: false,
+        finished: false,
+        stream: null,
+        query: null
+    };
+
     update = (props) => {
         if(this.state.query != props.query) {
-            this.setState({ query: props.query, updating: true });
-            search(props.query).then( tracks => {
-                this.setState({ query: props.query, updating: false, tracks });
-            });
+            let stream = Protocol.search(props.query);
+            this.setState({ stream: stream, query: props.query, tracks: [], updating: false, finished: false }, e => {this.more()})
         }
     }
 
+    more = async () => {
+        if(this.state.updating || this.state.finished)
+            return;
+
+        this.setState({ updating: true });
+
+        let tracks = await Promise.all(Array(20).fill(0).map(_ => this.state.stream.next()));
+
+        const length = tracks.filter(x => !x.done).length;
+        tracks = tracks.slice(0, length);
+        tracks = tracks.map(x => x.value);
+
+        const tmp = this.state.tracks.slice();
+        tmp.push.apply(tmp, tracks);
+
+        if(length < 20) 
+            this.setState({ tracks: tmp, finished: true, updating: false });
+        else
+            this.setState({ tracks: tmp, updating: false});
+    }
+
     componentDidMount() {
-        console.log("LALAL");
         this.update(this.props);
+
     }
 
     componentWillReceiveProps(props) {
@@ -35,11 +56,10 @@ export default class Search extends Component {
     }
 
 	// Note: `user` comes from the URL, courtesy of our router
-	render({}, { query, updating, tracks }) {
-        console.log("QUERY: " + query);
-        if(tracks && tracks.length > 0) {
+	render({}, { query, updating, stream, tracks }) {
+        if(stream && tracks.length > 0) {
             return (
-                <TrackList tracks={tracks} />
+                <TrackList loadMore={this.more} tracks={tracks} />
             );
         } else {
             return (
