@@ -26,16 +26,40 @@ class Protocol {
         return this.send_msg(uuid, 'update_track', track);
     }
 
+    upvote_track(key) {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'vote_for_track', {'key': key});
+    }
+
     get_playlists() {
         const uuid = guid();
 
         return this.send_msg(uuid, 'get_playlists', {});
     }
 
+    change_playlist_title(key, title) {
+        const uuid = guid();
+        
+        return this.send_msg(uuid, 'update_playlist', {'key': key, 'title': title});
+    }
+
+    change_playlist_desc(key, desc) {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'update_playlist', {'key': key, 'desc': desc});
+    }
+
     add_playlist(name) {
         const uuid = guid();
 
         return this.send_msg(uuid, 'add_playlist', {'name': name});
+    }
+
+    delete_playlist(key) {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'delete_playlist', {'key': key});
     }
 
     add_to_playlist(key, playlist) {
@@ -59,12 +83,6 @@ class Protocol {
         const uuid = guid();
 
         return this.send_msg(uuid, 'upload_youtube', {'url': url});
-    }
-
-    upvote_track(key) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'upvote_track', {'key': key});
     }
 
     delete_track(key) {

@@ -64,8 +64,8 @@ impl Collection {
         self.socket.get_track(key)
     }
 
-    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String> {
-        self.socket.update_track(key, title, album, interpret, conductor, composer)
+    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, people: Option<String>, composer: Option<String>) -> Result<String> {
+        self.socket.update_track(key, title, album, interpret, people, composer)
     }
 
     pub fn get_suggestion(&self, key: &str) -> Result<String> {
@@ -133,6 +133,14 @@ impl Collection {
         self.socket.add_playlist(name)
     }
 
+    pub fn delete_playlist(&self, key: &str) -> Result<()> {
+        self.socket.delete_playlist(key)
+    }
+
+    pub fn update_playlist(&self, key: &str, title: Option<String>, desc: Option<String>) -> Result<()> {
+        self.socket.update_playlist(key, title, desc)
+    }
+
     pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
         self.socket.add_to_playlist(key, playlist)
     }
@@ -142,6 +150,7 @@ impl Collection {
     }
 
     pub fn get_playlists_of_track(&self, key: &str) -> Result<Vec<Playlist>> {
+
         self.socket.get_playlists_of_track(key)
     }
 
@@ -153,5 +162,9 @@ impl Collection {
         fs::remove_file(path);
 
         self.socket.delete_track(key)
+    }
+
+    pub fn vote_for_track(&self, key: &str) -> Result<()> {
+        self.socket.vote_for_track(key)
     }
 }

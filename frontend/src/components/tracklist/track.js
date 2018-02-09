@@ -73,14 +73,19 @@ export default class Track extends Component {
     };
 
     onClick = (e) => {
+        if(this.state.minimal)
+            this.update_playlists();
+
+        this.setState({ minimal: !this.state.minimal });
+    }
+
+    update_playlists() {
         let pl_of_track = Protocol.get_playlists_of_track(this.props.track_key);
         let all_playlists = Protocol.get_playlists();
         
         Promise.all([pl_of_track, all_playlists]).then(values => {
             this.setState({ playlists: values[0], suggestions: values[1].map(x => x.title) });
         });
-
-        this.setState({ minimal: !this.state.minimal });
     }
 
     delete_forever = (e) => {
@@ -91,6 +96,15 @@ export default class Track extends Component {
 
     upvote = (e) => {
         Protocol.upvote_track(this.props.track_key);
+
+        e.stopPropagation();
+    }
+
+    open_web = (e) => {
+        let query = this.props.title + " " + this.props.interpret;
+        query = query.replace(/ /g, '+');
+
+        window.open('https://www.discogs.com/search/?q=' + query + '&type=all', '_blank');
     }
 
     suggest = (query) => {
@@ -122,9 +136,17 @@ export default class Track extends Component {
         }
     }
 
-    render({size, track_key, title, album, interpret, conductor, composer}, {minimal, hide, playlists, suggestions}) {
+    render({size, track_key, title, album, interpret, people, composer}, {minimal, hide, playlists, suggestions}) {
         if(hide)
             return;
+
+        // parse the people field to an array
+        let people_arr = [];
+        if(people) people_arr = people.split(',')
+            .map(x => x.trim())
+            .map(x => x.split(':'))
+            .filter(x => x.length == 2)
+            .map(x => { return {role: x[0], name: x[1]}; });
 
         if(minimal)
             return (
@@ -132,7 +154,7 @@ export default class Track extends Component {
                     <Element track_key={track_key} kind="title" value={title} />
                     {size != Size.ONLY_TITLE && (<Element track_key={track_key} kind="album" value={album} />)}
                     {size != Size.ONLY_TITLE && (<Element track_key={track_key} kind="interpret" value={interpret} />)}
-                    {size == Size.FULL && (<Element track_key={track_key} kind="conductor" value={conductor} />)}
+                    {size == Size.FULL && (<Element track_key={track_key} kind="people" value={people_arr.map(x => x.name).join(', ')} />)}
                     {size == Size.FULL && (<Element track_key={track_key} kind="composer" value={composer} />)}
                 </tr>
             );
@@ -146,14 +168,14 @@ export default class Track extends Component {
                                 <AddToQueueButton track_key={track_key} />
                                 <Button onClick={this.upvote}><Icon icon="insert emoticon" /></Button>
                                 <Button onClick={this.upvote}><Icon icon="file download" /></Button>
-                                <Button onClick={this.upvote}><Icon icon="language" /></Button>
+                                <Button onClick={this.open_web}><Icon icon="language" /></Button>
                                 <Button onClick={this.delete_forever} style="flex-grow: 1"><Icon icon="delete forever" /></Button>
                             </div>
                             <div class={style.desc_content}>
                                 <Element vertical track_key={track_key} kind="title" value={title} />
                                 <Element vertical track_key={track_key} kind="album" value={album} />
                                 <Element vertical track_key={track_key} kind="interpret" value={interpret} />
-                                <Element vertical track_key={track_key} kind="conductor" value={conductor} />
+                                <Element vertical track_key={track_key} kind="people" value={people} />
                                 <Element vertical track_key={track_key} kind="composer" value={composer} />
                             </div>
                             <div class={style.playlists}><b>Playlists</b><div class={style.playlist_inner}>

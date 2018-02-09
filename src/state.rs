@@ -1,7 +1,9 @@
 use std::fs::File;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::cell::RefCell;
+use std::borrow::BorrowMut;
 
 use serde_json;
 use failure::ResultExt;
@@ -47,7 +49,7 @@ impl RequestState {
         let state2 = state.clone();
 
         let hnd = dwnd.state().map(move |x| {
-            *state2.borrow_mut() = x;
+            *(*state2).borrow_mut() = x;
 
             ()
         });
@@ -79,7 +81,7 @@ impl State {
         }
     }
 
-    pub fn process(&mut self, msg: String) -> Result<OwnedMessage> {
+    pub fn process(&mut self, msg: String, card_key: &mut Option<String>) -> Result<OwnedMessage> {
         println!("Got: {}", &msg);
 
         let packet: proto::IncomingWrapper = serde_json::from_str(&msg).context(ErrorKind::Parsing)?;
@@ -175,9 +177,9 @@ impl State {
                 )
             },
 
-            proto::Incoming::UpdateTrack { key, title, album, interpret, conductor, composer } => {
+            proto::Incoming::UpdateTrack { key, title, album, interpret, people, composer } => {
                 ("update_track", 
-                    self.collection.update_track(&key, title, album, interpret, conductor, composer)
+                    self.collection.update_track(&key, title, album, interpret, people, composer)
                         .map(|x| proto::Outgoing::UpdateTrack(x))
                         .map_err(|err| err.context(ErrorKind::Music).into())
 
@@ -197,6 +199,20 @@ impl State {
             proto::Incoming::AddPlaylist { name } => {
                 ("add_playlist", self.collection.add_playlist(&name)
                     .map(|x| proto::Outgoing::AddPlaylist(x))
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
+            },
+
+            proto::Incoming::DeletePlaylist { key } => {
+                ("delete_playlist", self.collection.delete_playlist(&key)
+                    .map(|x| proto::Outgoing::DeletePlaylist)
+                    .map_err(|err| err.context(ErrorKind::Music).into())
+                )
+            },
+
+            proto::Incoming::UpdatePlaylist { key, title, desc } => {
+                ("update_playlist", self.collection.update_playlist(&key, title, desc)
+                    .map(|x| proto::Outgoing::UpdatePlaylist)
                     .map_err(|err| err.context(ErrorKind::Music).into())
                 )
             },
@@ -265,6 +281,22 @@ impl State {
 
                     self.collection.add_track(state.format(), &state.get_content().unwrap())
                 }).map(|x| proto::Outgoing::FinishYoutube(x)))
+            },
+
+            proto::Incoming::SetCardKey { key } => {
+                *card_key = Some(key);
+
+                ("set_card_key", Ok(proto::Outgoing::SetCardKey))
+            },
+
+            proto::Incoming::GetCardKey => {
+                ("get_card_key", Ok(proto::Outgoing::GetCardKey(card_key.clone())))
+            },
+
+            proto::Incoming::VoteForTrack { key } => {
+                ("vote_for_track", self.collection.vote_for_track(&key)
+                    .map(|_| proto::Outgoing::VoteForTrack)
+                    .map_err(|err| err.context(ErrorKind::Music).into()))
             }
 
         };

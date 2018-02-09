@@ -13,6 +13,8 @@ use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 
+use failure::Fail;
+
 use uuid::Uuid;
 
 #[derive(Serialize, Clone, Debug)]
@@ -20,7 +22,7 @@ pub struct Track {
     title: Option<String>,
     album: Option<String>,
     interpret: Option<String>,
-    conductor: Option<String>,
+    people: Option<String>,
     composer: Option<String>,
     fingerprint: String,
     pub key: String,
@@ -46,14 +48,14 @@ impl Track {
             title: None,
             album: None,
             interpret: None,
-            conductor: None,
+            people: None,
             composer: None,
             favs_count: 0,
             channels: 2
         }
     }
 
-    pub fn new(key: &str, fingerprint: &str, duration: f64, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>, favs_count: u32, channels: u32) -> Track {
+    pub fn new(key: &str, fingerprint: &str, duration: f64, title: Option<String>, album: Option<String>, interpret: Option<String>, people: Option<String>, composer: Option<String>, favs_count: u32, channels: u32) -> Track {
         Track {
             key: key.into(),
             fingerprint: fingerprint.into(),
@@ -61,7 +63,7 @@ impl Track {
             title: title,
             album: album,
             interpret: interpret,
-            conductor: conductor,
+            people: people,
             composer: composer,
             favs_count: favs_count,
             channels: channels
@@ -107,7 +109,7 @@ impl Connection {
                 album: row.get(1),
                 interpret: row.get(2),
                 fingerprint: row.get(3),
-                conductor: row.get(4),
+                people: row.get(4),
                 composer: row.get(5),
                 key: row.get(6),
                 duration: row.get(7),
@@ -155,7 +157,7 @@ impl Connection {
         println!("Got keys: {:?}", keys);
 
         if let Some(keys) = keys {
-            let query = format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys.split(",").map(|row| { format!("'{}'", row) }).collect::<Vec<String>>().join(","));
+            let query = format!("SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys.split(",").map(|row| { format!("'{}'", row) }).collect::<Vec<String>>().join(","));
 
             let mut stmt = self.socket.prepare(&query).context(ErrorKind::Database)?;
 
@@ -195,6 +197,23 @@ impl Connection {
         })
     }
 
+    pub fn delete_playlist(&self, key: &str) -> Result<()> {
+        self.socket.execute("DELETE FROM playlists WHERE key = ?", &[&key])
+            .map(|_| ())
+            .map_err(|err| err.context(ErrorKind::Database).into())
+    }
+
+    pub fn update_playlist(&self, key: &str, title: Option<String>, desc: Option<String>) -> Result<()> {
+        if let Some(title) = title {
+            self.socket.execute("UPDATE playlists SET title = ?1 WHERE Key = ?2", &[&title, &key]).context(ErrorKind::Database)?;
+        }
+        if let Some(desc) = desc {
+            self.socket.execute("UPDATE playlists SET desc = ?1 WHERE Key = ?2", &[&desc, &key]).context(ErrorKind::Database)?;
+        }
+
+        Ok(())
+    }
+
     pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
         let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count, tracks FROM Playlists WHERE Title=?;").context(ErrorKind::Database)?;
         let mut rows = stmt.query(&[&playlist]).context(ErrorKind::Database)?;
@@ -222,9 +241,9 @@ impl Connection {
 
     pub fn insert_track(&self, track: Track) -> Result<()> {
         self.socket.execute("INSERT INTO music 
-                                    (Title, Album, Interpret, Conductor, Composer, Key, Fingerprint, Duration, FavsCount, Channels) 
+                                    (Title, Album, Interpret, People, Composer, Key, Fingerprint, Duration, FavsCount, Channels) 
                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)", 
-                                    &[&track.title, &track.album, &track.interpret, &track.conductor, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels])
+                                    &[&track.title, &track.album, &track.interpret, &track.people, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels])
             .context(ErrorKind::Database)?;
 
         Ok(())
@@ -237,13 +256,13 @@ impl Connection {
     }
 
     pub fn get_track(&self, key: &str) -> Result<Track> {
-        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music WHERE Key = '{}'", key)).context(ErrorKind::Database)?;
+        let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music WHERE Key = '{}'", key)).context(ErrorKind::Database)?;
         
         let res = self.search(&mut stmt).next().ok_or(ErrorKind::Database);
 
         Ok(res?)
     }
-    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, conductor: Option<String>, composer: Option<String>) -> Result<String> {
+    pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, people: Option<String>, composer: Option<String>) -> Result<String> {
         if let Some(title) = title {
             self.socket.execute("UPDATE music SET Title = ? WHERE Key = ?", &[&title, &key]).context(ErrorKind::Database)?;
         }
@@ -253,14 +272,19 @@ impl Connection {
         if let Some(interpret) = interpret {
             self.socket.execute("UPDATE music SET Interpret = ? WHERE Key = ?", &[&interpret, &key]).context(ErrorKind::Database)?;
         }
-        if let Some(conductor) = conductor {
-            self.socket.execute("UPDATE music SET Conductor = ? WHERE Key = ?", &[&conductor, &key]).context(ErrorKind::Database)?;
+        if let Some(people) = people {
+            self.socket.execute("UPDATE music SET People = ? WHERE Key = ?", &[&people, &key]).context(ErrorKind::Database)?;
         }
         if let Some(composer) = composer {
             self.socket.execute("UPDATE music SET Composer = ? WHERE Key = ?", &[&composer, &key]).context(ErrorKind::Database)?;
         }
 
         return Ok(key.into());
-    
+    }
+
+    pub fn vote_for_track(&self, key: &str) -> Result<()> {
+        self.socket.execute("UPDATE music SET FavsCount = FavsCount + 1 WHERE Key = ?1", &[&key]).context(ErrorKind::Database)?;
+
+        Ok(())
     }
 }

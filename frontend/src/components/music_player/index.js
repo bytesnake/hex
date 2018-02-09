@@ -73,7 +73,7 @@ export default class MusicPlayer extends Component {
         else
             slider_pos = 1.0;
 
-        let inner = this.timer.children[0];
+        let inner = this.timer.children[1];
         let knob = inner.children[0];
 
         inner.style.width = slider_pos*rect.width + "px";
@@ -106,12 +106,15 @@ export default class MusicPlayer extends Component {
         if(this.timer == null)
             return;
 
-        let inner = this.timer.children[0];
+        let inner_loaded = this.timer.children[0];
+        let inner = this.timer.children[1];
         let knob = inner.children[0];
 
         const time = this.player.time_percentage();
+        const loaded = this.player.loaded_percentage();
 
         inner.style.width = time * this.timer.offsetWidth + "px";
+        inner_loaded.style.width = loaded * this.timer.offsetWidth + "px";
         knob.style.left = time * this.timer.offsetWidth + "px";
     }
 
@@ -139,7 +142,12 @@ export default class MusicPlayer extends Component {
         return (
             <div class={sbottom.outer}>
             <div class={sbottom.music_player}>
-                <div class={sbottom.progress_bar} ref={x => this.timer = x}><div class={sbottom.progress_bar_inner}><div class={sbottom.round_button} onMouseDown={this.start_seek} ref={x => this.timer_button = x}/></div></div>
+                <div class={sbottom.progress_bar} ref={x => this.timer = x}>
+                    <div class={sbottom.progress_bar_loaded} />
+                    <div class={sbottom.progress_bar_timer} >
+                        <div class={sbottom.round_button} onMouseDown={this.start_seek} ref={x => this.timer_button = x} />
+                    </div>
+                </div>
                 <div class={sbottom.music_player_inner}>
                     <div class={sbottom.music_player_left}>
                         {cover && (

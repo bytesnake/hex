@@ -24,15 +24,33 @@
     flex-grow: 1;
 
     height: 100%;
-    b {
-        border-bottom: 1px #DDD solid;
+    input {
         width: auto;
         font-size: 20px;
+        border: none;
+        border-bottom: 1px #DDD solid;
+        background: none;
+        box-shadow: none;
+        font-weight: bold;
     }
 
-    i {
+    textarea {
         margin-left: 20px;
         font-size: 15px;
+        border: none;
+        background: none;
+        box-shadow: none;
+        height: 100%;
     }
 }
 
+.header_actions {
+    display: flex;
+    flex-direction: column;
+    width: 100px;
+
+    i {
+        padding: 5px;
+        font-size: 25px;
+    }
+}

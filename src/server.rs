@@ -1,4 +1,6 @@
 use std::fmt::Debug;
+use std::sync::Arc;
+use std::cell::RefCell;
 
 use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
@@ -18,6 +20,9 @@ pub fn start(conf: Conf) {
     let addr = (conf.server.host.as_str(), conf.server.port);
 	let server = Server::bind(addr, &handle).unwrap();
 
+    //let card_key = Arc::new(RefCell::new(None));
+    let card_key = Arc::new(RefCell::new(None));
+
 	// time to build the server's future
 	// this will be a struct containing everything the server is going to do
 
@@ -35,6 +40,9 @@ pub fn start(conf: Conf) {
             }
 
             let handle2 = handle.clone();
+            let card_key2 = card_key.clone();
+            //let cards_2 = cards.clone();
+
             // accept the request to be a ws connection if it does
             let f = upgrade
                 .use_protocol("rust-websocket")
@@ -46,6 +54,7 @@ pub fn start(conf: Conf) {
                     let mut state = State::new(handle2);
 
                     let (sink, stream) = s.split();
+
                     stream
                     .take_while(|m| Ok(!m.is_close()))
                     .filter_map(move |m| {
@@ -53,8 +62,8 @@ pub fn start(conf: Conf) {
                             OwnedMessage::Ping(p) => Some(OwnedMessage::Pong(p)),
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(msg) => {
-                                let msg = state.process(msg).unwrap();
-                                //println!("Send: {}", msg);
+                                let mut key = card_key2.borrow_mut();
+                                let msg = state.process(msg, &mut *key).unwrap();
 
                                 Some(msg)
                             },

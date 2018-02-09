@@ -10,7 +10,7 @@ const Size = {
 
 export default class TrackList extends Component {
     state = {
-        size: Size.FULL // Omit Conductor, Composer if screen too small
+        size: Size.FULL // Omit People, Composer if screen too small
     };
     
     componentDidMount() {
@@ -49,7 +49,7 @@ export default class TrackList extends Component {
                         <th>Title</th>
                         {size != Size.ONLY_TITLE && (<th>Album</th>)}
                         {size != Size.ONLY_TITLE && (<th>Interpret</th>)}
-                        {size == Size.FULL && (<th>Conductor</th>)}
+                        {size == Size.FULL && (<th>People</th>)}
                         {size == Size.FULL && (<th>Composer</th>)}
                     </tr>
 

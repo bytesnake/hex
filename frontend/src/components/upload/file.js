@@ -61,7 +61,7 @@ export default class Upload extends Component {
                     "album": null,
                     "title": null,
                     "interpret": null,
-                    "conductor": null,
+                    "people": null,
                     "composer": null
                 };
             })});

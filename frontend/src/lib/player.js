@@ -9,6 +9,7 @@ class AudioBuffer {
         this.worker = new Worker();
 
         this._pos = 0;
+        this.pos_loaded = 0;
 
         this.worker.onmessage = this.on_packet.bind(this);
         this.finished = finished;
@@ -59,11 +60,18 @@ class AudioBuffer {
 
     on_packet(e) {
         if(e.data.kind == 0) {
-            if(this.buffer[0].length - e.data.offset < e.data.data[0].length) {
+
+            console.log(e.data.offset + e.data.data[0].length);
+            console.log(this.buffer[0].length);
+            if(this.buffer[0].length < e.data.offset + e.data.data[0].length) {
+                console.log("DONE");
+                this.pos_loaded = this.buffer[0].length;
 
                 this.buffer[0].set(e.data.data[0].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
                 this.buffer[1].set(e.data.data[1].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
             } else {
+                this.pos_loaded += e.data.data[0].length;
+
                 this.buffer[0].set(e.data.data[0], e.data.offset);
                 this.buffer[1].set(e.data.data[1], e.data.offset);
             }
@@ -122,15 +130,35 @@ export default class Player {
         let playlist = this.playlist;
         let buffer = this.buffer;
 
-        let tmp = Protocol.get_track(key);
-        tmp.then(x => {
-            playlist.push(x);
+        let tmp;
+        if(typeof key == "string") {
+            tmp = Protocol.get_track(key);
+            tmp.then(x => {
+                playlist.push(x);
 
-            if(playlist.length == 1) {
-                this.new_track_cb(x);
-                buffer.next_track(x);
+                if(playlist.length == 1) {
+                    this.new_track_cb(x);
+                    buffer.next_track(x);
+                }
+            });
+        } else {
+            let vecs = [];
+            for(var elm of key) {
+                vecs.push(Protocol.get_track(elm));
             }
-        });
+            
+            tmp = Promise.all(vecs);
+
+            tmp.then(x => {
+                console.log(x);
+                playlist.push.apply(playlist, x);
+
+                if(playlist.length == x.length) {
+                    this.new_track_cb(x[0]);
+                    buffer.next_track(x[0]);
+                }
+            });
+        }
 
         return tmp;
     }
@@ -165,7 +193,7 @@ export default class Player {
 
     next = () => {
         if(this.playlist_pos == this.playlist.length - 1) {
-            this.set_playing_cb(false);
+            //this.set_playing_cb(false);
             return false;
         }
 
@@ -215,5 +243,18 @@ export default class Player {
             this.next();
 
         return val;
+    }
+
+    loaded_percentage() {
+        if(this.playlist.length == 0)
+            return 0.0;
+
+        const tmp = this.buffer.pos_loaded / this.audioContext.sampleRate / this.playlist[this.playlist_pos].duration;
+
+
+        console.log(tmp);
+
+        return tmp;
+
     }
 }

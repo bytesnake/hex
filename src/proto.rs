@@ -39,7 +39,7 @@ pub enum Incoming {
         title: Option<String>,
         album: Option<String>,
         interpret: Option<String>,
-        conductor: Option<String>,
+        people: Option<String>,
         composer: Option<String>
     },
     #[serde(rename="get_suggestion")]
@@ -50,6 +50,10 @@ pub enum Incoming {
     AddPlaylist {
         name: String
     },
+    #[serde(rename="delete_playlist")]
+    DeletePlaylist {
+        key: String
+    },
     #[serde(rename="set_playlist_image")]
     SetPlaylistImage {
         key: String
@@ -58,6 +62,12 @@ pub enum Incoming {
     AddToPlaylist {
         key: String,
         playlist: String
+    },
+    #[serde(rename="update_playlist")]
+    UpdatePlaylist {
+        key: String,
+        title: Option<String>,
+        desc: Option<String>
     },
     #[serde(rename="get_playlists")]
     GetPlaylists,
@@ -78,7 +88,17 @@ pub enum Incoming {
         path: String
     },
     #[serde(rename="finish_youtube")]
-    FinishYoutube
+    FinishYoutube,
+    #[serde(rename="set_card_key")]
+    SetCardKey {
+        key: String
+    },
+    #[serde(rename="get_card_key")]
+    GetCardKey,
+    #[serde(rename="vote_for_track")]
+    VoteForTrack {
+        key: String
+    }
 }
 
 #[derive(Deserialize)]
@@ -109,6 +129,8 @@ pub enum Outgoing {
         data: String
     },
     AddPlaylist(Playlist),
+    DeletePlaylist,
+    UpdatePlaylist,
     SetPlaylistImage,
     AddToPlaylist(Playlist),
     GetPlaylists(Vec<Playlist>),
@@ -116,7 +138,10 @@ pub enum Outgoing {
     GetPlaylistsOfTrack(Vec<Playlist>),
     DeleteTrack(()),
     FromYoutube(youtube::State),
-    FinishYoutube(Track)
+    FinishYoutube(Track),
+    SetCardKey,
+    GetCardKey(Option<String>),
+    VoteForTrack
 }
 
 #[derive(Serialize)]

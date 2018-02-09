@@ -92,9 +92,9 @@ export default class TrackView extends Component {
                 <b>Interpret</b>
                 <Autocomplete id='autocomplete_interpret' source={(a,b) => this.suggest(a, b, "artist")} showAllValues={true}
                     onConfirm={() => this.update(document.getElementById("autocomplete_interpret").value, "interpret")} displayMenu='overlay' />
-                <b>Conductor</b>
-                <Autocomplete id='autocomplete_conductor' source={(a,b) => this.suggest(a, b, "artist")} showAllValues={true}
-                    onConfirm={() => this.update(document.getElementById("autocomplete_conductor").value, "conductor")} displayMenu='overlay' />
+                <b>People</b>
+                <Autocomplete id='autocomplete_people' source={(a,b) => this.suggest(a, b, "artist")} showAllValues={true}
+                    onConfirm={() => this.update(document.getElementById("autocomplete_people").value, "People")} displayMenu='overlay' />
                 <b>Composer</b>
                 <Autocomplete id='autocomplete_composer' source={(a,b) => this.suggest(a, b, "artist")} showAllValues={true}
                     onConfirm={() => this.update(document.getElementById("autocomplete_composer").value, "composer")} displayMenu='overlay' />

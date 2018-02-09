@@ -3,7 +3,7 @@ pub enum Tag {
     Title(String),
     Album(String),
     Interpret(String),
-    Conductor(String),
+    People(String),
     Composer(String)
 }
 
@@ -51,7 +51,7 @@ impl Tag {
                 "title" | "TITLE" => Some(Tag::Title(elms[1].into())),
                 "album" | "ALBUM" => Some(Tag::Album(elms[1].into())),
                 "interpret" | "INTERPRET" => Some(Tag::Interpret(elms[1].into())),
-                "conductor" | "performer" | "CONDUCTOR" | "PERFORMER" => Some(Tag::Conductor(elms[1].into())),
+                "people" | "performer" | "PEOPLE" | "PERFORMER" => Some(Tag::People(elms[1].into())),
                 "composer" | "COMPOSER" => Some(Tag::Composer(elms[1].into())),
                 _ => return None
             }
@@ -60,11 +60,11 @@ impl Tag {
 
     pub fn to_sql_query(self) -> String {
         match self {
-            Tag::Any(x) => format!("Title LIKE '%{}%' OR Album LIKE '%{}%' OR Interpret LIKE '%{}%' OR Conductor LIKE '%{}' OR Composer LIKE '%{}%'", x, x, x, x, x),
+            Tag::Any(x) => format!("Title LIKE '%{}%' OR Album LIKE '%{}%' OR Interpret LIKE '%{}%' OR People LIKE '%{}' OR Composer LIKE '%{}%'", x, x, x, x, x),
             Tag::Title(x) => format!("Title LIKE '%{}%'", x),
             Tag::Album(x) => format!("Album LIKE '%{}%'", x),
             Tag::Interpret(x) => format!("Interpret LIKE '%{}%'", x),
-            Tag::Conductor(x) => format!("Conductor LIKE '%{}%'", x),
+            Tag::People(x) => format!("People LIKE '%{}%'", x),
             Tag::Composer(x) => format!("Composer LIKE '%{}%'", x)
         }
     }
@@ -88,7 +88,7 @@ impl SearchQuery {
     }
 
     pub fn to_sql_query(self) -> String {
-        let mut tmp: String = "SELECT Title, Album, Interpret, Fingerprint, Conductor, Composer, Key, Duration, FavsCount, Channels FROM music".into();
+        let mut tmp: String = "SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music".into();
         
         if !self.tags.is_empty() {
             tmp.push_str(" WHERE ");
