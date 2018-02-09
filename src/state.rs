@@ -21,6 +21,7 @@ use hex_music::database::Track;
 
 use proto;
 
+use conf;
 use error::{Result, ErrorKind};
 use youtube;
 
@@ -72,11 +73,11 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(handle: Handle) -> State {
+    pub fn new(handle: Handle, conf: conf::Music) -> State {
         State {
             handle: handle,
             reqs: HashMap::new(),
-            collection: hex_music::Collection::new(),
+            collection: hex_music::Collection::new(conf.db_path, conf.data_path),
             buffer: Vec::new()
         }
     }

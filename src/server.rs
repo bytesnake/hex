@@ -41,6 +41,7 @@ pub fn start(conf: Conf) {
 
             let handle2 = handle.clone();
             let card_key2 = card_key.clone();
+            let conf_music = conf.music.clone();
             //let cards_2 = cards.clone();
 
             // accept the request to be a ws connection if it does
@@ -51,7 +52,7 @@ pub fn start(conf: Conf) {
                 //.and_then(|(s, _)| s.send(Message::text("Hello World!").into()))
                 // simple echo server impl
                 .and_then(|(s,_)| {
-                    let mut state = State::new(handle2);
+                    let mut state = State::new(handle2, conf_music);
 
                     let (sink, stream) = s.split();
 

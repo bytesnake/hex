@@ -27,19 +27,22 @@ use std::io::Read;
 use std::fs::File;
 use std::fs;
 use std::mem;
+use std::path::PathBuf;
 
 use database::{Playlist, Track};
 use error::{Result, ErrorKind};
 use failure::ResultExt;
 
 pub struct Collection {
-    socket: database::Connection
+    socket: database::Connection,
+    data_path: String
 }
 
 impl Collection {
-    pub fn new() -> Collection {
+    pub fn new(db_path: String, data_path: String) -> Collection {
         Collection {
-            socket: database::Connection::open_file("/home/lorenz/.music.db")
+            socket: database::Connection::open_file(&db_path),
+            data_path: data_path
         }
     }
 
@@ -76,8 +79,11 @@ impl Collection {
 
     /// Create a new stream with track
     pub fn stream_start(&self, key: &str) -> Result<File> {
-        let mut path = env::home_dir().ok_or(format_err!("Invalid home path!"))?;
+        /*let mut path = env::home_dir().ok_or(format_err!("Invalid home path!"))?;
         path.push(".music");
+        path.push(key);*/
+        let mut path = PathBuf::new();
+        path.push(&self.data_path);
         path.push(key);
 
         Ok(File::open(path).context(ErrorKind::Database)?)
@@ -155,9 +161,12 @@ impl Collection {
     }
 
     pub fn delete_track(&self, key: &str) -> Result<()> {
-        let mut path = env::home_dir().ok_or(()).unwrap();
-        path.push(".music");
+        let mut path = PathBuf::new();
+        path.push(&self.data_path);
         path.push(key);
+        /*let mut path = env::home_dir().ok_or(()).unwrap();
+        path.push(".music");
+        path.push(key);*/
 
         fs::remove_file(path);
 

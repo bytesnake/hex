@@ -84,6 +84,7 @@ impl Connection {
         //let mut dir = env::home_dir().expect("Could not find the home directory!");
         //dir.push(".music.db");
 
+        println!("Path: {}", path);
         Connection { socket: rusqlite::Connection::open(path).unwrap() }
     }
 

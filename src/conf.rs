@@ -30,7 +30,7 @@ impl Default for Server {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Music {
     pub data_path: String,
     pub db_path: String
