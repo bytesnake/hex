@@ -3,29 +3,24 @@ import {Icon, Button} from 'preact-mdl';
 import Player from '../../lib/player.js';
 import get_album_cover from '../../lib/get_cover.js';
 import sbottom from './style_bottom.less';
-
-const BUFFER_SIZE = 8192*2;
-const BUFFER_FILL = 4;
+import ProgressBar from './progress.js';
+import MusicQueue from './music_queue.js';
 
 export default class MusicPlayer extends Component {
     state = {
         is_playing: false,
-        track: null
+        track: null,
+        queue: [],
+        queue_pos: 0
     };
     
     componentWillMount() {
-        this.player = new Player(2, this.new_track, (x) => this.setState({ is_playing: x }));
-
-        this.update = setInterval(this.update_time.bind(this), 300);
+        this.player = new Player(2, this.new_track, (x) => this.setState({ is_playing: x }), (x) => this.setState({ queue: x }), (x) => this.setState({queue_pos: x}));
     }
 
     componentWillUmount() {
-        clearInterval(this.update);
-
         this.player.stop();
         this.player.clear();
-
-        console.log("UMOUNT");
     }
 
     new_track = (track) => {
@@ -48,8 +43,7 @@ export default class MusicPlayer extends Component {
     }
 
     add_track(key) {
-        this.player.add_track(key).then(x => {
-        });
+        this.player.add_track(key);
     }
 
     play_click(e) {
@@ -60,62 +54,6 @@ export default class MusicPlayer extends Component {
             this.player.play();
             this.setState({is_playing: true });
         }
-    }
-
-    seek = (e) => {
-        let rect = this.timer.getBoundingClientRect();
-
-        let slider_pos;
-        if(e.screenX < rect.x)
-            slider_pos = 0;
-        else if(e.screenX > rect.x && e.screenX < rect.x+rect.width)
-            slider_pos = (e.screenX - rect.x) / rect.width;
-        else
-            slider_pos = 1.0;
-
-        let inner = this.timer.children[1];
-        let knob = inner.children[0];
-
-        inner.style.width = slider_pos*rect.width + "px";
-        knob.style.left = slider_pos*rect.width + "px";
-
-        if(this.seek_timer)
-            clearTimeout(this.seek_timer)
-
-        this.seek_timer = setTimeout(() => {
-            this.player.seek(slider_pos * this.player.duration);
-            this.update = setInterval(this.update_time.bind(this), 300);
-            console.log("Set to " + slider_pos);
-        }, 500);
-    }
-
-    start_seek = (e) => {
-        if(this.player.playlist.length == 0)
-            return;
-
-        clearInterval(this.update);
-
-        window.addEventListener("mousemove", this.seek);
-        window.addEventListener("mouseup", _ => {
-            window.removeEventListener("mousemove", this.seek);
-        });
-
-    }
-
-    update_time() {
-        if(this.timer == null)
-            return;
-
-        let inner_loaded = this.timer.children[0];
-        let inner = this.timer.children[1];
-        let knob = inner.children[0];
-
-        const time = this.player.time_percentage();
-        const loaded = this.player.loaded_percentage();
-
-        inner.style.width = time * this.timer.offsetWidth + "px";
-        inner_loaded.style.width = loaded * this.timer.offsetWidth + "px";
-        knob.style.left = time * this.timer.offsetWidth + "px";
     }
 
     dur_to_string(duration) {
@@ -132,7 +70,7 @@ export default class MusicPlayer extends Component {
         window.open('https://www.azlyrics.com/lyrics/'+artist+'/'+title+'.html', '_blank');
     }
 
-    render({}, {is_playing, track, cover}) {
+    render({}, {is_playing, track, cover, queue, queue_pos}) {
         let play_pause = null;
         if(!is_playing)
             play_pause = <Icon style="font-size: 5em;" icon="play circle outline" onClick={this.play_click.bind(this)} onMouseOver={e => e.target.innerHTML = "play_circle_filled"} onMouseLeave={e => e.target.innerHTML = "play_circle_outline"} />;
@@ -142,12 +80,7 @@ export default class MusicPlayer extends Component {
         return (
             <div class={sbottom.outer}>
             <div class={sbottom.music_player}>
-                <div class={sbottom.progress_bar} ref={x => this.timer = x}>
-                    <div class={sbottom.progress_bar_loaded} />
-                    <div class={sbottom.progress_bar_timer} >
-                        <div class={sbottom.round_button} onMouseDown={this.start_seek} ref={x => this.timer_button = x} />
-                    </div>
-                </div>
+                <ProgressBar player={this.player} />
                 <div class={sbottom.music_player_inner}>
                     <div class={sbottom.music_player_left}>
                         {cover && (
@@ -174,12 +107,12 @@ export default class MusicPlayer extends Component {
                                 {this.dur_to_string(track.duration)}
                             </div>
                         }
-                        <div>
+                        <div class={sbottom.music_player_actions} >
                             {track && (
                                 <Icon onClick={this.show_lyrics.bind(this)} style="font-size: 40px;" icon="textsms" />
                             )}
 
-                            <Icon style="font-size: 40px;" icon="queue music" />
+                            <MusicQueue player={this.player} queue={queue} queue_pos={queue_pos} />
                         </div>
                     </div>
                 </div>

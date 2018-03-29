@@ -61,8 +61,8 @@ class AudioBuffer {
     on_packet(e) {
         if(e.data.kind == 0) {
 
-            console.log(e.data.offset + e.data.data[0].length);
-            console.log(this.buffer[0].length);
+            //console.log(e.data.offset + e.data.data[0].length);
+            //console.log(this.buffer[0].length);
             if(this.buffer[0].length < e.data.offset + e.data.data[0].length) {
                 console.log("DONE");
                 this.pos_loaded = this.buffer[0].length;
@@ -82,7 +82,7 @@ class AudioBuffer {
 const PLAY_BUFFER_SIZE = 2*8192;
 
 export default class Player {
-    constructor(numChannel, new_track_cb, set_playing_cb) {
+    constructor(numChannel, new_track_cb, set_playing_cb, set_queue_cb, set_queue_pos_cb) {
         try {
             this.audioContext = new AudioContext();
             this.processor = this.audioContext.createScriptProcessor(PLAY_BUFFER_SIZE, 0, numChannel);
@@ -95,10 +95,12 @@ export default class Player {
         this.buffer = new AudioBuffer(this.audioContext.sampleRate, 0, numChannel, this.next.bind(this));
         this.playing = false;
         this.numChannel = numChannel;
-        this.playlist = [];
-        this.playlist_pos = 0;
+        this.queue = [];
+        this.queue_pos = 0;
         this.new_track_cb = new_track_cb;
         this.set_playing_cb = set_playing_cb;
+        this.set_queue_cb = set_queue_cb;
+        this.set_queue_pos_cb = set_queue_pos_cb;
     }
 
     // forward to audio output
@@ -117,26 +119,30 @@ export default class Player {
     }
 
 
-    // clear the playlist
+    // clear the queue
     clear() {
         this.stop();
 
-        this.playlist = [];
-        this.playlist_pos = 0;
+        this.queue = [];
+        this.queue_pos = 0;
+
+        this.set_queue_pos_cb(this.queue_pos);
     }
 
     // add a new track to play
     add_track(key) {
-        let playlist = this.playlist;
+        let queue = this.queue;
         let buffer = this.buffer;
 
         let tmp;
         if(typeof key == "string") {
             tmp = Protocol.get_track(key);
             tmp.then(x => {
-                playlist.push(x);
+                queue.push(x);
 
-                if(playlist.length == 1) {
+                this.set_queue_cb(queue);
+
+                if(queue.length == 1) {
                     this.new_track_cb(x);
                     buffer.next_track(x);
                 }
@@ -151,9 +157,11 @@ export default class Player {
 
             tmp.then(x => {
                 console.log(x);
-                playlist.push.apply(playlist, x);
+                queue.push.apply(queue, x);
 
-                if(playlist.length == x.length) {
+                this.set_queue_cb(queue);
+
+                if(queue.length == x.length) {
                     this.new_track_cb(x[0]);
                     buffer.next_track(x[0]);
                 }
@@ -164,7 +172,7 @@ export default class Player {
     }
 
     is_empty() {
-        return this.playlist.length == 0;
+        return this.queue.length == 0;
     }
 
     play() {
@@ -185,26 +193,28 @@ export default class Player {
 
     seek(pos) {
         pos = Math.round(pos);
-        if(pos < 0 || pos > this.playlist[this.playlist_pos].duration)
+        if(pos < 0 || pos > this.queue[this.queue_pos].duration)
             return;
 
         this.buffer.pos = pos * this.audioContext.sampleRate;
     }
 
     next = () => {
-        if(this.playlist_pos == this.playlist.length - 1) {
+        if(this.queue_pos == this.queue.length - 1) {
             //this.set_playing_cb(false);
             return false;
         }
 
-        this.playlist_pos ++;
+        this.queue_pos ++;
+
+        this.set_queue_pos_cb(this.queue_pos);
 
         // if we are playing the same track again, just reset the position
-        if(this.playlist[this.playlist_pos].key == this.playlist[this.playlist_pos-1].key)
+        if(this.queue[this.queue_pos].key == this.queue[this.queue_pos-1].key)
             this.buffer.pos = 0;
         else {
-            this.new_track_cb(this.playlist[this.playlist_pos]);
-            this.buffer.next_track(this.playlist[this.playlist_pos]);
+            this.new_track_cb(this.queue[this.queue_pos]);
+            this.buffer.next_track(this.queue[this.queue_pos]);
         }
 
         return true;
@@ -212,33 +222,56 @@ export default class Player {
 
     prev = () => {
         if(this.time < 4) {
-            if(this.playlist_pos - 1 < 0)
+            if(this.queue_pos - 1 < 0)
                 return false;
 
-            this.playlist_pos --;
+            this.queue_pos --;
 
-            this.new_track_cb(this.playlist[this.playlist_pos]);
-            this.buffer.next_track(this.playlist[this.playlist_pos]);
+            this.set_queue_pos_cb(this.queue_pos);
+
+            this.new_track_cb(this.queue[this.queue_pos]);
+            this.buffer.next_track(this.queue[this.queue_pos]);
         } else
             this.buffer.pos = 0;
 
         return true;
     }
 
+    shuffle_below_current = () => {
+        var j, x, i;
+        for (i = this.queue.length - 1; i > this.queue_pos+1; i--) {
+            j = this.queue_pos + 1 + Math.floor(Math.random() * (i - this.queue_pos));
+            console.log(i + " -> " + j);
+            x = this.queue[i];
+            this.queue[i] = this.queue[j];
+            this.queue[j] = x;
+        }
+
+        this.set_queue_cb(this.queue);
+    }
+
+    set_queue_pos = (new_pos) => {
+        this.queue_pos = new_pos;
+
+        this.set_queue_pos_cb(this.queue_pos);
+
+        this.new_track_cb(this.queue[this.queue_pos]);
+        this.buffer.next_track(this.queue[this.queue_pos]);
+    }
 
     get time() {
         return this.buffer.pos / this.audioContext.sampleRate;
     }
 
     get duration() {
-        return this.playlist[this.playlist_pos].duration;
+        return this.queue[this.queue_pos].duration;
     }
 
     time_percentage() {
-        if(this.playlist.length == 0)
+        if(this.queue.length == 0)
             return 0.0;
 
-        const val = this.time / this.playlist[this.playlist_pos].duration;
+        const val = this.time / this.queue[this.queue_pos].duration;
         if(val == 100)
             this.next();
 
@@ -246,10 +279,10 @@ export default class Player {
     }
 
     loaded_percentage() {
-        if(this.playlist.length == 0)
+        if(this.queue.length == 0)
             return 0.0;
 
-        const tmp = this.buffer.pos_loaded / this.audioContext.sampleRate / this.playlist[this.playlist_pos].duration;
+        const tmp = this.buffer.pos_loaded / this.audioContext.sampleRate / this.queue[this.queue_pos].duration;
 
 
         console.log(tmp);
