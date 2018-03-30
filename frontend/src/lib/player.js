@@ -33,6 +33,7 @@ class AudioBuffer {
 
         this.buffer = [new Float32Array(samples), new Float32Array(samples)];
         this._pos = 0;
+        this.pos_loaded = 0;
 
         this.worker.postMessage({kind: 0, channel: this.channel, samples: samples, track: track, sample_rate: this.sample_rate});
     }
@@ -64,7 +65,6 @@ class AudioBuffer {
             //console.log(e.data.offset + e.data.data[0].length);
             //console.log(this.buffer[0].length);
             if(this.buffer[0].length < e.data.offset + e.data.data[0].length) {
-                console.log("DONE");
                 this.pos_loaded = this.buffer[0].length;
 
                 this.buffer[0].set(e.data.data[0].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
@@ -121,11 +121,14 @@ export default class Player {
 
     // clear the queue
     clear() {
+        console.log("CLEAR");
+
         this.stop();
 
         this.queue = [];
         this.queue_pos = 0;
 
+        this.set_queue_cb(this.queue);
         this.set_queue_pos_cb(this.queue_pos);
     }
 
@@ -241,7 +244,6 @@ export default class Player {
         var j, x, i;
         for (i = this.queue.length - 1; i > this.queue_pos+1; i--) {
             j = this.queue_pos + 1 + Math.floor(Math.random() * (i - this.queue_pos));
-            console.log(i + " -> " + j);
             x = this.queue[i];
             this.queue[i] = this.queue[j];
             this.queue[j] = x;
@@ -257,6 +259,12 @@ export default class Player {
 
         this.new_track_cb(this.queue[this.queue_pos]);
         this.buffer.next_track(this.queue[this.queue_pos]);
+    }
+
+    remove_track = (pos) => {
+        this.queue.splice(pos, 1);
+
+        this.set_queue_cb(this.queue);
     }
 
     get time() {
@@ -283,9 +291,7 @@ export default class Player {
             return 0.0;
 
         const tmp = this.buffer.pos_loaded / this.audioContext.sampleRate / this.queue[this.queue_pos].duration;
-
-
-        console.log(tmp);
+        //console.log(this.buffer.pos_loaded);
 
         return tmp;
 

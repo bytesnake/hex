@@ -3,20 +3,17 @@ import {Icon} from 'preact-mdl';
 import style from './music_queue_style.less';
 
 class QueueItem extends Component {
-    remove_track = () => {
+    remove_track = (e) => {
         this.props.player.remove_track(this.props.idx);
+
+        e.stopPropagation();
     }
 
     play_track = () => {
         this.props.player.set_queue_pos(this.props.idx);
     }
 
-
     render({title, interpret, current, idx}, {}) {
-        console.log("RENDER");
-
-        console.log(current);
-
         return (
             <div class={style.item} onClick={this.play_track}>
                 <div class={style.desc}>
@@ -24,7 +21,7 @@ class QueueItem extends Component {
                     <span>{interpret}</span>
                 </div>
 
-                <div class={style.remove_track} onClick={this.removeTrack} >
+                <div class={style.remove_track} onClick={this.remove_track} >
                     <Icon icon={(current?"play circle filled":"remove circle outline")} />
                 </div>
             </div>
@@ -43,17 +40,20 @@ export default class MusicQueue extends Component {
     }
 
     shuffle = () => {
-        console.log("BLUB");
         this.props.player.shuffle_below_current();
     }
+
+    clear = () => {
+        this.props.player.clear();
+    }
+
     dur_to_string(duration) {
         let min = Math.floor(duration/60);
         let sec =  Math.round(duration) % 60;
 
-        return min + ":" + sec;
+        return min + "h " + sec + "m";
     }
     render({player, queue, queue_pos},{visible} ) {
-        console.log("RENDER IDX: " + queue_pos);
         var idx = 0;
         var duration = 0.0;
 
@@ -63,7 +63,7 @@ export default class MusicQueue extends Component {
 
         return (
             <div class={style.music_queue}>
-                <Icon style="font-size: 40px;" icon="queue music" onClick={this.click}/>
+                <Icon icon="queue music" onClick={this.click}/>
                 {visible && (
                     <div class={style.inner} tabindex="0">
                     <div class={style.inner_wrapper}>
@@ -81,9 +81,12 @@ export default class MusicQueue extends Component {
                         <div class={style.inner_actions}>
                             <div class={style.inner_actions_icons}>
                                 <Icon icon="shuffle" onClick={this.shuffle} />
+                                <Icon icon="delete sweep" onClick={this.clear} />
                             </div>
+                            <b>{queue_pos+1}/{queue.length} Lieder</b>
                             <b>{this.dur_to_string(duration)}</b>
                         </div>
+                        <div class={style.arrow_down} />
                    </div>
                 )}
             </div>

@@ -56,11 +56,16 @@ export default class MusicPlayer extends Component {
         }
     }
 
-    dur_to_string(duration) {
+    dur_to_string(track) {
+        if(!track || !track.duration || this.state.queue.length == 0)
+            return "0m 0s";
+
+        let duration = track.duration;
+
         let min = Math.floor(duration/60);
         let sec =  Math.round(duration) % 60;
 
-        return min + ":" + sec;
+        return min + "m " + sec + "s";
     }
 
     show_lyrics() {
@@ -83,13 +88,13 @@ export default class MusicPlayer extends Component {
                 <ProgressBar player={this.player} />
                 <div class={sbottom.music_player_inner}>
                     <div class={sbottom.music_player_left}>
-                        {cover && (
+                        {queue.length > 0 && cover && (
                             <img src={cover} />
                         )}
-                        {!cover && (
+                        {(queue.length == 0 || !cover) && (
                             <Icon style="font-size: 5em" icon="art track" />
                         )}
-                        {track && (
+                        {queue.length > 0 && track && (
                             <span>
                                 <b>{track.title?track.title:"Unbekannt"}</b>
                                 {track.interpret}
@@ -102,17 +107,16 @@ export default class MusicPlayer extends Component {
                         <Icon style="font-size: 3em;" icon="skip next" onClick={this.player.next}/>
                     </div>
                     <div class={sbottom.music_player_right}>
-                        {track &&
-                            <div>
-                                {this.dur_to_string(track.duration)}
+                        {queue.length > 0 && track && (
+                            <div class={sbottom.music_player_actions} >
+                                <MusicQueue player={this.player} queue={queue} queue_pos={queue_pos} />
+                                <Icon onClick={this.show_lyrics.bind(this)} icon="textsms" />
+                                <Icon icon="file download" />
+                                <Icon icon="language" />
                             </div>
-                        }
-                        <div class={sbottom.music_player_actions} >
-                            {track && (
-                                <Icon onClick={this.show_lyrics.bind(this)} style="font-size: 40px;" icon="textsms" />
-                            )}
-
-                            <MusicQueue player={this.player} queue={queue} queue_pos={queue_pos} />
+                        )}
+                        <div class={sbottom.music_player_time}>
+                            {this.dur_to_string(track)}
                         </div>
                     </div>
                 </div>
