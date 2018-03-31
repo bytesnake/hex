@@ -2,7 +2,7 @@ import { guid } from './uuid.js'
 
 class Protocol {
     constructor() {
-        this.socket = new WebSocket('ws://' + window.location.hostname + ':2794', 'rust-websocket');
+        this.socket = new WebSocket('ws://103.11.143.113:2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
 
         var self = this;
