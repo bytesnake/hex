@@ -4,6 +4,7 @@ use error::{ErrorKind, Result};
 use failure::Fail;
 use std::result;
 use youtube;
+use state::UploadProgress;
 
 
 #[derive(Deserialize)]
@@ -19,10 +20,6 @@ pub enum Incoming {
     },
     #[serde(rename="clear_buffer")]
     ClearBuffer,
-    #[serde(rename="add_track")]
-    AddTrack {
-        format: String
-    },
     #[serde(rename="stream_next")]
     StreamNext {
         key: String
@@ -83,12 +80,14 @@ pub enum Incoming {
     DeleteTrack {
         key: String
     },
-    #[serde(rename="from_youtube")]
-    FromYoutube {
+    #[serde(rename="upload_youtube")]
+    UploadYoutube {
         path: String
     },
-    #[serde(rename="finish_youtube")]
-    FinishYoutube,
+    #[serde(rename="upload_track")]
+    UploadTrack {
+        format: String
+    },
     #[serde(rename="set_card_key")]
     SetCardKey {
         key: String
@@ -98,7 +97,9 @@ pub enum Incoming {
     #[serde(rename="vote_for_track")]
     VoteForTrack {
         key: String
-    }
+    },
+    #[serde(rename="ask_upload_progress")]
+    AskUploadProgress
 }
 
 #[derive(Deserialize)]
@@ -117,7 +118,6 @@ pub enum Outgoing {
     },
     Track(Track),
     ClearBuffer,
-    AddTrack(String),
     StreamNext,
     StreamSeek {
         pos: f64
@@ -137,11 +137,12 @@ pub enum Outgoing {
     GetPlaylist((Playlist,Vec<Track>)),
     GetPlaylistsOfTrack(Vec<Playlist>),
     DeleteTrack(()),
-    FromYoutube(youtube::State),
-    FinishYoutube(Track),
+    UploadYoutube,
+    UploadTrack,
     SetCardKey,
     GetCardKey(Option<String>),
-    VoteForTrack
+    VoteForTrack,
+    AskUploadProgress(Vec<UploadProgress>)
 }
 
 #[derive(Serialize)]

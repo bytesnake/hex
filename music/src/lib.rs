@@ -15,12 +15,19 @@ extern crate uuid;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate serde;
+extern crate tokio_core;
+extern crate tokio_io;
+extern crate tokio_process;
+extern crate futures;
+extern crate bytes;
 
 pub mod music_search;
 pub mod database;
 pub mod acousticid;
 pub mod audio_file;
 pub mod error;
+pub mod ffmpeg;
+pub mod opus_conv;
 
 use std::env;
 use std::io::Read;

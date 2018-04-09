@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::fs::{self, File};
 use std::process::Command;
 use std::process::Stdio;
@@ -14,6 +14,9 @@ use bytes::BytesMut;
 use failure::ResultExt;
 
 use error::{Result, ErrorKind};
+use uuid::Uuid;
+
+use hound::WavReader;
 
 struct LineCodec;
 
@@ -63,7 +66,6 @@ pub enum Error {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct State {
-    name: String,
     file: String,
     pub progress: f32
 }
@@ -71,43 +73,56 @@ pub struct State {
 impl State {
     pub fn empty() -> State {
         State {
-            name: "".into(),
             file: "".into(),
             progress: 0.0
         }
     }
 
-    pub fn format(&self) -> &str {
-        self.file.rsplit(".").next().unwrap()
-    }
+    pub fn read(&self) -> (Vec<i16>, u32, f64) {
+        // read the whole wave file
+        let mut reader = WavReader::open(&self.file).unwrap();
 
-    pub fn get_content(&self) -> Result<Vec<u8>> {
-        let mut file = File::open(&self.file).context(ErrorKind::Youtube)?;
+        let samples = reader.samples::<i16>().map(|x| x.unwrap()).collect::<Vec<i16>>();
 
-        let mut tmp = Vec::new();
-        let nread = file.read_to_end(&mut tmp).unwrap();
+        // use the metadata section to determine sample rate, number of channel and duration in
+        // seconds
+        let sample_rate = reader.spec().sample_rate as f64;
+        let num_channel = reader.spec().channels;
+        let duration = reader.duration() as f64 / sample_rate as f64;
 
-        fs::remove_file(&self.file).context(ErrorKind::Youtube)?;
-        //debug!("Read {} bytes from youtube", nread);
-
-        Ok(tmp)
+        (samples, num_channel as u32, duration)
     }
 }   
 
-pub struct Downloader {
+pub struct Converter {
     pub handle: Handle,
     child: Option<Child>,
     stdout: Option<ToLine<ChildStdout>>,
     stderr: Option<ToLine<ChildStderr>>
 }
 
-impl Downloader {
-    pub fn new(handle: Handle, addr: &str) -> Downloader {
-        let mut cmd = Command::new("youtube-dl")
-            .arg("--external-downloader").arg("aria2c")
-            .arg("-f").arg("bestaudio")
-            .arg("-o").arg("/tmp/%(title)s.%(ext)s")
-            .arg(addr)
+impl Converter {
+    pub fn new(handle: Handle, data: &[u8], format: &str) -> Result<Converter> {
+        // Generate a new filename for our temporary conversion
+        let id = Uuid::new_v4();
+        let filename = format!("/tmp/{}.{}", id, format);
+        let filename_out = format!("/tmp/{}_out.{}", id, format);
+
+        // convert to wave file
+        let mut file = File::create(&filename)
+            .context(ErrorKind::Conversion)?;
+
+        file.write_all(data)
+            .context(ErrorKind::Conversion)?;
+
+        file.sync_all()
+            .context(ErrorKind::Conversion)?;
+
+        let mut cmd = Command::new("ffmpeg")
+            .arg("-y")
+            .arg("-i").arg(&filename)
+            .arg("-ar").arg("48000")
+            .arg(&filename_out)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn_async(&handle)
@@ -115,12 +130,12 @@ impl Downloader {
 
         let (stdout, stderr) = (cmd.stdout().take().unwrap(), cmd.stderr().take().unwrap());
 
-        Downloader {
+        Ok(Converter {
             handle: handle,
             child: Some(cmd),
             stdout: Some(ToLine::new(stdout)),
             stderr: Some(ToLine::new(stderr))
-        }
+        })
     }
 
     pub fn state(&mut self) -> impl Stream<Item=State, Error=Error> {
@@ -130,6 +145,7 @@ impl Downloader {
             out.chain(err).map(move |msg| {
                 println!("Msg: {}", msg);
 
+                /*
                 if msg.contains("Destination: ") {
                     if let Some(file) = msg.split(": ").skip(1).next() {
                         let file = file.trim();
@@ -144,7 +160,7 @@ impl Downloader {
                     }
                 } else if msg.contains("100%") {
                     state.progress = 1.0;
-                }
+                }*/
 
 
                 state.clone()

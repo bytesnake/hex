@@ -2,7 +2,7 @@ import { guid } from './uuid.js'
 
 class Protocol {
     constructor() {
-        this.socket = new WebSocket('ws://103.11.143.113:2794', 'rust-websocket');
+        this.socket = new WebSocket('ws://127.0.0.1:2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
 
         var self = this;
@@ -79,12 +79,6 @@ class Protocol {
         return this.send_msg(uuid, 'get_playlists_of_track', {'key': key});
     }
 
-    upload_youtube(url) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'upload_youtube', {'url': url});
-    }
-
     delete_track(key) {
         const uuid = guid();
 
@@ -97,6 +91,12 @@ class Protocol {
 
     youtube_finish(uuid) {
         return this.send_msg(uuid, 'finish_youtube', {});
+    }
+
+    ask_upload_progress() {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'ask_upload_progress', {});
     }
 
     async *stream(uuid, track_key) {

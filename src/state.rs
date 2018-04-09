@@ -24,6 +24,8 @@ use proto;
 use conf;
 use error::{Result, ErrorKind};
 use youtube;
+use hex_music::ffmpeg;
+use hex_music::opus_conv;
 
 enum RequestState {
     Search {
@@ -34,16 +36,38 @@ enum RequestState {
     Stream {
         file: File,
         track: Track
-    },
-
-    Youtube {
-        downloader: youtube::Downloader,
-        state: Rc<RefCell<youtube::State>>
     }
 }
 
-impl RequestState {
-    pub fn stream(path: &str, handle: Handle) -> RequestState {
+#[derive(Serialize, Debug)]
+pub struct UploadProgress {
+    kind: String,
+    progress: f32,
+    key: String,
+    track_key: Option<String>
+}
+
+enum UploadState {
+    YoutubeDownload {
+        downloader: youtube::Downloader,
+        state: Rc<RefCell<youtube::State>>,
+        key: String
+    },
+    ConvertingFFMPEG {
+        converter: ffmpeg::Converter,
+        state: Rc<RefCell<ffmpeg::State>>,
+        key: String
+    },
+    ConvertingOpus {
+        converter: opus_conv::Converter,
+        state: Rc<RefCell<opus_conv::State>>,
+        key: String,
+        track_key: Option<String>
+    }
+}
+
+impl UploadState {
+    pub fn youtube(key: String, path: &str, handle: Handle) -> UploadState {
         let mut dwnd = youtube::Downloader::new(handle.clone(), path);
 
         let state = Rc::new(RefCell::new(youtube::State::empty()));
@@ -58,9 +82,86 @@ impl RequestState {
         dwnd.spawn(hnd);
         handle.spawn(dwnd.child().into_future().map(|_| ()).map_err(|_| ()));
 
-        RequestState::Youtube {
+        UploadState::YoutubeDownload {
             downloader: dwnd,
-            state: state
+            state: state,
+            key: key
+        }
+    }
+
+    pub fn converting_ffmpeg(handle: Handle, key: String, data: &[u8], format: &str) -> UploadState {
+        let mut dwnd = ffmpeg::Converter::new(handle.clone(), data, format).unwrap();
+
+        let state = Rc::new(RefCell::new(ffmpeg::State::empty()));
+        let state2 = state.clone();
+
+        let hnd = dwnd.state().map(move |x| {
+            *(*state2).borrow_mut() = x;
+
+            ()
+        });
+
+        dwnd.spawn(hnd);
+        handle.spawn(dwnd.child().into_future().map(|_| ()).map_err(|_| ()));
+
+        UploadState::ConvertingFFMPEG {
+            converter: dwnd,
+            state: state,
+            key: key
+        }
+    }
+
+    pub fn converting_opus(handle: Handle, key: String, samples: &[i16], duration: f32, num_channel: u32) -> UploadState {
+        let mut dwnd = opus_conv::Converter::new(handle.clone(), Vec::from(samples), duration, num_channel);
+
+        let state = Rc::new(RefCell::new(opus_conv::State::empty()));
+        let state2 = state.clone();
+
+        let hnd = dwnd.state().map(move |x| {
+            *(*state2).borrow_mut() = x;
+
+            ()
+        });
+
+        dwnd.spawn(hnd);
+        //handle.spawn(dwnd.child().into_future().map(|_| ()).map_err(|_| ()));
+
+        UploadState::ConvertingOpus {
+            converter: dwnd,
+            state: state,
+            key: key,
+            track_key: None
+        }
+        
+    }
+
+    pub fn kind(&self) -> &str {
+        match *self {
+            UploadState::YoutubeDownload { .. } => "youtube_download",
+            UploadState::ConvertingFFMPEG { .. } => "converting_ffmpeg",
+            UploadState::ConvertingOpus { .. } => "converting_opus"
+        }
+    }
+    pub fn progress(&self) -> f32 {
+        match *self {
+            UploadState::YoutubeDownload { ref state, .. } => state.borrow().progress,
+            UploadState::ConvertingFFMPEG { ref state, .. } => state.borrow().progress,
+            UploadState::ConvertingOpus { ref state, .. } => state.borrow().progress
+        }
+    }
+    pub fn key(&self) -> String {
+        match *self {
+            UploadState::YoutubeDownload { ref key, .. } => key.clone(),
+            UploadState::ConvertingFFMPEG { ref key, .. } => key.clone(),
+            UploadState::ConvertingOpus { ref key, .. } => key.clone()
+        }
+    }
+
+    pub fn track_key(&self) -> Option<String> {
+        match *self {
+            UploadState::YoutubeDownload { .. } => None,
+            UploadState::ConvertingFFMPEG { .. } => None,
+            UploadState::ConvertingOpus { ref track_key, .. } => track_key.clone()
         }
     }
 }
@@ -69,7 +170,8 @@ pub struct State {
     handle: Handle,
     reqs: HashMap<String, RequestState>,
     collection: hex_music::Collection,
-    buffer: Vec<u8>
+    buffer: Vec<u8>,
+    uploads: Vec<UploadState>
 }
 
 impl State {
@@ -78,7 +180,8 @@ impl State {
             handle: handle,
             reqs: HashMap::new(),
             collection: hex_music::Collection::new(conf.db_path, conf.data_path),
-            buffer: Vec::new()
+            buffer: Vec::new(),
+            uploads: Vec::new()
         }
     }
 
@@ -171,13 +274,6 @@ impl State {
                 ("clear_buffer", Ok(proto::Outgoing::ClearBuffer))
             },
 
-            proto::Incoming::AddTrack { format } => {
-                ("add_track", self.collection.add_track(&format, &self.buffer)
-                    .map(|x| proto::Outgoing::AddTrack(x.key))
-                    .map_err(|err| err.context(ErrorKind::Music).into())
-                )
-            },
-
             proto::Incoming::UpdateTrack { key, title, album, interpret, people, composer } => {
                 ("update_track", 
                     self.collection.update_track(&key, title, album, interpret, people, composer)
@@ -253,35 +349,72 @@ impl State {
                 )
             },
 
-            proto::Incoming::FromYoutube { path } => {
+            proto::Incoming::UploadYoutube { path } => {
                 println!("YOUTUBE ID {}", packet.id);
 
                 let handle = self.handle.clone();
-                let prior_state = self.reqs.entry(packet.id.clone())
-                    .or_insert_with(|| {
-                        RequestState::stream(&path, handle)
-                    });
 
-                let state = match prior_state {
-                    &mut RequestState::Youtube { ref state, .. } => state,
-                    _ => panic!("blub")
-                };
+                self.uploads.push(UploadState::youtube(path, &packet.id, handle));
 
-                let val = Ok(state.borrow().clone());
-                ("from_youtube", val.map(|x|  proto::Outgoing::FromYoutube(x)))
+                ("upload_youtube", Ok(proto::Outgoing::UploadYoutube))
             },
 
-            proto::Incoming::FinishYoutube => {
-                remove = true;
+            proto::Incoming::UploadTrack { format } => {
+                let handle = self.handle.clone();
 
-                ("finish_youtube", self.reqs.get(&packet.id).ok_or(ErrorKind::Youtube.into()).and_then(|state| {
-                    let state = match state {
-                        &RequestState::Youtube { ref state, .. } => state.borrow(),
-                        _ => panic!("blub")
-                    };
+                self.uploads.push(UploadState::converting_ffmpeg(handle, packet.id.clone(), &self.buffer, &format));
 
-                    self.collection.add_track(state.format(), &state.get_content().unwrap())
-                }).map(|x| proto::Outgoing::FinishYoutube(x)))
+                ("upload_track", Ok(proto::Outgoing::UploadTrack))
+            },
+
+            proto::Incoming::AskUploadProgress => {
+                println!("Ask upload progress");
+
+                let mut tmp = self.uploads.split_off(0);
+                
+                for item in tmp.iter_mut() {
+                    let mut tmp2 = None;
+
+                    match *item {
+                        UploadState::YoutubeDownload { ref state, ref key, ref downloader } => {
+                            let state = state.borrow();
+                            if state.progress == 1.0 {
+                                //TODO
+                                tmp2 = Some(UploadState::converting_ffmpeg(downloader.handle.clone(), packet.id.clone(), &state.get_content().unwrap(), state.format()));
+                            }
+                        },
+                        UploadState::ConvertingFFMPEG { ref key, ref state, ref converter } => {
+                            let state = state.borrow();
+
+                            let (data, num_channel, duration) = state.read();
+
+                            if state.progress == 1.0 {
+
+                                tmp2 = Some(UploadState::converting_opus(converter.handle.clone(), packet.id.clone(), &data, duration as f32, num_channel));
+                            }
+                        },
+                        _ => {}
+                    }
+
+                    if let Some(tmp2) = tmp2 {
+                        *item = tmp2;
+                    }
+                }
+
+                // replace old version
+                self.uploads = tmp;
+
+                // collect update informations
+                let infos = self.uploads.iter().map(|item| {
+                    UploadProgress {
+                        kind: item.kind().into(),
+                        progress: item.progress(),
+                        key: item.key(),
+                        track_key: item.track_key()
+                    }
+                }).collect();
+
+                ("ask_upload_progress", Ok(proto::Outgoing::AskUploadProgress(infos)))
             },
 
             proto::Incoming::SetCardKey { key } => {
