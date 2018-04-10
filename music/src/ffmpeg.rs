@@ -27,8 +27,6 @@ impl codec::Decoder for LineCodec {
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> result::Result<Option<String>, io::Error> {
-        println!("{}", buf.len());
-
         if let Some(n) = buf.as_ref().iter().position(|b| (*b == b'\n' || *b == b'\r')) {
             let line = buf.split_to(n);
             buf.split_to(1);
@@ -67,18 +65,22 @@ pub enum Error {
 #[derive(Clone, Debug, Serialize)]
 pub struct State {
     file: String,
+    duration: Option<u64>,
     pub progress: f32
 }
 
 impl State {
-    pub fn empty() -> State {
+    pub fn empty(file: &str) -> State {
         State {
-            file: "".into(),
+            file: file.into(),
+            duration: None,
             progress: 0.0
         }
     }
 
     pub fn read(&self) -> (Vec<i16>, u32, f64) {
+        println!("Open: {}", self.file);
+
         // read the whole wave file
         let mut reader = WavReader::open(&self.file).unwrap();
 
@@ -96,17 +98,33 @@ impl State {
 
 pub struct Converter {
     pub handle: Handle,
+    file: String,
     child: Option<Child>,
     stdout: Option<ToLine<ChildStdout>>,
     stderr: Option<ToLine<ChildStderr>>
 }
+
+fn duration_to_time(inp: &str) -> Option<u64> {
+    let mut groups = inp.split(":");
+    if let (Some(hour), Some(min), Some(secs_mill)) = (groups.next(), groups.next(), groups.next()) {
+        let mut groups = secs_mill.split(".");
+        if let (Some(sec), Some(mil)) = (groups.next(), groups.next()) {
+            if let (Ok(hour), Ok(min), Ok(sec), Ok(mil)) = (hour.parse::<u64>(), min.parse::<u64>(), sec.parse::<u64>(), mil.parse::<u64>()) {
+                return Some((60*60*hour + 60*min + sec) * 1000 + mil);
+            }
+        }
+    }
+
+    None
+}
+             
 
 impl Converter {
     pub fn new(handle: Handle, data: &[u8], format: &str) -> Result<Converter> {
         // Generate a new filename for our temporary conversion
         let id = Uuid::new_v4();
         let filename = format!("/tmp/{}.{}", id, format);
-        let filename_out = format!("/tmp/{}_out.{}", id, format);
+        let filename_out = format!("/tmp/{}_out.wav", id);
 
         // convert to wave file
         let mut file = File::create(&filename)
@@ -132,6 +150,7 @@ impl Converter {
 
         Ok(Converter {
             handle: handle,
+            file: filename_out,
             child: Some(cmd),
             stdout: Some(ToLine::new(stdout)),
             stderr: Some(ToLine::new(stderr))
@@ -140,28 +159,28 @@ impl Converter {
 
     pub fn state(&mut self) -> impl Stream<Item=State, Error=Error> {
         if let (Some(out), Some(err)) = (self.stdout.take(), self.stderr.take()) {
-            let mut state = State::empty();
+            let mut state = State::empty(&self.file);
 
             out.chain(err).map(move |msg| {
                 println!("Msg: {}", msg);
-
-                /*
-                if msg.contains("Destination: ") {
-                    if let Some(file) = msg.split(": ").skip(1).next() {
-                        let file = file.trim();
-                        state.file = file.into();
-                        state.name = file.into();
+                
+                if msg.contains("Duration: ") {
+                    if let Some(dur) = msg.trim().split(" ").skip(1).next()
+                        .and_then(|x| x.split(",").next()).map(|x| x.trim()) {
+                            state.duration = duration_to_time(dur);
                     }
-                } else if msg.contains("has already been") {
-                    state.progress = 1.0;
-                } else if msg.contains("%)") {
-                    if let Some(pc) = msg.split("%)").next().and_then(|x| x.split("(").skip(1).next()).and_then(|x| x.trim().parse::<f32>().ok()) {
-                        state.progress = pc / 100.0;
-                    }
-                } else if msg.contains("100%") {
-                    state.progress = 1.0;
-                }*/
+                } else if msg.contains("time=") {
+                    if let Some(time) = msg.split("time=").skip(1).next()
+                        .and_then(|x| x.split(" ").next()).map(|x| x.trim()) {
+                        
+                            if let (Some(dur), Some(time)) = (state.duration, duration_to_time(time)) {
+                                state.progress = time as f32 / dur as f32;
 
+                                println!("Progress: {}", state.progress);
+                            }
+                    }
+
+                }
 
                 state.clone()
             }).map_err(|err| {

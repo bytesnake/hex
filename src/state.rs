@@ -92,7 +92,7 @@ impl UploadState {
     pub fn converting_ffmpeg(handle: Handle, key: String, data: &[u8], format: &str) -> UploadState {
         let mut dwnd = ffmpeg::Converter::new(handle.clone(), data, format).unwrap();
 
-        let state = Rc::new(RefCell::new(ffmpeg::State::empty()));
+        let state = Rc::new(RefCell::new(ffmpeg::State::empty("")));
         let state2 = state.clone();
 
         let hnd = dwnd.state().map(move |x| {
@@ -354,7 +354,7 @@ impl State {
 
                 let handle = self.handle.clone();
 
-                self.uploads.push(UploadState::youtube(path, &packet.id, handle));
+                self.uploads.push(UploadState::youtube(packet.id.clone(), &path, handle));
 
                 ("upload_youtube", Ok(proto::Outgoing::UploadYoutube))
             },
