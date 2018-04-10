@@ -24,13 +24,12 @@ extern crate bytes;
 pub mod music_search;
 pub mod database;
 pub mod acousticid;
-pub mod audio_file;
 pub mod error;
 pub mod ffmpeg;
 pub mod opus_conv;
 
 use std::env;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::fs::File;
 use std::fs;
 use std::mem;
@@ -62,12 +61,16 @@ impl Collection {
         Ok(res)
     }
 
-    pub fn add_track(&self, format: &str, data: &[u8]) -> Result<database::Track> {
-        let track = audio_file::AudioFile::new(data, format)?.to_db()?;
+    pub fn add_track(&self, data: &[u8], meta: Track) -> Result<String> {
+        let mut file = File::create(&format!("/home/lorenz/.music/{}", meta.key))
+            .context(ErrorKind::Conversion)?;
 
-        self.socket.insert_track(track.clone())?;
+        file.write_all(&data)
+            .context(ErrorKind::Conversion)?;
 
-        Ok(track)
+        self.socket.insert_track(meta.clone())?;
+
+        Ok(meta.key)
     }
 
     pub fn get_track(&self, key: &str) -> Result<database::Track> {

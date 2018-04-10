@@ -393,7 +393,17 @@ impl State {
                                 tmp2 = Some(UploadState::converting_opus(converter.handle.clone(), packet.id.clone(), &data, duration as f32, num_channel));
                             }
                         },
-                        _ => {}
+                        UploadState::ConvertingOpus { ref state, ref mut track_key, .. } => {
+                            let state = state.borrow();
+
+                            if state.progress == 1.0 {
+                                if let Some(Ok((ref track, ref data))) = state.data {
+                                    let key = self.collection.add_track(&data, track.clone()).unwrap();
+
+                                    *track_key = Some(key);
+                                }
+                            }
+                        }
                     }
 
                     if let Some(tmp2) = tmp2 {

@@ -5,7 +5,6 @@ use rusqlite;
 use rusqlite::Statement;
 
 use music_search::SearchQuery;
-use audio_file::AudioFile;
 use acousticid;
 
 use std::{env, str};

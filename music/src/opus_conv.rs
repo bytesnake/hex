@@ -1,30 +1,83 @@
 use std::thread;
 use std::io::Write;
+use std::mem;
 
 use futures::{IntoFuture, Future, Stream};
 use futures::sync::mpsc::{channel, Sender, Receiver};
 use tokio_core::reactor::Handle;
 
+use opus;
+use opus::{Channels, Application};
+
+use failure::ResultExt;
 use error::{Result, ErrorKind};
 
+use acousticid;
+use database::Track;
+
+use uuid::Uuid;
+
 pub struct State {
-    pub progress: f32
+    pub progress: f32,
+    pub data: Option<Result<(Track, Vec<u8>)>>
 }
 
 impl State {
     pub fn empty() -> State {
         State {
             progress: 0.0,
+            data: None
         }
     }
 }
 
-fn worker(mut sender: Sender<State>, samples: Vec<i16>, duration: f32, num_channel: u32) {
-    loop {
-        sender.try_send(State::empty());
+fn worker(mut sender: Sender<State>, samples: Vec<i16>, duration: f32, num_channel: u32) -> Result<(Track, Vec<u8>)> {
+    // calculate the acousticid of the file
+    let fingerprint = acousticid::get_hash(num_channel as u16, &samples)?;
+    let key = Uuid::new_v4();
 
-        thread::sleep_ms(1000);
+    // now convert to the opus file format
+    let channel = match num_channel {
+        1 => Channels::Mono,
+        _ => Channels::Stereo // TODO: more than two channels support
+    };
+        
+    let mut opus_data: Vec<u8> = Vec::new();
+    let mut tmp = vec![0u8; 4000];
+    
+    let mut encoder = opus::Encoder::new(48000, channel, Application::Audio).unwrap();
+    
+    let mut cnt = 0;
+    let mut idx = 0;
+    for i in samples.chunks(1920) {
+        let nbytes: usize = {
+            if i.len() < 1920 {
+                let mut filled_up_buf = vec![0i16; 1920];
+                filled_up_buf[0..i.len()].copy_from_slice(i);
+    
+                encoder.encode(&filled_up_buf, &mut tmp)
+                    .context(ErrorKind::Conversion)?
+            } else {
+                encoder.encode(&i, &mut tmp)
+                    .context(ErrorKind::Conversion)?
+            }
+        };
+    
+        //println!("Opus frame size: {}", nbytes);
+    
+        let nbytes_raw: [u8; 4] = unsafe { mem::transmute((nbytes as u32).to_be()) };
+    
+        opus_data.extend_from_slice(&nbytes_raw);
+        opus_data.extend_from_slice(&tmp[0..nbytes]);
+    
+        idx += 1920;
+        cnt = (cnt+1) % 10;
+        if cnt == 0 {
+            sender.try_send(State { progress: idx as f32 / samples.len() as f32, data: None });
+        }
     }
+    
+    Ok((Track::empty(&key.simple().to_string(), &fingerprint, duration.into()), opus_data))
 }
 
 pub struct Converter {
@@ -37,7 +90,12 @@ impl Converter {
     pub fn new(handle: Handle, samples: Vec<i16>, duration: f32, num_channel: u32) -> Converter {
         let (sender, recv) = channel(10);
 
-        let thread = thread::spawn(move || worker(sender, samples, duration, num_channel));
+        let thread = thread::spawn(move || {
+            let mut sender2 = sender.clone();
+            let res = worker(sender, samples, duration, num_channel);
+
+            sender2.try_send(State { progress: 1.0, data: Some(res) });
+        });
 
         Converter {
             handle: handle,
