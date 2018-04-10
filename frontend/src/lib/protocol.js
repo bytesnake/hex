@@ -85,12 +85,10 @@ class Protocol {
         return this.send_msg(uuid, 'delete_track', {'key': key});
     }
 
-    youtube_upload(uuid, path) {
-        return this.send_msg(uuid, 'from_youtube', {'path': path});
-    }
+    upload_youtube(path) {
+        const uuid = guid();
 
-    youtube_finish(uuid) {
-        return this.send_msg(uuid, 'finish_youtube', {});
+        return this.send_msg(uuid, 'upload_youtube', {'path': path});
     }
 
     ask_upload_progress() {
@@ -138,7 +136,7 @@ class Protocol {
 
             let res = await self.send_msg(uuid, 'clear_buffer', {})
             .then(() => self.send_binary(file[1]))
-            .then(() => self.send_msg(uuid, 'add_track', {'format': file[0]}));
+            .then(() => self.send_msg(uuid, 'upload_track', {'format': file[0]}));
 
             keys.push(res);
         }

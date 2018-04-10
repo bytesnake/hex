@@ -103,7 +103,8 @@ pub struct Downloader {
 
 impl Downloader {
     pub fn new(handle: Handle, addr: &str) -> Downloader {
-        let mut cmd = Command::new("youtube-dl")
+        let mut cmd = Command::new("unbuffer")
+            .arg("youtube-dl")
             .arg("--external-downloader").arg("aria2c")
             .arg("-f").arg("bestaudio")
             .arg("-o").arg("/tmp/%(title)s.%(ext)s")

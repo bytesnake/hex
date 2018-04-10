@@ -1,3 +1,90 @@
+.upload {
+    display: flex;
+    flex-direction: column;
+
+    position: absolute;
+    top: 70px;
+    right: 10px;
+    min-width: 250px;
+    min-height: 200px;
+    background-color: white;
+    border-radius: 10px;
+    border: #145c9e solid 2px;
+}
+    
+.control {
+    background-color: #145c9e;
+    height: 30px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.upload_list {
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    b {
+        font-size: 20px;
+        color: black;
+    }
+}
+
+.track_item {
+    border-bottom: 1px solid #000;
+    font-size: 20px;
+    color: black;
+    padding-left: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+
+    span, b {
+        margin-right: 5px;
+    }
+}
+
+.upload_nothing {
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.link_button {
+    font-size: 25px !important;
+    margin: 0px !important;
+    padding-left: 5px;
+}
+
+.link_input {
+    flex: 1;
+    margin-left: 5px;
+    margin-right: 2px;
+    border: 1px solid #000;
+    height: 25px;
+    border-bottom-right-radius: 10px;
+    width: 70%;
+    color: black;
+    font-size: 20px;
+    padding: 0px;
+}
+
+.upload_status {
+    b {
+        font-size: 20px;
+        color: black
+    }
+
+    font-size: 20px;
+    color: grey;
+}
+
 .menu {
     display: flex;
     flex-direction: column;

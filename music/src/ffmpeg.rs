@@ -27,6 +27,7 @@ impl codec::Decoder for LineCodec {
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> result::Result<Option<String>, io::Error> {
+        println!("{}", buf.len());
         if let Some(n) = buf.as_ref().iter().position(|b| (*b == b'\n' || *b == b'\r')) {
             let line = buf.split_to(n);
             buf.split_to(1);
@@ -48,14 +49,15 @@ impl<T: AsyncRead> ToLine<T> {
     }
 }
 
-impl<T: AsyncRead> Stream for ToLine<T> {
+/*impl<T: AsyncRead> Stream for ToLine<T> {
     type Item = String;
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        println!("Poll");
         self.0.poll()
     }
-}
+}*/
 
 #[derive(Debug)]
 pub enum Error {
@@ -136,7 +138,8 @@ impl Converter {
         file.sync_all()
             .context(ErrorKind::Conversion)?;
 
-        let mut cmd = Command::new("ffmpeg")
+        let mut cmd = Command::new("unbuffer")
+            .arg("ffmpeg")
             .arg("-y")
             .arg("-i").arg(&filename)
             .arg("-ar").arg("48000")
@@ -161,7 +164,7 @@ impl Converter {
         if let (Some(out), Some(err)) = (self.stdout.take(), self.stderr.take()) {
             let mut state = State::empty(&self.file);
 
-            out.chain(err).map(move |msg| {
+            out.0.chain(err.0).map(move |msg| {
                 println!("Msg: {}", msg);
                 
                 if msg.contains("Duration: ") {
@@ -184,6 +187,8 @@ impl Converter {
 
                 state.clone()
             }).map_err(|err| {
+                println!("ERR");
+
                 Error::IO("".into())
             })
 

@@ -378,7 +378,7 @@ impl State {
                     match *item {
                         UploadState::YoutubeDownload { ref state, ref key, ref downloader } => {
                             let state = state.borrow();
-                            if state.progress == 1.0 {
+                            if state.progress >= 1.0 {
                                 //TODO
                                 tmp2 = Some(UploadState::converting_ffmpeg(downloader.handle.clone(), packet.id.clone(), &state.get_content().unwrap(), state.format()));
                             }
@@ -386,9 +386,9 @@ impl State {
                         UploadState::ConvertingFFMPEG { ref key, ref state, ref converter } => {
                             let state = state.borrow();
 
-                            let (data, num_channel, duration) = state.read();
 
-                            if state.progress == 1.0 {
+                            if state.progress >= 0.999 {
+                                let (data, num_channel, duration) = state.read();
 
                                 tmp2 = Some(UploadState::converting_opus(converter.handle.clone(), packet.id.clone(), &data, duration as f32, num_channel));
                             }
@@ -396,7 +396,7 @@ impl State {
                         UploadState::ConvertingOpus { ref state, ref mut track_key, .. } => {
                             let state = state.borrow();
 
-                            if state.progress == 1.0 {
+                            if state.progress >= 1.0 {
                                 if let Some(Ok((ref track, ref data))) = state.data {
                                     let key = self.collection.add_track(&data, track.clone()).unwrap();
 
