@@ -41,6 +41,30 @@ export default class Upload extends Component {
         Protocol.upload_youtube(val);
     }
 
+    filesDropped = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        var files = [];
+        for(const entry of e.target.files) {
+            let file = "webkitGetAsEntry" in entry ? entry.webkitGetAsEntry() : entry;
+
+            var name;
+            switch(file.type) {
+                case "audio/mpeg":
+                    name = "mp3"; break;
+                case "audio/x-wav":
+                    name = "wav"; break;
+                case "audio/mp4":
+                    name = "mp4"; break;
+                default:
+                    continue;
+            }
+            files.push([file.name, name, file.slice()]);
+        }
+
+        Protocol.upload_files(files)
+    }
     input_changed = (e) => {
         let elm = e.target;
 
@@ -60,9 +84,12 @@ export default class Upload extends Component {
                 elm.classList.add(style.red_border);
                 elm.classList.remove(style.green_border);
             }
+
+            this.setState({link_empty: false});
         } else {
             elm.classList.remove(style.green_border);
             elm.classList.remove(style.red_border);
+            this.setState({link_empty: true});
         }
 
     }
@@ -77,12 +104,13 @@ export default class Upload extends Component {
                     <List />
                     <div class={style.control}>
                         {!link_empty && (
-                            <Icon icon="note add" class={style.link_button} onClick={this.upload_file} />
-                        )}
-                        {link_empty && (
                             <Icon icon="add circle outline" class={style.link_button} onClick={this.upload_link} />
                         )}
+                        {link_empty && (
+                            <Icon icon="note add" class={style.link_button} onClick={x => this.file_input.click()} />
+                        )}
                         <input class={style.link_input} ref={x => this.input = x} onKeyUp={this.input_changed} />
+                        <input type="file" style="display: none" webkitdirectory allowdir mozdirectory onChange={this.filesDropped} ref={x => this.file_input = x}/>
                     </div>
                 </div>
                 )}

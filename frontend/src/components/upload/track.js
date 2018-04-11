@@ -4,7 +4,6 @@ import Autocomplete from 'accessible-autocomplete/preact'
 import {Button} from 'preact-mdl';
 import Protocol from '../../lib/protocol.js';
 import suggestion_flatten from '../../lib/suggestions';
-
 export default class TrackView extends Component {
     constructor(props) {
         super();
@@ -105,3 +104,4 @@ export default class TrackView extends Component {
         );
     }
 }
+

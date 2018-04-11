@@ -41,6 +41,7 @@ enum RequestState {
 
 #[derive(Serialize, Debug)]
 pub struct UploadProgress {
+    desc: String,
     kind: String,
     progress: f32,
     key: String,
@@ -89,10 +90,10 @@ impl UploadState {
         }
     }
 
-    pub fn converting_ffmpeg(handle: Handle, key: String, data: &[u8], format: &str) -> UploadState {
-        let mut dwnd = ffmpeg::Converter::new(handle.clone(), data, format).unwrap();
+    pub fn converting_ffmpeg(handle: Handle, desc: String, key: String, data: &[u8], format: &str) -> UploadState {
+        let mut dwnd = ffmpeg::Converter::new(handle.clone(), desc.clone(), data, format).unwrap();
 
-        let state = Rc::new(RefCell::new(ffmpeg::State::empty("")));
+        let state = Rc::new(RefCell::new(ffmpeg::State::empty(desc, "")));
         let state2 = state.clone();
 
         let hnd = dwnd.state().map(move |x| {
@@ -111,10 +112,10 @@ impl UploadState {
         }
     }
 
-    pub fn converting_opus(handle: Handle, key: String, samples: &[i16], duration: f32, num_channel: u32) -> UploadState {
-        let mut dwnd = opus_conv::Converter::new(handle.clone(), Vec::from(samples), duration, num_channel);
+    pub fn converting_opus(handle: Handle, key: String, desc: String, samples: &[i16], duration: f32, num_channel: u32) -> UploadState {
+        let mut dwnd = opus_conv::Converter::new(handle.clone(), desc.clone(), Vec::from(samples), duration, num_channel);
 
-        let state = Rc::new(RefCell::new(opus_conv::State::empty()));
+        let state = Rc::new(RefCell::new(opus_conv::State::empty(desc)));
         let state2 = state.clone();
 
         let hnd = dwnd.state().map(move |x| {
@@ -164,6 +165,14 @@ impl UploadState {
             UploadState::ConvertingOpus { ref track_key, .. } => track_key.clone()
         }
     }
+    pub fn desc(&self) -> String {
+        match *self {
+            UploadState::YoutubeDownload { ref state, .. } => state.borrow().file.clone(),
+            UploadState::ConvertingFFMPEG { ref state, .. } => state.borrow().desc.clone(),
+            UploadState::ConvertingOpus { ref state, .. } => state.borrow().desc.clone()
+        }
+    }
+
 }
 
 pub struct State {
@@ -359,10 +368,10 @@ impl State {
                 ("upload_youtube", Ok(proto::Outgoing::UploadYoutube))
             },
 
-            proto::Incoming::UploadTrack { format } => {
+            proto::Incoming::UploadTrack { name, format } => {
                 let handle = self.handle.clone();
 
-                self.uploads.push(UploadState::converting_ffmpeg(handle, packet.id.clone(), &self.buffer, &format));
+                self.uploads.push(UploadState::converting_ffmpeg(handle, name, packet.id.clone(), &self.buffer, &format));
 
                 ("upload_track", Ok(proto::Outgoing::UploadTrack))
             },
@@ -380,7 +389,7 @@ impl State {
                             let state = state.borrow();
                             if state.progress >= 1.0 {
                                 //TODO
-                                tmp2 = Some(UploadState::converting_ffmpeg(downloader.handle.clone(), packet.id.clone(), &state.get_content().unwrap(), state.format()));
+                                tmp2 = Some(UploadState::converting_ffmpeg(downloader.handle.clone(), state.file.clone(), packet.id.clone(), &state.get_content().unwrap(), state.format()));
                             }
                         },
                         UploadState::ConvertingFFMPEG { ref key, ref state, ref converter } => {
@@ -390,13 +399,13 @@ impl State {
                             if state.progress >= 0.999 {
                                 let (data, num_channel, duration) = state.read();
 
-                                tmp2 = Some(UploadState::converting_opus(converter.handle.clone(), packet.id.clone(), &data, duration as f32, num_channel));
+                                tmp2 = Some(UploadState::converting_opus(converter.handle.clone(), packet.id.clone(), state.desc.clone(), &data, duration as f32, num_channel));
                             }
                         },
                         UploadState::ConvertingOpus { ref state, ref mut track_key, .. } => {
                             let state = state.borrow();
 
-                            if state.progress >= 1.0 {
+                            if state.progress >= 1.0 && track_key.is_none() {
                                 if let Some(Ok((ref track, ref data))) = state.data {
                                     let key = self.collection.add_track(&data, track.clone()).unwrap();
 
@@ -417,6 +426,7 @@ impl State {
                 // collect update informations
                 let infos = self.uploads.iter().map(|item| {
                     UploadProgress {
+                        desc: item.desc().clone(),
                         kind: item.kind().into(),
                         progress: item.progress(),
                         key: item.key(),

@@ -5,9 +5,12 @@
     position: absolute;
     top: 70px;
     right: 10px;
-    min-width: 250px;
+
+    max-width: 600px;
+    width: 90%;
     min-height: 200px;
     background-color: white;
+    
     border-radius: 10px;
     border: #145c9e solid 2px;
 }
@@ -26,9 +29,15 @@
     display: flex;
     flex-direction: column;
 
+    overflow-y: auto;
+
     b {
+        flex: 1;
         font-size: 20px;
         color: black;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
     }
 }
 
@@ -38,13 +47,30 @@
     color: black;
     padding-left: 10px;
     display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding-right: 10px;
+}
+
+.track_header {
+    display: flex;
     justify-content: center;
     align-items: center;
     width: 100%;
+    height: 60px;
 
     span, b {
         margin-right: 5px;
     }
+}
+
+.track_meta {
+    flex: 1;
+    margin-right: 10px;
+    margin-left: 15px;
+    padding-left: 15px;
+    margin-bottom: 10px;
+    border-left: 2px dotted #CCC;
 }
 
 .upload_nothing {
@@ -125,7 +151,7 @@
 
   position: absolute;
   top: -20px;
-  right: 40px;
+  right: 60px;
   border-left: 20px solid transparent;
   border-right: 20px solid transparent;
   
@@ -178,29 +204,11 @@
 .files_inner {
     width: 400px;
     height: 220px;
-    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
-    background-color: white;
     margin: auto;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 0;
-    left: 0;
-    padding: 10px;
 }
 
 .files_data {
-    width: 400px;
-    height: 400px;
-    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
-    background-color: white;
     margin: auto;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 0;
-    left: 0;
-    padding: 30px;
 }
 
 .files_data p {

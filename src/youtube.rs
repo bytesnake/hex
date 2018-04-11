@@ -64,7 +64,7 @@ pub enum Error {
 #[derive(Clone, Debug, Serialize)]
 pub struct State {
     name: String,
-    file: String,
+    pub file: String,
     pub progress: f32
 }
 

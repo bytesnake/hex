@@ -68,14 +68,16 @@ pub enum Error {
 pub struct State {
     file: String,
     duration: Option<u64>,
+    pub desc: String,
     pub progress: f32
 }
 
 impl State {
-    pub fn empty(file: &str) -> State {
+    pub fn empty(desc: String, file: &str) -> State {
         State {
             file: file.into(),
             duration: None,
+            desc: desc,
             progress: 0.0
         }
     }
@@ -101,6 +103,7 @@ impl State {
 pub struct Converter {
     pub handle: Handle,
     file: String,
+    desc: String,
     child: Option<Child>,
     stdout: Option<ToLine<ChildStdout>>,
     stderr: Option<ToLine<ChildStderr>>
@@ -122,7 +125,7 @@ fn duration_to_time(inp: &str) -> Option<u64> {
              
 
 impl Converter {
-    pub fn new(handle: Handle, data: &[u8], format: &str) -> Result<Converter> {
+    pub fn new(handle: Handle, desc: String, data: &[u8], format: &str) -> Result<Converter> {
         // Generate a new filename for our temporary conversion
         let id = Uuid::new_v4();
         let filename = format!("/tmp/{}.{}", id, format);
@@ -153,6 +156,7 @@ impl Converter {
 
         Ok(Converter {
             handle: handle,
+            desc: desc,
             file: filename_out,
             child: Some(cmd),
             stdout: Some(ToLine::new(stdout)),
@@ -162,7 +166,7 @@ impl Converter {
 
     pub fn state(&mut self) -> impl Stream<Item=State, Error=Error> {
         if let (Some(out), Some(err)) = (self.stdout.take(), self.stderr.take()) {
-            let mut state = State::empty(&self.file);
+            let mut state = State::empty(self.desc.clone(), &self.file);
 
             out.0.chain(err.0).map(move |msg| {
                 println!("Msg: {}", msg);

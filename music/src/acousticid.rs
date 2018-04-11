@@ -24,7 +24,7 @@ pub fn get_metadata(hash: &str, duration: u32) -> Result<String> {
         .context(ErrorKind::AcousticIDMetadata)?;
 
     let mut form = Form::new();
-    form.part("client").contents(b"nrUnHqXcsAE").add()
+    form.part("client").contents(b"GHPK6dMc-AY").add()
         .context(ErrorKind::AcousticIDMetadata)?;
 
     form.part("fingerprint").contents(hash.as_bytes()).add()

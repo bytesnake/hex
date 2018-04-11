@@ -19,19 +19,21 @@ use uuid::Uuid;
 
 pub struct State {
     pub progress: f32,
+    pub desc: String,
     pub data: Option<Result<(Track, Vec<u8>)>>
 }
 
 impl State {
-    pub fn empty() -> State {
+    pub fn empty(desc: String) -> State {
         State {
             progress: 0.0,
+            desc: desc,
             data: None
         }
     }
 }
 
-fn worker(mut sender: Sender<State>, samples: Vec<i16>, duration: f32, num_channel: u32) -> Result<(Track, Vec<u8>)> {
+fn worker(mut sender: Sender<State>, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32) -> Result<(Track, Vec<u8>)> {
     // calculate the acousticid of the file
     let fingerprint = acousticid::get_hash(num_channel as u16, &samples)?;
     let key = Uuid::new_v4();
@@ -73,7 +75,7 @@ fn worker(mut sender: Sender<State>, samples: Vec<i16>, duration: f32, num_chann
         idx += 1920;
         cnt = (cnt+1) % 10;
         if cnt == 0 {
-            sender.try_send(State { progress: idx as f32 / samples.len() as f32, data: None });
+            sender.try_send(State { progress: idx as f32 / samples.len() as f32, desc: desc.clone(), data: None });
         }
     }
     
@@ -87,14 +89,14 @@ pub struct Converter {
 }
 
 impl Converter {
-    pub fn new(handle: Handle, samples: Vec<i16>, duration: f32, num_channel: u32) -> Converter {
+    pub fn new(handle: Handle, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32) -> Converter {
         let (sender, recv) = channel(10);
 
         let thread = thread::spawn(move || {
             let mut sender2 = sender.clone();
-            let res = worker(sender, samples, duration, num_channel);
+            let res = worker(sender, desc.clone(), samples, duration, num_channel);
 
-            sender2.try_send(State { progress: 1.0, data: Some(res) });
+            sender2.try_send(State { progress: 1.0, desc: desc, data: Some(res) });
         });
 
         Converter {

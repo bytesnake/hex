@@ -131,12 +131,13 @@ class Protocol {
         var keys = [];
         var self = this;
         for(const file of files) {
+            console.log(file);
         //return Promise.all([].map.call(files, function(file) {
             let uuid = guid();
 
             let res = await self.send_msg(uuid, 'clear_buffer', {})
-            .then(() => self.send_binary(file[1]))
-            .then(() => self.send_msg(uuid, 'upload_track', {'format': file[0]}));
+            .then(() => self.send_binary(file[2]))
+            .then(() => self.send_msg(uuid, 'upload_track', {'name': file[0], 'format': file[1]}));
 
             keys.push(res);
         }
