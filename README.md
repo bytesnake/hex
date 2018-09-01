@@ -1,7 +1,8 @@
 # Hex - a private music library
 
 > "He was spending more nights now watching Hex trawl the invisible writings for any hints. In theory, because of the nature of L-space, absolutely everything was available to him, but that only meant that it was more or less impossible to find whatever it was you were looking for, which is the purpose of computers."
-> &mdash; <cite>Terry Pratchett (The Last Continent)</cite>
+>
+> &mdash; <cite>Terry Pratchett (in _The Last Continent_)</cite>
 
 Hex is a collection of crates with whom we're managing our music. It was born out of the desire to be independent from any music provider and to support music tags (which can be used like normal objects in the real world).
 
