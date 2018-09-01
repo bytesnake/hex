@@ -1,5 +1,5 @@
 use std::io::{self, Read, Write};
-use std::fs::File;
+use std::fs::{File, self};
 use std::process::Command;
 use std::process::Stdio;
 use std::{result, slice};
@@ -63,15 +63,17 @@ pub enum StateError {
 #[derive(Clone, Debug, Serialize)]
 pub struct State {
     file: String,
+    file_wav: String,
     duration: Option<u64>,
     pub desc: String,
     pub progress: f32
 }
 
 impl State {
-    pub fn empty(desc: String, file: &str) -> State {
+    pub fn empty(desc: String, file: &str, file_wav: &str) -> State {
         State {
             file: file.into(),
+            file_wav: file_wav.into(),
             duration: None,
             desc: desc,
             progress: 0.0
@@ -84,6 +86,9 @@ impl State {
         let mut pcm = vec![];
 
         file.read_to_end(&mut pcm).unwrap();
+
+        fs::remove_file(&self.file);
+        fs::remove_file(&self.file_wav);
 
         let pcm: &[i16] = unsafe {
             slice::from_raw_parts(
@@ -99,6 +104,7 @@ impl State {
 pub struct Converter {
     pub handle: Handle,
     file: String,
+    file_wav: String,
     desc: String,
     child: Option<Child>,
     stdout: Option<ToLine<ChildStdout>>,
@@ -156,6 +162,7 @@ impl Converter {
             handle: handle,
             desc: desc,
             file: filename_out,
+            file_wav: filename,
             child: Some(cmd),
             stdout: Some(ToLine::new(stdout)),
             stderr: Some(ToLine::new(stderr))
@@ -164,7 +171,7 @@ impl Converter {
 
     pub fn state(&mut self) -> impl Stream<Item=State, Error=StateError> {
         if let (Some(out), Some(err)) = (self.stdout.take(), self.stderr.take()) {
-            let mut state = State::empty(self.desc.clone(), &self.file);
+            let mut state = State::empty(self.desc.clone(), &self.file, &self.file_wav);
 
             out.0.chain(err.0).map(move |msg| {
                 println!("Msg: {}", msg);

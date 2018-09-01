@@ -62,7 +62,7 @@ impl UploadState {
     pub fn converting_ffmpeg(handle: Handle, desc: String, key: String, data: &[u8], format: &str) -> UploadState {
         let mut dwnd = ffmpeg::Converter::new(handle.clone(), desc.clone(), data, format).unwrap();
 
-        let state = Rc::new(RefCell::new(ffmpeg::State::empty(desc, "")));
+        let state = Rc::new(RefCell::new(ffmpeg::State::empty(desc, "", "")));
         let state2 = state.clone();
 
         let hnd = dwnd.state().map(move |x| {
