@@ -5,3 +5,4 @@
 /.idea
 yarn.lock
 /.vscode
+build/*

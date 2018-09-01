@@ -14,9 +14,9 @@ struct MainService {
 }
 
 impl MainService {
-    fn new(handle: &Handle) -> MainService {
+    fn new(handle: &Handle, path: &str) -> MainService {
         MainService {
-            static_: Static::new(handle, Path::new("frontend/build/")),
+            static_: Static::new(handle, Path::new(path)),
         }
     }
 }
@@ -39,7 +39,7 @@ impl Service for MainService {
     }
 }
 
-pub fn create_webserver(host: &str, port: u16) {
+pub fn create_webserver(host: &str, port: u16, path: &str) {
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
@@ -48,7 +48,7 @@ pub fn create_webserver(host: &str, port: u16) {
 
     let http = Http::new();
     let server = listener.incoming().for_each(|(sock, addr)| {
-        let s = MainService::new(&handle);
+        let s = MainService::new(&handle, path);
         http.bind_connection(&handle, sock, addr, s);
         Ok(())
     });

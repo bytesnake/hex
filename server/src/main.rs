@@ -41,7 +41,7 @@ fn main() {
 
     if let Some(webserver) = conf.webserver.clone() {
         thread::spawn(move || {
-            webserver::create_webserver(&webserver.host, webserver.port);
+            webserver::create_webserver(&webserver.host, webserver.port, &webserver.path);
         });
     }
 
