@@ -1,0 +1,8 @@
+[package]
+name = "hex-database"
+version = "0.1.0"
+authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
+
+[dependencies]
+rusqlite = "0.14.0"
+uuid = {version="0.4", features = ["v4"]}

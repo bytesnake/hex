@@ -71,12 +71,15 @@ function fill_buf() {
         }
 
 
-        let buf;
+
+        /*let buf;
         try {
             buf = decoder.decode(buf_raw.value);
         } catch(e) {
             console.error("Couldn't parse opus packet: " + e);
-        }
+        }*/
+
+        let buf = new Int16Array(buf_raw.value.buffer);
 
         //console.log(buf.length);
 
@@ -93,8 +96,8 @@ function fill_buf() {
         const new_size = buf_size+buf.length / 2;
         let j = 0;
         for(let i = buf_size; i < Math.min(BUF_SIZE, new_size); i++) {
-            buffer[0][i] = buf[j];
-            buffer[1][i] = buf[j+1];
+            buffer[0][i] = buf[j] / (buf[j] >= 0 ? 32767 : 32768);
+            buffer[1][i] = buf[j+1] / (buf[j+1] >= 0 ? 32767 : 32768);
 
             j += 2;
         }
@@ -122,8 +125,8 @@ function fill_buf() {
             // fill the remaining bytes to the next buffer
             if(new_size > BUF_SIZE) {
                 for(let i = 0; i < new_size-BUF_SIZE; i++) {
-                    buffer[0][i] = buf[j];
-                    buffer[1][i] = buf[j+1];
+                    buffer[0][i] = buf[j] / (buf[j] >= 0 ? 32767 : 32768);
+                    buffer[1][i] = buf[j+1] / (buf[j+1] >= 0 ? 32767 : 32768);
 
                     j += 2;
                 }

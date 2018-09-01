@@ -1,0 +1,13 @@
+[package]
+name = "local-client"
+version = "0.1.0"
+authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
+
+[dependencies]
+
+
+[dependencies.hex-music-container]
+path = "../music-container/"
+
+[dependencies.hex-database]
+path = "../database/"

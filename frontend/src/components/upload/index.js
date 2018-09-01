@@ -3,6 +3,7 @@ import {Icon} from 'preact-mdl';
 import style from './style.less';
 import {List} from './list.js';
 import Protocol from '../../lib/protocol.js';
+import { route } from 'preact-router';
 
 const Mode = {
     Closed: 0,
@@ -94,6 +95,14 @@ export default class Upload extends Component {
 
     }
 
+    create_playlist = (e) => {
+        Protocol.add_playlist("New playlist")
+        .then(obj => {
+            return Promise.all(this.list.state.tracks.map(x => Protocol.add_to_playlist(obj.key, x.track_key))).then(_ => obj.key);
+        })
+        .then(key => route('/playlist/' + key));
+    }
+
     render(props, {show, link_empty}) {
         return (
             <div>
@@ -101,8 +110,9 @@ export default class Upload extends Component {
 
                 {show != Mode.Closed && (
                 <div class={style.upload}>
-                    <List />
+                    <List ref={x => this.list = x} />
                     <div class={style.control}>
+                        <Icon icon="playlist add" onClick={this.create_playlist} class={style.link_button} />
                         {!link_empty && (
                             <Icon icon="add circle outline" class={style.link_button} onClick={this.upload_link} />
                         )}

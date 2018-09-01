@@ -1,0 +1,9 @@
+[package]
+name = "hex-music-container"
+version = "0.1.0"
+authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
+
+[dependencies]
+byteorder = "1"
+opus = "0.2.0"
+futures = "0.1"

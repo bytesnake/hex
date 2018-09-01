@@ -1,9 +1,0 @@
-/target/
-**/*.rs.bk
-Cargo.lock
-
-# all possible vim backup files
-[._]*.s[a-v][a-z]
-[._]*.sw[a-p]
-[._]s[a-v][a-z]
-[._]sw[a-p]

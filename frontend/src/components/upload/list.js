@@ -164,7 +164,6 @@ export class List extends Component {
                 {tracks.length == 0 && (
                     <div class={style.upload_nothing}>Keine Uploads</div>
                 )}
-                <div class={style.arrow_up} />
             </div>
         );
     }
