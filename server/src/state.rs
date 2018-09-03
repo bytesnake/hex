@@ -17,7 +17,7 @@ use proto::{Track, Token};
 use convert::{UploadState, UploadProgress};
 
 use hex_database;
-use hex_music_container::{Configuration, Container};
+use hex_music_container::{self, Configuration, Container};
 
 use acousticid;
 
@@ -121,6 +121,56 @@ impl State {
                 };
 
 
+                let mut pcm = Ok(Vec::new());
+                for i in 0..10 {
+                    let data = container.next_packet(Configuration::Stereo)
+                        .map(|x| {
+                            unsafe {
+                                slice::from_raw_parts(
+                                    x.as_ptr() as *const u8,
+                                    x.len() * 2
+                                )
+                            }
+                        });
+
+                    match data {
+                        Ok(data) => {
+                            match pcm {
+                                Ok(ref mut pcm) => pcm.extend(data.into_iter()),
+                                _ => {}
+                            }
+                        },
+                        Err(err) => {
+                            match err {
+                                hex_music_container::error::Error::ReachedEnd => {},
+                                err => pcm = Err(Error::MusicContainer(err))
+                            }
+
+                            break;
+                        }
+                    }
+                }
+
+                match pcm {
+                    Ok(pcm) => {
+                        if pcm.len() == 0 {
+                            ("stream_next", Err(Error::MusicContainer(hex_music_container::error::Error::ReachedEnd)))
+                        } else {
+                            binary_data = Some(pcm);
+                            ("stream_next", Ok(proto::Outgoing::StreamNext))
+                        }
+                    },
+                    Err(err) => {
+                        ("stream_next", Err(err))
+                    }
+                }
+
+                //let pcm: Result<Vec<Vec<i16>>> = (0..10).map(|_| container.next_packet(Configuration::Stereo).map_err(|err| Error::MusicContainer(err))).collect();
+
+                //match pcm {
+                //    Ok(res) => 
+                //("stream_next", Err(Error::Configuration))
+/*
                 let res = {
                     let mut pcm = vec![0u8; 76800];
 
@@ -139,7 +189,7 @@ impl State {
                             Ok(data) => {
                                 pcm[i * 7680 .. (i+1) * 7680].copy_from_slice(&data);
                             },
-                            Err(err) => return Err(err)
+                            Err(err) => break Err(err)
                         }
                     }
 
@@ -154,7 +204,7 @@ impl State {
                     Err(err) => {
                         ("stream_next", Err(err))
                     }
-                }
+                }*/
             },
 
             proto::Incoming::StreamSeek { sample } => {
