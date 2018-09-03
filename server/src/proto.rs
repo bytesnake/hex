@@ -107,7 +107,7 @@ pub enum Incoming {
     ClearBuffer,
     #[serde(rename="stream_next")]
     StreamNext {
-        key: String
+        key: Option<String>
     },
     #[serde(rename="stream_end")]
     StreamEnd,

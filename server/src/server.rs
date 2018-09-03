@@ -54,7 +54,10 @@ pub fn start(conf: Conf) {
                             OwnedMessage::Ping(p) => Some(OwnedMessage::Pong(p)),
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(msg) => {
-                                let msg = state.process(msg).unwrap();
+                                let msg = match state.process(msg) {
+                                    Ok(msg) => msg,
+                                    Err(_) => OwnedMessage::Text("Err(CouldNotParse)".into())
+                                };
 
                                 Some(msg)
                             },

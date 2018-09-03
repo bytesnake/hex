@@ -107,13 +107,22 @@ impl State {
                 ("search", res)
             },
             proto::Incoming::StreamNext { key } => {
-                let prior_state = self.reqs.entry(packet.id.clone())
-                    .or_insert(
+                let State {
+                    ref data_path,
+                    ref collection,
+                    ref mut reqs,
+                    ..
+                } = *self;
+
+                let entry = reqs.entry(packet.id.clone());
+
+                let prior_state = entry
+                    .or_insert_with(|| {
                         RequestState::Stream {
-                            container: Container::<File>::with_key(&self.data_path, &key).unwrap(),
-                            track: self.collection.get_track(&key).unwrap()
+                            container: Container::<File>::with_key(&data_path, &key.clone().unwrap()).unwrap(),
+                            track: collection.get_track(&key.unwrap()).unwrap()
                         }
-                    );
+                    });
                 
                 let mut container = match prior_state {
                     &mut RequestState::Stream { ref mut container, .. } => container,
@@ -164,47 +173,6 @@ impl State {
                         ("stream_next", Err(err))
                     }
                 }
-
-                //let pcm: Result<Vec<Vec<i16>>> = (0..10).map(|_| container.next_packet(Configuration::Stereo).map_err(|err| Error::MusicContainer(err))).collect();
-
-                //match pcm {
-                //    Ok(res) => 
-                //("stream_next", Err(Error::Configuration))
-/*
-                let res = {
-                    let mut pcm = vec![0u8; 76800];
-
-                    for i in 0..10 {
-                //let data = self.collection.stream_next(&mut file);
-                        let data = container.next_packet(Configuration::Stereo)
-                            .map_err(|err| Error::MusicContainer(err))
-                            .map(|x| { unsafe {
-                                slice::from_raw_parts(
-                                    x.as_ptr() as *const u8,
-                                    x.len() * 2
-                                )
-                            }});
-
-                        match data {
-                            Ok(data) => {
-                                pcm[i * 7680 .. (i+1) * 7680].copy_from_slice(&data);
-                            },
-                            Err(err) => break Err(err)
-                        }
-                    }
-
-                    Ok(pcm)
-                };
-
-                match res {
-                    Ok(pcm) => {
-                        binary_data = Some(pcm);
-                        ("stream_next", Ok(proto::Outgoing::StreamNext))
-                    }, 
-                    Err(err) => {
-                        ("stream_next", Err(err))
-                    }
-                }*/
             },
 
             proto::Incoming::StreamSeek { sample } => {

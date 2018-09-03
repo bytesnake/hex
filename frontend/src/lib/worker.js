@@ -32,7 +32,7 @@ function clear_abort() {
     abort = null;
 }
 
-function fill_buf() {
+function fill_buf(key) {
     finished = false;
     // abort the buffering if the track has changed
     if(abort && typeof abort == "function") {
@@ -40,7 +40,7 @@ function fill_buf() {
         return;
     }
 
-    Protocol.stream(uuid, track.key).next().then(buf_raw => {
+    Protocol.stream(uuid, key).next().then(buf_raw => {
         console.log(buf_raw);
         // if we got all packets, then send the last block
         if(buf_raw.done) {
@@ -139,7 +139,7 @@ onmessage = function(e) {
 
             clear_abort();
 
-            fill_buf();
+            fill_buf(track.key);
         });
     } else if(kind == 1) {
         console.log("change pos to " + e.data.pos);

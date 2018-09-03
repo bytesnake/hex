@@ -98,9 +98,15 @@ class Protocol {
     }
 
     async *stream(uuid, track_key) {
+        var first = true;
         while(true) {
             try {
-                yield await this.send_msg(uuid, 'stream_next', {'key': track_key});
+                if(first) {
+                    yield await this.send_msg(uuid, 'stream_next', {'key': track_key});
+                    first = false;
+                }
+                else
+                    yield await this.send_msg(uuid, 'stream_next', {});
             } catch(err) {
                 console.log(err);
                 break;
@@ -174,6 +180,12 @@ class Protocol {
             self.socket.addEventListener('message', function listener(e) {
 
                 if(typeof e.data === "string") {
+                    if(e.data.startsWith("Err(")) {
+                        reject("Could not parse the message!");
+                        return;
+
+                    }
+
                     var parsed = JSON.parse(e.data);
 
                     if(parsed.id == uuid) {
