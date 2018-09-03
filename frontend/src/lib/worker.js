@@ -32,16 +32,6 @@ function clear_abort() {
     abort = null;
 }
 
-// TODO: wait until module loaded, not an arbitrary timespan
-/*let decoder;
-try {
-    setTimeout(function() {
-        decoder = new Decoder(2);
-    }, 500);
-} catch(e) {
-    console.error("Couldn't create the decoder: " + e);
-}*/
-
 function fill_buf() {
     finished = false;
     // abort the buffering if the track has changed
@@ -51,6 +41,7 @@ function fill_buf() {
     }
 
     Protocol.stream(uuid, track.key).next().then(buf_raw => {
+        console.log(buf_raw);
         // if we got all packets, then send the last block
         if(buf_raw.done) {
             // fill the remaining space with zero
@@ -68,15 +59,6 @@ function fill_buf() {
             // stop the stream
             return;
         }
-
-
-
-        /*let buf;
-        try {
-            buf = decoder.decode(buf_raw.value);
-        } catch(e) {
-            console.error("Couldn't parse opus packet: " + e);
-        }*/
 
         let buf = new Int16Array(buf_raw.value.buffer);
 

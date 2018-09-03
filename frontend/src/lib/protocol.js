@@ -99,12 +99,12 @@ class Protocol {
 
     async *stream(uuid, track_key) {
         while(true) {
-            const buf = await this.send_msg(uuid, 'stream_next', {'key': track_key});
-
-            if(buf.length == 0)
+            try {
+                yield await this.send_msg(uuid, 'stream_next', {'key': track_key});
+            } catch(err) {
+                console.log(err);
                 break;
-            else
-                yield buf;
+            }
         }
     }
 
