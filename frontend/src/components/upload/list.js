@@ -149,7 +149,7 @@ export class List extends Component {
         }, 1000);
     }
 
-    componentDidUmount() {
+    componentWillUnmount() {
         clearInterval(this.interval);
     }
 

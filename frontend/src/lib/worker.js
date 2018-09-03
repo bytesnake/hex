@@ -1,5 +1,4 @@
 import 'babel-polyfill';
-import Decoder from 'opus/decoder.js';
 import Protocol from 'protocol.js';
 import {guid} from 'uuid.js';
 import Resampler from './resampler.js';
@@ -34,14 +33,14 @@ function clear_abort() {
 }
 
 // TODO: wait until module loaded, not an arbitrary timespan
-let decoder;
+/*let decoder;
 try {
     setTimeout(function() {
         decoder = new Decoder(2);
     }, 500);
 } catch(e) {
     console.error("Couldn't create the decoder: " + e);
-}
+}*/
 
 function fill_buf() {
     finished = false;
