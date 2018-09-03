@@ -120,22 +120,40 @@ impl State {
                     _ => panic!("blub")
                 };
 
-                //let data = self.collection.stream_next(&mut file);
-                let data = container.next_packet(Configuration::Stereo)
-                    .map_err(|err| Error::MusicContainer(err))
-                    .map(|x| { unsafe {
-                        slice::from_raw_parts(
-                            x.as_ptr() as *const u8,
-                            x.len() * 2
-                        )
-                    }});
 
-                match data {
-                    Ok(data) => {
-                        binary_data = Some(data.into());
+                let res = {
+                    let mut pcm = vec![0u8; 76800];
+
+                    for i in 0..10 {
+                //let data = self.collection.stream_next(&mut file);
+                        let data = container.next_packet(Configuration::Stereo)
+                            .map_err(|err| Error::MusicContainer(err))
+                            .map(|x| { unsafe {
+                                slice::from_raw_parts(
+                                    x.as_ptr() as *const u8,
+                                    x.len() * 2
+                                )
+                            }});
+
+                        match data {
+                            Ok(data) => {
+                                pcm[i * 7680 .. (i+1) * 7680].copy_from_slice(&data);
+                            },
+                            Err(err) => return Err(err)
+                        }
+                    }
+
+                    Ok(pcm)
+                };
+
+                match res {
+                    Ok(pcm) => {
+                        binary_data = Some(pcm);
                         ("stream_next", Ok(proto::Outgoing::StreamNext))
-                    },
-                    Err(err) => ("stream_next", Err(err))
+                    }, 
+                    Err(err) => {
+                        ("stream_next", Err(err))
+                    }
                 }
             },
 
