@@ -4,4 +4,9 @@ version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
 [dependencies]
+spidev = "0.2.1"
 sysfs_gpio = "0.5"
+
+[dependencies.mfrc522]
+git = "https://github.com/emkw/rust-MFRC522.git"
+features = ["spidev"]
