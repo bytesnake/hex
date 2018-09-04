@@ -1,6 +1,7 @@
 [package]
-name = "stream-client"
+name = "hex-stream-client"
 version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
 [dependencies]
+sysfs_gpio = "0.5"

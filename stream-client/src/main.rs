@@ -1,33 +1,53 @@
-extern crate websocket;
-extern crate termion;
-extern crate tui;
-extern crate rb;
-extern crate cpal;
+extern crate sysfs_gpio;
 
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
+use sysfs_gpio::{Direction, Pin};
+use std::thread;
+use std::time::Duration;
 
-mod audio;
-mod control;
-mod client;
+const BUTTON_PINS: &[u64] = &[1016, 1014, 1018, 1019];
+
+#[derive(Debug)]
+enum Event {
+    ButtonPressed(u8)
+}
 
 fn main() {
-    let mut audio_device = audio::AudioDevice::new();
-    let format = audio_device.format();
+    let inputs: Result<Vec<_>, _> = BUTTON_PINS.iter().map(|pin| {
+        let input = Pin::new(*pin);
+        
+        input.export()
+            .and_then(|x| input.set_direction(Direction::In))
+            .map(|_| input)
+    }).collect();
 
-    println!("{:?}", audio_device.format());
+    let inputs = inputs.unwrap();
 
-    let mut tui = control::TextInterface::new();
+    let mut prev = vec![1,1,1,1];
+    loop {
+        let vals: Result<Vec<u8>, _> = inputs.iter().map(|dev| dev.get_value()).collect();
 
-    let client = client::Client::new(tui.sender(), audio_device);
+        let mut events = Vec::new();
+        if let Ok(vals) = vals {
+            if vals[0] < prev[0] {
+                events.push(Event::ButtonPressed(0));
+            }
+            if vals[1] < prev[1] {
+                events.push(Event::ButtonPressed(1));
+            }
+            if vals[2] < prev[2] {
+                events.push(Event::ButtonPressed(2));
+            }
+            if vals[3] < prev[3] {
+                events.push(Event::ButtonPressed(3));
+            }
 
-    tui.run(client.sender());
+            if events.len() > 0 {
+                println!("{:?}", events);
+            }
 
-    //control::display();
+            prev = vals;
+        }
 
-    /*loop {
-        audio_device.buffer(&vec![0i16; format.channels as usize]);
-    }*/
-    println!("Hello, world!");
+        thread::sleep(Duration::from_millis(50));
+    }
 }
