@@ -10,7 +10,9 @@ rb = "0.3"
 websocket = "0.20"
 serde = "1"
 serde_derive = "1"
+serde_json = "1.0"
 cpal = "*"
+uuid = {version="0.4", features = ["v4"]}
 
 [dependencies.mfrc522]
 git = "https://github.com/emkw/rust-MFRC522.git"

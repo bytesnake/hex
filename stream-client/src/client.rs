@@ -1,3 +1,6 @@
+use uuid::Uuid;
+
+use serde_json;
 use websocket::{ClientBuilder, OwnedMessage, self};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::net::TcpStream;
@@ -27,12 +30,23 @@ pub struct Playlist {
     count: u32
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Token {
-    token: String,
+    token: u32,
     key: String,
     pos: usize,
     completion: f64
+}
+
+impl Token {
+    pub fn with_playlist(key: &str) -> Token {
+        Token {
+            Uuid::v4_new().hyphenated().to_string(),
+            key: key.into(),
+            pos: 0,
+            completion: 0.0
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -40,6 +54,7 @@ pub struct Token {
 pub enum Outgoing {
     #[serde(rename="stream_next")]
     StreamNext {
+        #[serde(skip_serializing_if = "Option::is_none")]
         key: Option<String>
     },
     #[serde(rename="stream_end")]
@@ -59,7 +74,24 @@ pub enum Outgoing {
 }
 
 #[derive(Serialize)]
-#[serde(untagged)]
+pub struct OutgoingWrapper {
+    id: String,
+    msg: Outgoing
+}
+
+impl Outgoing {
+    pub fn serialize(self, id: Uuid) -> String {
+        let wrapper = OutgoingWrapper {
+            id: id.hyphenated().to_string(),
+            msg: self
+        };
+
+        serde_json::to_string(&wrapper).expect("Failed to serialize Outgoing struct!")
+    }
+}
+
+#[derive(Deserialize, Debug)]
+//#[serde(untagged)]
 pub enum Incoming {
     StreamNext,
     StreamSeek {
@@ -70,13 +102,26 @@ pub enum Incoming {
     InsertToken
 }
 
+impl Incoming {
+    pub fn deserialize(buf: String) -> Result<Incoming, Error> {
+        serde_json::from_str(&buf).expect("Failed to deserialize Incoming!")
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub enum Error {
+}
+
+#[derive(Deserialize, Debug)]
+pub struct IncomingWrapper((String, Result<Incoming, Error>));
+
 pub struct Client {
     client: websocket::client::sync::Client<TcpStream>
 }
 
 impl Client {
     pub fn new() -> Client {
-        let client = ClientBuilder::new("127.0.0.1")
+        let client = ClientBuilder::new("ws://192.168.1.2:2794")
             .unwrap()
             .add_protocol("rust-websocket")
             .connect_insecure()
@@ -87,5 +132,9 @@ impl Client {
         Client {
             client: client
         }
+    }
+
+    pub fn send(&mut self, id: Uuid, msg: Outgoing) {
+        self.client.send_message(&OwnedMessage::Text(msg.serialize(id))).unwrap();
     }
 }

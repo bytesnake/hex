@@ -39,7 +39,7 @@ pub struct Playlist {
 
 #[derive(Debug)]
 pub struct Token {
-    pub token: String,
+    pub token: u32,
     pub key: String,
     pub pos: u32,
     pub completion: f64
