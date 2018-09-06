@@ -6,7 +6,15 @@ authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 [dependencies]
 spidev = "0.2.1"
 sysfs_gpio = "0.5"
+rb = "0.3"
+websocket = "0.20"
+serde = "1"
+serde_derive = "1"
+cpal = "*"
 
 [dependencies.mfrc522]
 git = "https://github.com/emkw/rust-MFRC522.git"
 features = ["spidev"]
+
+#[dependencies.cpal]
+#path = "/home/lorenz/Downloads/cpal/"

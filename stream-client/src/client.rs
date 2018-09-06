@@ -3,7 +3,6 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use std::net::TcpStream;
 use std::thread;
 
-use control;
 use audio::AudioDevice;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -72,8 +71,7 @@ pub enum Incoming {
 }
 
 pub struct Client {
-    sender: Sender<Packet>,
-    thread: thread::JoinHandle<()>
+    client: websocket::client::sync::Client<TcpStream>
 }
 
 impl Client {
@@ -87,7 +85,7 @@ impl Client {
         println!("Connected to server!");
 
         Client {
-            thread: handle
+            client: client
         }
     }
 }

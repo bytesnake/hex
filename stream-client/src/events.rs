@@ -1,4 +1,6 @@
-use spidev::{Spidev, SpidevOptions};
+use std::sync::mpsc::{Receiver, Sender, channel};
+
+use spidev::{self, Spidev, SpidevOptions};
 use sysfs_gpio::{Pin, Direction};
 
 use mfrc522::{MFRC522, pcd::Reg, picc::UID};
@@ -9,14 +11,14 @@ use std::time::Duration;
 const BUTTON_PINS: &[u64] = &[1016, 1014, 1018, 1019];
 
 #[derive(Debug)]
-enum Event {
+pub enum Event {
     ButtonPressed(u8),
     NewCard(Vec<u8>),
     CardLost
 }
 
 pub fn events() -> Receiver<Vec<Event>> {
-    let (recv, sender) = channel();
+    let (sender, recv) = channel();
 
     thread::spawn(|| events_fn(sender));
 
@@ -110,7 +112,7 @@ fn events_fn(sender: Sender<Vec<Event>>) {
 
         if events.len() > 0 {
             sender.send(events).unwrap();
-            println!("{:?}", events);
+            //println!("{:?}", events);
         }
 
         thread::sleep(Duration::from_millis(100));

@@ -11,5 +11,4 @@ Cargo.lock
 **/*.rs.bk
 
 # We don't want to add custom library
-server/ssl_arm/
-server/libopus/
+/crosscomp/
