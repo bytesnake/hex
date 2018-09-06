@@ -39,9 +39,9 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn with_playlist(key: &str) -> Token {
+    pub fn with_playlist(token: u32, key: &str) -> Token {
         Token {
-            Uuid::v4_new().hyphenated().to_string(),
+            token: token,
             key: key.into(),
             pos: 0,
             completion: 0.0
@@ -65,7 +65,7 @@ pub enum Outgoing {
     },
     #[serde(rename="get_token")]
     GetToken {
-        token: String
+        token: u32
     },
     #[serde(rename="insert_token")]
     InsertToken {

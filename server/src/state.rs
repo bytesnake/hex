@@ -379,7 +379,7 @@ impl State {
                 )
             },
             proto::Incoming::GetToken { token } => {
-                ("get_token", self.collection.get_token(&token)
+                ("get_token", self.collection.get_token(token)
                     .map(|x| {
                         let tracks: Vec<proto::Track> = x.2.into_iter()
                             .map(|x| proto::Track::from_db_obj(x))

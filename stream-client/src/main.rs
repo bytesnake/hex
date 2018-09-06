@@ -14,13 +14,14 @@ mod audio;
 mod events;
 mod client;
 
-use client::{Client, Outgoing};
+use client::{Client, Outgoing, Token};
         
 fn main() {
     let events = events::events();
     let mut client = Client::new();
 
-    let a = Outgoing::StreamNext { key: None };
+    let token = Token::with_playlist(0, "437f4559d21445e99a238daa217c3448");
+    let a = Outgoing::InsertToken { token: token };
 
     client.send(uuid::Uuid::new_v4(), a);
 

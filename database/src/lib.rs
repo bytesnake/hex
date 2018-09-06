@@ -219,7 +219,7 @@ impl Collection {
     }
 
     /// Get the metadata and tracks for a certain playlist
-    pub fn get_token(&self, token: &str) -> Result<(Token, Playlist, Vec<Track>)> {
+    pub fn get_token(&self, token: u32) -> Result<(Token, Playlist, Vec<Track>)> {
         let mut stmt = self.socket.prepare(
             "SELECT Token, Key, Pos, Completion
                 FROM Tokens WHERE Token=?;")?;

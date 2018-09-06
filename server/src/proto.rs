@@ -182,7 +182,7 @@ pub enum Incoming {
     AskUploadProgress,
     #[serde(rename="get_token")]
     GetToken {
-        token: String
+        token: u32
     },
     #[serde(rename="insert_token")]
     InsertToken {
