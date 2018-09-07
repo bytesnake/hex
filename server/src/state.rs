@@ -400,6 +400,12 @@ impl State {
                     .map(|_| proto::Outgoing::InsertToken)
                     .map_err(|err| Error::Database(err))
                 )
+            },
+            proto::Incoming::UpdateToken { token, played, pos } => {
+                ("update_token", self.collection.update_token(token, played, pos)
+                     .map(|_| proto::Outgoing::UpdateToken)
+                     .map_err(|err| Error::Database(err))
+                )
             }
         };
 

@@ -41,6 +41,6 @@ pub struct Playlist {
 pub struct Token {
     pub token: u32,
     pub key: String,
-    pub pos: u32,
-    pub completion: f64
+    pub played: String,
+    pub pos: f64
 }

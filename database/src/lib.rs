@@ -221,7 +221,7 @@ impl Collection {
     /// Get the metadata and tracks for a certain playlist
     pub fn get_token(&self, token: u32) -> Result<(Token, Playlist, Vec<Track>)> {
         let mut stmt = self.socket.prepare(
-            "SELECT Token, Key, Pos, Completion
+            "SELECT Token, Key, Played, Pos
                 FROM Tokens WHERE Token=?;")?;
             
         let mut query = stmt.query(&[&token])?;
@@ -230,8 +230,8 @@ impl Collection {
         let token = Token {
             token: row.get(0),
             key: row.get(1),
-            pos: row.get(2),
-            completion: row.get(3)
+            played: row.get(2),
+            pos: row.get(3)
         };
 
         let (playlist, tracks) = self.get_playlist(&token.key)?;
@@ -241,8 +241,12 @@ impl Collection {
 
     pub fn insert_token(&self, token: Token) -> Result<()> {
         self.socket.execute(
-            "INSERT INTO Tokens(token, key, pos, completion) VALUES (?1, ?2, ?3, ?4)",
-                &[&token.token, &token.key, &token.pos, &token.completion]).map(|_| ())
+            "INSERT INTO Tokens(token, key, played, pos) VALUES (?1, ?2, ?3, ?4)",
+                &[&token.token, &token.key, &token.played, &token.pos]).map(|_| ())
+    }
+
+    pub fn update_token(&self, token: u32, played: String, pos: f64) -> Result<()> {
+        self.socket.execute("UPDATE tokens SET played = ?1, pos = ?2 WHERE token = ?3", &[&played, &pos, &token]).map(|_| ())
     }
 }
 

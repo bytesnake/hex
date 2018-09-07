@@ -30,20 +30,6 @@ impl Track {
             favs_count: obj.favs_count,
         }
     }
-
-    /*pub fn empty(fingerprint: String, key: String, duration: f64) -> Track {
-        Track {
-            title: None,
-            album: None,
-            interpret: None,
-            people: None,
-            composer: None,
-            fingerprint: fingerprint,
-            key: key,
-            duration: duration,
-            favs_count: 0,
-        }
-    }*/
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Playlist {
@@ -68,8 +54,8 @@ impl Playlist {
 pub struct Token {
     pub token: u32,
     pub key: String,
-    pub pos: u32,
-    pub completion: f64
+    pub played: String,
+    pub pos: f64
 }
 
 impl Token {
@@ -77,8 +63,8 @@ impl Token {
         Token {
             token: obj.token,
             key: obj.key,
-            pos: obj.pos,
-            completion: obj.completion
+            played: obj.played,
+            pos: obj.pos
         }
     }
 
@@ -86,8 +72,8 @@ impl Token {
         hex_database::Token {
             token: self.token,
             key: self.key,
-            pos: self.pos,
-            completion: self.completion
+            played: self.played,
+            pos: self.pos
         }
     }
 }
@@ -187,6 +173,12 @@ pub enum Incoming {
     #[serde(rename="insert_token")]
     InsertToken {
         token: Token
+    },
+    #[serde(rename="update_token")]
+    UpdateToken {
+        token: u32,
+        played: String,
+        pos: f64
     }
 }
 
@@ -230,7 +222,8 @@ pub enum Outgoing {
     VoteForTrack,
     AskUploadProgress(Vec<UploadProgress>),
     GetToken((Token, Playlist, Vec<Track>)),
-    InsertToken
+    InsertToken,
+    UpdateToken
 }
 
 #[derive(Serialize)]

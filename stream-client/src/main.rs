@@ -9,22 +9,51 @@ extern crate cpal;
 extern crate rb;
 extern crate websocket;
 extern crate uuid;
+extern crate rand;
 
 mod audio;
 mod events;
 mod client;
+mod token;
 
-use client::{Client, Outgoing, Token};
-        
+use std::slice;
+use std::thread;
+use std::time::Duration;
+use client::{Client, Outgoing, Token, Incoming};
+use events::Event;        
+
 fn main() {
     let events = events::events();
     let mut client = Client::new();
+    let mut audio = audio::AudioDevice::new();
 
-    let token = Token::with_playlist(0, "437f4559d21445e99a238daa217c3448");
-    let a = Outgoing::InsertToken { token: token };
+    let mut token: Option<token::Token> = Some(token::Token::new(&mut client, 0));
+    loop {
+        if let Ok(events) = events.try_recv() {
+            for event in events {
+                match event {
+                    Event::ButtonPressed(x) => {
+                        if let Some(ref mut token) = token {
+                            match x {
+                                3 => token.next_track(),
+                                1 => token.prev_track(),
+                                0 => token.shuffle(),
+                                2 => token.upvote(&mut client),
+                                _ => println!("Not supported yet!")
+                            }
+                        }
+                    },
+                    Event::NewCard(num) => token = Some(token::Token::new(&mut client, 0)),
+                    Event::CardLost => token = None
+                }
+            }
+        }
 
-    client.send(uuid::Uuid::new_v4(), a);
-
-    //println!("{:?}", Incoming::deserialize("(\"stream_next\", Ok(StreamNext))".into()));
+        if let Some(ref mut token) = token {
+            if let Some(packet) = token.next_packet(&mut client) {
+                audio.buffer(packet);
+            }
+        }
+    }
 }
 

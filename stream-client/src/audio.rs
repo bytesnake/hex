@@ -1,6 +1,7 @@
 use cpal;
 use std::thread;
 use rb::{SpscRb, RB, RbProducer, RbConsumer, Producer, Consumer};
+use rb::RbInspector;
 
 pub struct AudioDevice {
     format: cpal::Format,
@@ -11,7 +12,7 @@ pub struct AudioDevice {
 
 impl AudioDevice {
     pub fn new() -> AudioDevice {
-        let rb = SpscRb::new(4096);
+        let rb = SpscRb::new(48000 * 1);
         let (prod, cons) = (rb.producer(), rb.consumer());
 
         let device = cpal::default_output_device().expect("Failed to get default output device");
@@ -38,7 +39,15 @@ impl AudioDevice {
     }
 
     pub fn buffer(&mut self, buf: &[i16]) {
-        self.producer.write_blocking(buf).expect("Couldn't queue block to buffer");
+        let mut written = 0;
+        loop {
+            let n = self.producer.write_blocking(&buf[written..]).expect("Couldn't queue block to buffer");
+            written += n;
+
+            if written == buf.len() {
+                break;
+            }
+        }
     }
 
     pub fn format(&self) -> cpal::Format {
@@ -54,7 +63,6 @@ impl AudioDevice {
         let mut buf = vec![0i16; format.channels as usize];
 
         event_loop.run(move |_, data| {
-            println!("Loop");
             match data {
                 cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer) } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {

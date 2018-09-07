@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use serde_json;
+use serde_json::{self, value::Value};
 use websocket::{ClientBuilder, OwnedMessage, self};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::net::TcpStream;
@@ -10,16 +10,14 @@ use audio::AudioDevice;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Track {
-    title: Option<String>,
-    album: Option<String>,
-    interpret: Option<String>,
-    people: Option<String>,
-    composer: Option<String>,
-    fingerprint: String,
+    pub title: Option<String>,
+    pub album: Option<String>,
+    pub interpret: Option<String>,
+    pub people: Option<String>,
+    pub composer: Option<String>,
     pub key: String,
     pub duration: f64,
-    favs_count: u32,
-    channels: u32
+    pub favs_count: u32,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -34,7 +32,7 @@ pub struct Playlist {
 pub struct Token {
     token: u32,
     key: String,
-    pos: usize,
+    pub pos: usize,
     completion: f64
 }
 
@@ -61,7 +59,7 @@ pub enum Outgoing {
     StreamEnd,
     #[serde(rename="stream_seek")]
     StreamSeek {
-        pos: u32
+        sample: u32
     },
     #[serde(rename="get_token")]
     GetToken {
@@ -70,6 +68,10 @@ pub enum Outgoing {
     #[serde(rename="insert_token")]
     InsertToken {
         token: Token
+    },
+    #[serde(rename="vote_for_track")]
+    VoteForTrack {
+        key: String
     }
 }
 
@@ -91,29 +93,58 @@ impl Outgoing {
 }
 
 #[derive(Deserialize, Debug)]
-//#[serde(untagged)]
+#[serde(untagged)]
 pub enum Incoming {
+    #[serde(rename = "stream_next")]
     StreamNext,
+    #[serde(rename = "stream_seek")]
     StreamSeek {
         pos: u32
     },
+    #[serde(rename = "stream_end")]
     StreamEnd,
+    #[serde(rename = "get_token")]
     GetToken((Token, Playlist, Vec<Track>)),
-    InsertToken
+    #[serde(rename = "insert_token")]
+    InsertToken,
+    #[serde(rename = "vote_for_track")]
+    VoteForTrack,
+    Buffer(Vec<u8>)
 }
 
 impl Incoming {
     pub fn deserialize(buf: String) -> Result<Incoming, Error> {
-        serde_json::from_str(&buf).expect("Failed to deserialize Incoming!")
+        let mut wrapper: IncomingWrapper = serde_json::from_str(&buf).expect("Failed to deserialize Incoming Wrapper!");
+
+        println!("{}", buf);
+
+        let mut res: Result<Value, Error> = serde_json::from_value(wrapper.payload.clone()).unwrap();
+
+        res.map(|x| {
+            match wrapper.fnc.as_ref() {
+                "stream_next" => Incoming::StreamNext,
+                "stream_end" => Incoming::StreamEnd,
+                "insert_token" => Incoming::InsertToken,
+                "vote_for_track" => Incoming::VoteForTrack,
+                _ => serde_json::from_value(x).unwrap()
+            }
+        })
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub enum Error {
+    #[serde(rename = "MusicContainer(ReachedEnd)")]
+    EndOfStream
 }
 
 #[derive(Deserialize, Debug)]
-pub struct IncomingWrapper((String, Result<Incoming, Error>));
+pub struct IncomingWrapper {
+    id: String,
+    #[serde(rename = "fn")]
+    fnc: String,
+    payload: Value
+}
 
 pub struct Client {
     client: websocket::client::sync::Client<TcpStream>
@@ -136,5 +167,19 @@ impl Client {
 
     pub fn send(&mut self, id: Uuid, msg: Outgoing) {
         self.client.send_message(&OwnedMessage::Text(msg.serialize(id))).unwrap();
+    }
+
+    pub fn send_once(&mut self, msg: Outgoing) {
+        self.send(Uuid::new_v4(), msg);
+    }
+
+    pub fn recv(&mut self) -> Result<Incoming, Error> {
+        let msg = self.client.recv_message().unwrap();
+
+        match msg {
+            OwnedMessage::Text(msg) => Incoming::deserialize(msg),
+            OwnedMessage::Binary(buf) => Ok(Incoming::Buffer(buf)),
+            _ => panic!("Got invalid message type!")
+        }
     }
 }

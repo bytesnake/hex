@@ -1,3 +1,4 @@
+use std::mem;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use spidev::{self, Spidev, SpidevOptions};
@@ -13,7 +14,7 @@ const BUTTON_PINS: &[u64] = &[1016, 1014, 1018, 1019];
 #[derive(Debug)]
 pub enum Event {
     ButtonPressed(u8),
-    NewCard(Vec<u8>),
+    NewCard(u32),
     CardLost
 }
 
@@ -102,7 +103,12 @@ fn events_fn(sender: Sender<Vec<Event>>) {
                     let (read_status, nread) = mfrc522.mifare_read(8, &mut buffer);
                     if read_status.is_ok() && nread > 0 {
                         card_avail = true;
-                        events.push(Event::NewCard(buffer));
+                        let id = ((buffer[0] as u32) << 24) |
+                                 ((buffer[1] as u32) << 16) |
+                                 ((buffer[2] as u32) << 8)  |
+                                 ((buffer[3] as u32) << 0);
+
+                        events.push(Event::NewCard(id));
                     }
                 }
 
