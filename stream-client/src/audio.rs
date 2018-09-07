@@ -12,7 +12,7 @@ pub struct AudioDevice {
 
 impl AudioDevice {
     pub fn new() -> AudioDevice {
-        let rb = SpscRb::new(48000 * 1);
+        let rb = SpscRb::new(48000 * 3);
         let (prod, cons) = (rb.producer(), rb.consumer());
 
         let device = cpal::default_output_device().expect("Failed to get default output device");
@@ -48,6 +48,10 @@ impl AudioDevice {
                 break;
             }
         }
+    }
+
+    pub fn clean(&mut self) {
+        self.rb.clear();
     }
 
     pub fn format(&self) -> cpal::Format {

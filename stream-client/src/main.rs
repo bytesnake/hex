@@ -27,7 +27,7 @@ fn main() {
     let mut client = Client::new();
     let mut audio = audio::AudioDevice::new();
 
-    let mut token: Option<token::Token> = Some(token::Token::new(&mut client, 0));
+    let mut token: Option<token::Token> = None;
     loop {
         if let Ok(events) = events.try_recv() {
             for event in events {
@@ -44,7 +44,13 @@ fn main() {
                         }
                     },
                     Event::NewCard(num) => token = Some(token::Token::new(&mut client, 0)),
-                    Event::CardLost => token = None
+                    Event::CardLost => {
+                        if let Some(ref mut token) = token {
+                            token.removed(&mut client);
+                        }
+                        
+                        token = None
+                    }
                 }
             }
         }

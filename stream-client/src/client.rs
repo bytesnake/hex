@@ -8,7 +8,7 @@ use std::thread;
 
 use audio::AudioDevice;
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Track {
     pub title: Option<String>,
     pub album: Option<String>,
@@ -24,16 +24,16 @@ pub struct Track {
 pub struct Playlist {
     pub key: String,
     pub title: String,
-    desc: Option<String>,
-    count: u32
+    pub desc: Option<String>,
+    pub count: u32
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Token {
-    token: u32,
-    key: String,
-    pub pos: usize,
-    completion: f64
+    pub token: u32,
+    pub key: String,
+    pub played: String,
+    pub pos: f64
 }
 
 impl Token {
@@ -41,8 +41,8 @@ impl Token {
         Token {
             token: token,
             key: key.into(),
-            pos: 0,
-            completion: 0.0
+            played: "".into(),
+            pos: 0.0
         }
     }
 }
@@ -68,6 +68,12 @@ pub enum Outgoing {
     #[serde(rename="insert_token")]
     InsertToken {
         token: Token
+    },
+    #[serde(rename="update_token")]
+    UpdateToken {
+        token: u32,
+        played: String,
+        pos: f64
     },
     #[serde(rename="vote_for_track")]
     VoteForTrack {
@@ -99,7 +105,7 @@ pub enum Incoming {
     StreamNext,
     #[serde(rename = "stream_seek")]
     StreamSeek {
-        pos: u32
+        sample: u32
     },
     #[serde(rename = "stream_end")]
     StreamEnd,
