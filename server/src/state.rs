@@ -16,7 +16,7 @@ use proto::{Track, Token};
 
 use convert::{UploadState, UploadProgress};
 
-use hex_database;
+use hex_database::{self, events::Action};
 use hex_music_container::{self, Configuration, Container};
 
 use acousticid;
@@ -36,7 +36,7 @@ enum RequestState {
 pub struct State {
     handle: Handle,
     reqs: HashMap<String, RequestState>,
-    collection: hex_database::Collection,
+    pub collection: hex_database::Collection,
     data_path: String,
     buffer: Vec<u8>,
     uploads: Vec<UploadState>
@@ -54,7 +54,7 @@ impl State {
         }
     }
 
-    pub fn process(&mut self, msg: String) -> Result<OwnedMessage> {
+    pub fn process(&mut self, origin: String, msg: String) -> Result<OwnedMessage> {
         println!("Got: {}", &msg);
 
         let packet: proto::IncomingWrapper = serde_json::from_str(&msg)
@@ -118,6 +118,8 @@ impl State {
 
                 let prior_state = entry
                     .or_insert_with(|| {
+                        collection.add_event(Action::PlaySong(key.clone().unwrap()).with_origin(origin)).unwrap();
+
                         RequestState::Stream {
                             container: Container::<File>::with_key(&data_path, &key.clone().unwrap()).unwrap(),
                             track: collection.get_track(&key.unwrap()).unwrap()
@@ -286,6 +288,8 @@ impl State {
                 )
             },
             proto::Incoming::DeleteTrack { key } => {
+                self.collection.add_event(Action::DeleteSong(key.clone()).with_origin(origin.clone())).unwrap();
+
                 ("delete_track", self.collection.delete_track(&key)
                     .map(|x| proto::Outgoing::DeleteTrack(x))
                     .map_err(|err| Error::Database(err))
@@ -343,6 +347,7 @@ impl State {
                                 if let Some(ref track) = state.data {
                                     *track_key = Some(track.key.clone());
                                     
+                                    self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
                                     self.collection.insert_track(track.clone()).unwrap();
 
                                 }

@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::time::Instant;
 
 use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
@@ -9,6 +10,8 @@ use futures::{Future, Sink, Stream};
 
 use state::State;
 use conf::Conf;
+
+use hex_database::events::Action;
 
 pub fn start(conf: Conf) {
 	let mut core = Core::new().unwrap();
@@ -42,19 +45,22 @@ pub fn start(conf: Conf) {
                 // send a greeting!
                 //.and_then(|(s, _)| s.send(Message::text("Hello World!").into()))
                 // simple echo server impl
-                .and_then(|(s,_)| {
+                .and_then(move |(s,_)| {
+                    let now = Instant::now();
                     let mut state = State::new(handle2, conf_music);
+
+                    //state.collection.add_event(Action::PlaySong(key.clone().unwrap()).with_origin(origin)).unwrap();
 
                     let (sink, stream) = s.split();
 
                     stream
-                    .take_while(|m| Ok(!m.is_close()))
+                    //.take_while(|m| Ok(!m.is_close()))
                     .filter_map(move |m| {
                         match m {
                             OwnedMessage::Ping(p) => Some(OwnedMessage::Pong(p)),
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(msg) => {
-                                let msg = match state.process(msg) {
+                                let msg = match state.process(addr.to_string(), msg) {
                                     Ok(msg) => msg,
                                     Err(_) => OwnedMessage::Text("Err(CouldNotParse)".into())
                                 };
@@ -66,11 +72,23 @@ pub fn start(conf: Conf) {
 
                                 Some(OwnedMessage::Text("{\"fn\": \"upload\"}".into()))
                             },
+                            OwnedMessage::Close(_) => {
+                                state.collection.add_event(Action::Connect(now.elapsed().as_secs() as f32).with_origin(addr.to_string())).unwrap();
+                                println!("BLUB2");
+
+
+                                Some(OwnedMessage::Close(None))
+                            },
                             _ => Some(m)
                         }
                     })
                     .forward(sink)
-                    .and_then(|(_, sink)| {
+                    .and_then(move |(_, sink)| {
+                        println!("BLUB");
+                        //println!("Disconnected: {}", now.elapsed().as_secs());
+                        //hex_database::Collection::from_file(&conf_music.db_path)
+                        //state.collection.add_event(Action::Connect(0.0).with_origin(addr.to_string())).unwrap();
+
                         sink.send(OwnedMessage::Close(None))
                     })
                 });

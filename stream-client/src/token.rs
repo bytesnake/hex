@@ -53,8 +53,8 @@ impl Token {
                 let id = Uuid::new_v4();
                 client.send(id, Outgoing::StreamNext { key: Some(tracks[pos].key.clone()) });
                 client.recv();
-                client.send(id, Outgoing::StreamSeek { sample: (token.pos * 48000.0) as u32 });
-                client.recv();
+                //client.send(id, Outgoing::StreamSeek { sample: (token.pos * 48000.0) as u32 });
+                //client.recv();
 
                 return Token {
                     token: token.token,

@@ -3,9 +3,11 @@ extern crate uuid;
 
 pub mod objects;
 pub mod search;
+pub mod events;
 
 pub use objects::{Track, Playlist, Token};
 pub use rusqlite::{Result, Statement, Error};
+pub use events::Event;
 
 use uuid::Uuid;
 
@@ -247,6 +249,46 @@ impl Collection {
 
     pub fn update_token(&self, token: u32, played: String, pos: f64) -> Result<()> {
         self.socket.execute("UPDATE tokens SET played = ?1, pos = ?2 WHERE token = ?3", &[&played, &pos, &token]).map(|_| ())
+    }
+
+    pub fn add_event(&self, event: Event) -> Result<()> {
+        self.socket.execute(
+            "INSERT INTO Events (Date, Origin, Event, Data) VALUES (time('now'), ?1, ?2, ?3)",
+                &[&event.origin(), &event.tag(), &event.data()]).map(|_| ())
+    }
+
+    pub fn get_events(&self) -> Vec<(String, Event)> {
+        let mut stmt = self.socket.prepare(
+            "SELECT Date, Origin, Event, Data FROM Events;").unwrap();
+
+        let rows = stmt.query_map(&[], |x| {
+            (x.get(0), Event::from(x.get(1), x.get(2), x.get(3)))
+        }).unwrap().filter_map(|x| x.ok()).filter_map(|x| {
+            if let Some(y) = x.1.ok() {
+                Some((x.0, y))
+            } else {
+                None
+            }
+        }).collect();
+
+        rows
+    }
+
+    pub fn summarise_day(&self, day: String, connects: u32, plays: u32, adds: u32, removes: u32) -> Result<()> {
+        self.socket.execute(
+            "INSERT INTO Summarise (day, connects, plays, adds, removes) (?1, ?2, ?3, ?4, ?5)",
+                &[&day, &connects, &plays, &adds, &removes]).map(|_| ())
+    }
+
+    pub fn get_summarisation(&self) -> Vec<(u32, u32, u32, u32)> {
+        let mut stmt = self.socket.prepare(
+            "SELECT connects, plays, adds, removes FROM Summarise;").unwrap();
+
+        let rows = stmt.query_map(&[], |x| {
+            (x.get(0), x.get(1), x.get(2), x.get(3))
+        }).unwrap().filter_map(|x| x.ok()).collect();
+
+        rows
     }
 }
 
