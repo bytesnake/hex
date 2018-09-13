@@ -4,3 +4,7 @@ version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
 [dependencies]
+chrono = "0.4"
+
+[dependencies.hex-database]
+path = "../database/"

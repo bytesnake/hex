@@ -253,7 +253,7 @@ impl Collection {
 
     pub fn add_event(&self, event: Event) -> Result<()> {
         self.socket.execute(
-            "INSERT INTO Events (Date, Origin, Event, Data) VALUES (time('now'), ?1, ?2, ?3)",
+            "INSERT INTO Events (Date, Origin, Event, Data) VALUES (datetime('now'), ?1, ?2, ?3)",
                 &[&event.origin(), &event.tag(), &event.data()]).map(|_| ())
     }
 
@@ -276,7 +276,7 @@ impl Collection {
 
     pub fn summarise_day(&self, day: String, connects: u32, plays: u32, adds: u32, removes: u32) -> Result<()> {
         self.socket.execute(
-            "INSERT INTO Summarise (day, connects, plays, adds, removes) (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO Summarise (day, connects, plays, adds, removes) VALUES (?1, ?2, ?3, ?4, ?5)",
                 &[&day, &connects, &plays, &adds, &removes]).map(|_| ())
     }
 
@@ -289,6 +289,16 @@ impl Collection {
         }).unwrap().filter_map(|x| x.ok()).collect();
 
         rows
+    }
+
+    pub fn get_newest_summarise_day(&self) -> Result<String> {
+        let mut stmt = self.socket.prepare(
+            "SELECT day FROM Summarise order by day desc limit 1;").unwrap();
+
+        let mut query = stmt.query(&[]).unwrap();
+        let row = query.next().ok_or(Error::QueryReturnedNoRows)??;
+
+        Ok(row.get(0))
     }
 }
 

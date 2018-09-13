@@ -1,10 +1,12 @@
 use rusqlite::{Error, Result};
 
+#[derive(Debug)]
 pub struct Event {
     origin: String,
     action: Action
 }
 
+#[derive(Debug, Clone)]
 pub enum Action {
     Connect(f32),
     PlaySong(String),
@@ -22,6 +24,10 @@ impl Action {
 }
 
 impl Event {
+    pub fn action(&self) -> Action {
+        self.action.clone()
+    }
+
     pub fn origin(&self) -> String {
         self.origin.clone()
     }
