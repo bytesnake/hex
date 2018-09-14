@@ -97,6 +97,18 @@ class Protocol {
         return this.send_msg(uuid, 'ask_upload_progress', {});
     }
 
+    get_events() {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'get_events', {});
+    }
+
+    get_summarise() {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'get_summarise', {});
+    }
+
     async *stream(uuid, track_key) {
         var first = true;
         while(true) {

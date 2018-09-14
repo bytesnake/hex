@@ -15,14 +15,14 @@ export default class TrackList extends Component {
     
     componentDidMount() {
         window.addEventListener('resize', this.handleResize);
-        this.list.parentElement.addEventListener('scroll', this.handleScroll);
+        this.list.parentElement.parentElement.addEventListener('scroll', this.handleScroll);
 
         this.handleResize();
     }
 
     componentDidUmount() {
         window.removeEventListener('resize', this.handleResize);
-        this.list.parentElement.removeEventListener('scroll', this.handleScroll);
+        this.list.parentElement.parentElement.removeEventListener('scroll', this.handleScroll);
     }
 
     handleResize = () => {

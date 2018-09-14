@@ -59,7 +59,9 @@ export default class Search extends Component {
 	render({}, { query, updating, stream, tracks }) {
         if(stream && tracks.length > 0) {
             return (
-                <TrackList loadMore={this.more} tracks={tracks} />
+                <div class={style.search}>
+                    <TrackList loadMore={this.more} tracks={tracks} />
+                </div>
             );
         } else {
             return (
