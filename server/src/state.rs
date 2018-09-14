@@ -12,7 +12,7 @@ use proto;
 
 use conf;
 use error::{Result, Error};
-use proto::{Track, Token};
+use proto::{Track, Token, Event};
 
 use convert::{UploadState, UploadProgress};
 
@@ -411,6 +411,16 @@ impl State {
                      .map(|_| proto::Outgoing::UpdateToken)
                      .map_err(|err| Error::Database(err))
                 )
+            },
+            proto::Incoming::GetSummarise => {
+                ("get_summarise", Ok(proto::Outgoing::GetSummarise(self.collection.get_summarisation())))
+            },
+            proto::Incoming::GetEvents => {
+                ("get_events", Ok(proto::Outgoing::GetEvents(
+                    self.collection.get_events().into_iter()
+                        .map(|x| (x.0, Event::from_db_obj(x.1)))
+                        .collect()
+                )))
             }
         };
 

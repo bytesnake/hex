@@ -7,7 +7,7 @@ pub mod events;
 
 pub use objects::{Track, Playlist, Token};
 pub use rusqlite::{Result, Statement, Error};
-pub use events::Event;
+pub use events::{Action, Event};
 
 use uuid::Uuid;
 
@@ -280,12 +280,12 @@ impl Collection {
                 &[&day, &connects, &plays, &adds, &removes]).map(|_| ())
     }
 
-    pub fn get_summarisation(&self) -> Vec<(u32, u32, u32, u32)> {
+    pub fn get_summarisation(&self) -> Vec<(String, u32, u32, u32, u32)> {
         let mut stmt = self.socket.prepare(
-            "SELECT connects, plays, adds, removes FROM Summarise;").unwrap();
+            "SELECT day, connects, plays, adds, removes FROM Summarise;").unwrap();
 
         let rows = stmt.query_map(&[], |x| {
-            (x.get(0), x.get(1), x.get(2), x.get(3))
+            (x.get(0), x.get(1), x.get(2), x.get(3), x.get(4))
         }).unwrap().filter_map(|x| x.ok()).collect();
 
         rows

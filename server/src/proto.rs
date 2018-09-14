@@ -78,6 +78,40 @@ impl Token {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct Event {
+    origin: String,
+    action: Action
+}
+
+#[derive(Debug, Serialize)]
+pub enum Action {
+    Connect(f32),
+    PlaySong(String),
+    AddSong(String),
+    DeleteSong(String)
+}
+
+impl Action {
+    pub fn from_db_obj(obj: hex_database::Action) -> Action {
+        match obj {
+            hex_database::Action::Connect(x) => Action::Connect(x),
+            hex_database::Action::PlaySong(x) => Action::PlaySong(x),
+            hex_database::Action::AddSong(x) => Action::AddSong(x),
+            hex_database::Action::DeleteSong(x) => Action::DeleteSong(x)
+        }
+    }
+}
+
+impl Event {
+    pub fn from_db_obj(obj: hex_database::Event) -> Event {
+        Event {
+            origin: obj.origin(),
+            action: Action::from_db_obj(obj.action())
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "fn")]
 pub enum Incoming {
@@ -179,7 +213,11 @@ pub enum Incoming {
         token: u32,
         played: String,
         pos: f64
-    }
+    },
+    #[serde(rename="get_summarise")]
+    GetSummarise,
+    #[serde(rename="get_events")]
+    GetEvents
 }
 
 #[derive(Deserialize)]
@@ -223,7 +261,9 @@ pub enum Outgoing {
     AskUploadProgress(Vec<UploadProgress>),
     GetToken((Token, Playlist, Vec<Track>)),
     InsertToken,
-    UpdateToken
+    UpdateToken,
+    GetSummarise(Vec<(String, u32, u32, u32, u32)>),
+    GetEvents(Vec<(String, Event)>)
 }
 
 #[derive(Serialize)]
