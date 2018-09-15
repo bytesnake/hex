@@ -36,6 +36,7 @@ export default class App extends Component {
                     <Layout.Content>
                         <Router onChange={this.handleRoute}>
                             <Home path="/" />
+                            <Home path="/index.html" />
                             <Playlist path="/playlist/:pl_key" />
                             <Search path="/search/:query?" />
                         </Router>

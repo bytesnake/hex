@@ -26,8 +26,8 @@ impl Token {
                     };
                 }
 
-                let mut played: Vec<Track> = token.played.split(",").map(|x| {
-                    tracks.iter().cloned().filter(|y| y.key == x).next().unwrap()
+                let mut played: Vec<Track> = token.played.split(",").filter_map(|x| {
+                    tracks.iter().cloned().filter(|y| y.key == x).next()
                 }).collect();
 
                 let mut shuffle = false;
