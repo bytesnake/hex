@@ -5,20 +5,25 @@
 >
 > &mdash; <cite>Terry Pratchett (in _The Last Continent_)</cite>
 
-Hex is a collection of crates with whom we're managing our music. It was born out of the desire to be independent from any music provider and to support music tags (which can be used like normal objects in the real world).
+Hex is a collection of crates which can store, manage, tokenise and play music. It was born out of the desire to be independent from any music provider and to support music tags (real world objects like CDs representing a playlist). The project is written in Rust and at the moment running on two platforms, a music server and player.
 
 What are the goals?
- * having a music server running on a RaspberryPi
+ * having a music server running on a Raspberry Pi
  * proper support for a text interface as well as a web interface
  * a substitute for objects (e.g. CD) with tags
 
 From which parts is Hex made of?
- * (database) library - interface to a SQLite database
- * (music-container) library - codec for the music with Opus and Spherical Harmonics
- * (server) binary - a HTTP and websocket server providing the necessary calls
- * (frontend) website - nice GUI for music management
- * (local-client) binary - local management of the music collection without any server
- * (stream-client) binary - music playing system with support for tags in conjunction with a server
+ * [database](database/) library - interface to a SQLite database
+ * [music-container](music-container/) library - codec for the music with Opus and Spherical Harmonics
+ * [server](server) binary - a HTTP and websocket server providing the necessary calls
+ * [frontend](frontend) website - nice GUI for music management
+ * [local-client](local-client) binary - local management of the music collection without any server
+ * [stream-client](stream-client) binary - music playing system with support for tags in conjunction with a server
+ * [nightly-worker](nightly-worker) binary - summarise each day and perform some kind of cleanup
 
 ## Contribution
+
+<img align="left" src="assets/zyklop_trouble.png" width="220px"/>
+
+## Problems
 
