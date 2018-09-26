@@ -22,12 +22,15 @@ From which parts is Hex made of?
  * [nightly-worker](nightly-worker) binary - summarise each day and perform some kind of cleanup
 
 How are these crates interacting?
+
 The Hex project is all about music and its very important for us to have a acessible and easy user experience. For a developer this means that the project is chunked into useful components. The server plays the role of providing the music to every client with help of the database and music-container crates. The database crate defines all objects like _Playlist_, _Track_, _Token_, etc. and provides useful functions to manage them in a SQLite database. The _music-container_ converts raw audio to the Hex specific audio format. Two important points are that is uses the Opus codec to achieve good compression levels and saves the audio in a Spherical Harmonic format (though only minimal support at the moment, but extendable and backward compatible). With help of those libraries the server offers JSON calls to modify the database, play and swallow music. It can also provide the _frontend_ with help of a HTTP server. The _frontend_ connects to the websocket server and gives a nice overview and some tools to manage the music. The second streaming client (working with websockets) is the _stream-client_ which supports Tokens and runs on a small ARM chip with four buttons and the MFRC522 reader. The _local-client_ is a handy tool to manage the database without the graphical burden of a frontend. It can add music, change metadata and list information about Hex. As a local client it can only be used on the same computer as the server.
 
-<img align="left" src="assets/zyklop_confused.png" width="220px"/>
+<img align="left" src="assets/zyklop_confused.png" width="190px"/>
 
-## Problems
-see the issue tracker
+## Future directions
+ * improve frontend with people, playlist image and download
+ * full SH support
+ * more MUSIC!
 
 ## License
 
@@ -42,6 +45,3 @@ at your option.
 If you have any question or suggestion please just open an issue in Github. Feel free to comment on particular features or suggest crazy, funny ideas. I would anticipate if you can have some use of Hex and improve it at the same time.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
-
-
-
