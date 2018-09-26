@@ -1,5 +1,6 @@
-# Hex - a private music library
+<img align="left" src="assets/github.png" width="220px"/>
 
+#  Hex - a private music library
 > "He was spending more nights now watching Hex trawl the invisible writings for any hints. In theory, because of the nature of L-space, absolutely everything was available to him, but that only meant that it was more or less impossible to find whatever it was you were looking for, which is the purpose of computers."
 >
 > &mdash; <cite>Terry Pratchett (in _The Last Continent_)</cite>
