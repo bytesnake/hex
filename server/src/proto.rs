@@ -1,7 +1,7 @@
 use serde_json::{self, Value};
 use error::{Error, Result};
 use std::result;
-use convert::UploadProgress;
+use convert::{DownloadProgress, UploadProgress};
 
 use hex_database;
 
@@ -217,7 +217,14 @@ pub enum Incoming {
     #[serde(rename="get_summarise")]
     GetSummarise,
     #[serde(rename="get_events")]
-    GetEvents
+    GetEvents,
+    #[serde(rename="download")]
+    Download {
+        format: String,
+        tracks: Vec<String>
+    },
+    #[serde(rename="ask_download_progress")]
+    AskDownloadProgress
 }
 
 #[derive(Deserialize)]
@@ -263,7 +270,9 @@ pub enum Outgoing {
     InsertToken,
     UpdateToken,
     GetSummarise(Vec<(String, u32, u32, u32, u32)>),
-    GetEvents(Vec<(String, Event)>)
+    GetEvents(Vec<(String, Event)>),
+    Download,
+    AskDownloadProgress(Vec<DownloadProgress>)
 }
 
 #[derive(Serialize)]

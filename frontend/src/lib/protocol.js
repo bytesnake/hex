@@ -109,6 +109,18 @@ class Protocol {
         return this.send_msg(uuid, 'get_summarise', {});
     }
 
+    download(uuid, format, tracks) {
+        console.log("Downloading " + tracks + " in " + format);
+
+        return this.send_msg(uuid, 'download', {'format': format, 'tracks': tracks});
+    }
+
+    ask_download_progress() {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'ask_download_progress', {});
+    }
+
     async *stream(uuid, track_key) {
         var first = true;
         while(true) {

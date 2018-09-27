@@ -29,6 +29,7 @@ mod state;
 
 use std::env;
 use std::thread;
+use std::path::Path;
 
 fn main() {
     // check if we got the configuration, otherwise just load the default settings
@@ -40,10 +41,12 @@ fn main() {
     println!("Configuration: {:#?}", conf);
 
     if let Some(webserver) = conf.webserver.clone() {
+        let data_path = conf.music.data_path.clone();
         thread::spawn(move || {
-            webserver::create_webserver(&webserver.host, webserver.port, &webserver.path);
+            webserver::create_webserver(&webserver.host, webserver.port, &webserver.path, &data_path);
         });
     }
+
 
     server::start(conf)
 }

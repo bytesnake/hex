@@ -1,6 +1,19 @@
 import Worker from 'worker-loader!./worker.js';
 import Protocol from 'protocol.js';
 
+var createRingBuffer = function(length){
+
+  var pointer = 0, buffer = [];
+
+  return {
+    get  : function(key){return buffer[key];},
+    push : function(item){
+      buffer[pointer] = item;
+      pointer = (length + pointer +1) % length;
+    }
+  };
+};
+
 class AudioBuffer {
     constructor(sample_rate, channel, samples, finished)  {
         this.channel = channel;

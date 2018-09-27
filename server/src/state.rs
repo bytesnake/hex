@@ -14,7 +14,7 @@ use conf;
 use error::{Result, Error};
 use proto::{Track, Token, Event};
 
-use convert::{UploadState, UploadProgress};
+use convert::{UploadState, UploadProgress, download::{DownloadState, DownloadProgress}};
 
 use hex_database::{self, events::Action};
 use hex_music_container::{self, Configuration, Container};
@@ -39,7 +39,8 @@ pub struct State {
     pub collection: hex_database::Collection,
     data_path: String,
     buffer: Vec<u8>,
-    uploads: Vec<UploadState>
+    uploads: Vec<UploadState>,
+    downloads: Vec<DownloadState>,
 }
 
 impl State {
@@ -50,7 +51,8 @@ impl State {
             collection: hex_database::Collection::from_file(&conf.db_path),
             data_path: conf.data_path,
             buffer: Vec::new(),
-            uploads: Vec::new()
+            uploads: Vec::new(),
+            downloads: Vec::new()
         }
     }
 
@@ -317,51 +319,13 @@ impl State {
             proto::Incoming::AskUploadProgress => {
                 println!("Ask upload progress");
 
-                let mut tmp = self.uploads.split_off(0);
-                
-                for item in tmp.iter_mut() {
-                    let mut tmp2 = None;
-
-                    match *item {
-                        UploadState::YoutubeDownload { ref state, key: _, ref downloader } => {
-                            let state = state.borrow();
-                            if state.progress >= 1.0 {
-                                //TODO
-                                tmp2 = Some(UploadState::converting_ffmpeg(downloader.handle.clone(), state.file.clone(), packet.id.clone(), &state.get_content().unwrap(), state.format()));
-                            }
-                        },
-                        UploadState::ConvertingFFMPEG { key: _, ref state, ref converter } => {
-                            let state = state.borrow();
-
-
-                            if state.progress >= 0.999 {
-                                let (data, num_channel, duration) = state.read();
-
-                                tmp2 = Some(UploadState::converting_opus(converter.handle.clone(), packet.id.clone(), state.desc.clone(), &data, duration as f32, num_channel, self.data_path.clone()));
-                            }
-                        },
-                        UploadState::ConvertingOpus { ref state, ref mut track_key, .. } => {
-                            let state = state.borrow();
-
-                            if state.progress >= 1.0 && track_key.is_none() {
-                                if let Some(ref track) = state.data {
-                                    *track_key = Some(track.key.clone());
-                                    
-                                    self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
-                                    self.collection.insert_track(track.clone()).unwrap();
-
-                                }
-                            }
-                        }
-                    }
-
-                    if let Some(tmp2) = tmp2 {
-                        *item = tmp2;
+                // tick each item
+                for item in &mut self.uploads {
+                    if let Some(track) = item.tick(packet.id.clone(), self.data_path.clone()) {
+                        self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
+                        self.collection.insert_track(track).unwrap();
                     }
                 }
-
-                // replace old version
-                self.uploads = tmp;
 
                 // collect update informations
                 let infos = self.uploads.iter().map(|item| {
@@ -373,6 +337,9 @@ impl State {
                         track_key: item.track_key()
                     }
                 }).collect();
+
+                // delete finished uploads
+                self.uploads.retain(|x| x.should_retain());
 
                 ("ask_upload_progress", Ok(proto::Outgoing::AskUploadProgress(infos)))
             },
@@ -421,6 +388,29 @@ impl State {
                         .map(|x| (x.0, Event::from_db_obj(x.1)))
                         .collect()
                 )))
+            },
+            proto::Incoming::Download { format, tracks } => {
+                let id = packet.id.clone();
+                let res = tracks.into_iter()
+                    .map(|x| self.collection.get_track(&x)
+                        .map(|x| Track::from_db_obj(x))
+                        .map_err(|err| Error::Database(err))
+                    )
+                    .collect::<Result<Vec<Track>>>()
+                    .map(|tracks| {
+                        self.downloads.push(DownloadState::new(self.handle.clone(), id, format, tracks, 2, self.data_path.clone()));
+
+                        proto::Outgoing::Download
+                    });
+
+                ("download", res)
+            },
+            proto::Incoming::AskDownloadProgress => {
+                let res = self.downloads.iter_mut()
+                    .map(|x| x.progress())
+                    .collect();
+
+                ("ask_download_progress", Ok(proto::Outgoing::AskDownloadProgress(res)))
             }
         };
 

@@ -11,12 +11,14 @@ type ResponseFuture = Box<Future<Item=Response, Error=Error>>;
 
 struct MainService {
     static_: Static,
+    download: Static
 }
 
 impl MainService {
-    fn new(handle: &Handle, path: &str) -> MainService {
+    fn new(handle: &Handle, path: &str, data_path: &str) -> MainService {
         MainService {
-            static_: Static::new(handle, Path::new(path)),
+            static_: Static::new(&handle.clone(), Path::new(path)),
+            download: Static::new(&handle, Path::new(data_path).parent().unwrap())
         }
     }
 }
@@ -28,18 +30,18 @@ impl Service for MainService {
     type Future = ResponseFuture;
 
     fn call(&self, req: Request) -> Self::Future {
-        if req.path() == "/" {
-            let res = Response::new()
-                .with_status(hyper::StatusCode::MovedPermanently)
-                .with_header(hyper::header::Location::new("/index.html"));
-            Box::new(future::ok(res))
-        } else {
+        println!("Path: {}", req.path());
+        /*if req.path().starts_with("/data/") {
+            println!("Starts with!");
+
+            self.download.call(req)
+        } else {*/
             self.static_.call(req)
-        }
+        //}
     }
 }
 
-pub fn create_webserver(host: &str, port: u16, path: &str) {
+pub fn create_webserver(host: &str, port: u16, path: &str, data_path: &str) {
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
@@ -48,7 +50,7 @@ pub fn create_webserver(host: &str, port: u16, path: &str) {
 
     let http = Http::new();
     let server = listener.incoming().for_each(|(sock, addr)| {
-        let s = MainService::new(&handle, path);
+        let s = MainService::new(&handle, path, data_path);
         http.bind_connection(&handle, sock, addr, s);
         Ok(())
     });
