@@ -24,6 +24,13 @@ fn worker(mut sender: Sender<DownloadProgress>, id: String, format: String, trac
 
     for i in 0..tracks.len() {
         println!("processing {}", i);
+        sender.try_send(DownloadProgress { 
+            id: id.clone(),
+            format: format.clone(),
+            progress: i as f32 / tracks.len() as f32,
+            download: None
+        }).map_err(|_| Error::ChannelFailed)?;
+
         let file_path = Path::new(&data_path).join(&tracks[i].key);
 
         let file_path_out = download_path
@@ -71,24 +78,18 @@ fn worker(mut sender: Sender<DownloadProgress>, id: String, format: String, trac
             .arg("-f").arg("s16le")
             .arg("-i").arg(file_path_out.to_str().unwrap())
             .arg(converted_file.to_str().unwrap())
-            .spawn().expect("Could not start ffmpeg!");
+            .spawn().expect("Could not start ffmpeg!").wait().unwrap();
 
         println!("ffmpeg end");
         out_files.push(converted_file);
 
-        sender.try_send(DownloadProgress { 
-            id: id.clone(),
-            format: format.clone(),
-            progress: i as f32 / tracks.len() as f32,
-            download: None
-        }).map_err(|_| Error::ChannelFailed)?;
     }
 
     Command::new("tar")
         .arg("cvzf")
         .arg(download_path.join(format!("{}.tar.gz", id)))
         .args(out_files)
-        .spawn().expect("Could not start tar!");
+        .spawn().expect("Could not start tar!").wait().unwrap();
 
     sender.try_send(DownloadProgress { 
         id: id.clone(),

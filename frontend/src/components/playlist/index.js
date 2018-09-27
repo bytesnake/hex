@@ -42,7 +42,7 @@ export default class Playlist extends Component {
 
         let uuid = guid();
 
-        Protocol.download(uuid, 'wav', this.state.playlist[1].map(x => x.key));
+        Protocol.download(uuid, 'mp3', this.state.playlist[1].map(x => x.key));
 
         let self = this;
         let dwnd = this.download = setInterval(function() {
@@ -58,22 +58,13 @@ export default class Playlist extends Component {
 
                             self.setState({ downloading: null });
 
-                            var file_path = elm[0].download;
-                            var a = document.createElement('A');
-                            a.href = file_path;
-                            a.download = file_path.substr(file_path.lastIndexOf('/') + 1);
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            //window.open(elm[0].download);
-                            //window.location.assign(elm[0].download);
-
+                            window.open(elm[0].download);
                         }
                     }
 
                     console.log(x);
                 });
-        }, 200);
+        }, 1000);
     }
 
     update_download = () => {

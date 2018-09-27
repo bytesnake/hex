@@ -5,6 +5,7 @@ import style from './style.less';
 import {PlayButton, AddToQueueButton} from '../play_button';
 import Protocol from '../../lib/protocol.js';
 import InputSuggest from '../suggest_input/';
+import { guid } from '../../lib/uuid.js'
 
 const Size = {
     FULL: 0,
@@ -69,7 +70,8 @@ export default class Track extends Component {
         minimal: true,
         hide: false,
         playlists: null,
-        suggestions: null
+        suggestions: null,
+        downloading: null
     };
 
     onClick = (e) => {
@@ -96,6 +98,37 @@ export default class Track extends Component {
 
     upvote = (e) => {
         Protocol.upvote_track(this.props.track_key);
+
+        e.stopPropagation();
+    }
+
+    download = (e) => {
+        if(this.state.downloading != null)
+            return;
+
+        let uuid = guid();
+
+        Protocol.download(uuid, 'mp3', [this.props.track_key]);
+
+        let self = this;
+        let dwnd = this.download = setInterval(function() {
+            Protocol.ask_download_progress()
+                .then(x => {
+                    let elm = x.filter(x => x.id == uuid);
+
+                    if(elm[0]) {
+                        self.setState({ downloading: Math.round(elm[0].progress * 100)});
+
+                        if(elm[0].progress == 1.0) {
+                            clearInterval(dwnd);
+
+                            self.setState({ downloading: null });
+
+                            window.open(elm[0].download);
+                        }
+                    }
+                });
+        }, 1000);
 
         e.stopPropagation();
     }
@@ -136,7 +169,7 @@ export default class Track extends Component {
         }
     }
 
-    render({size, track_key, title, album, interpret, people, composer}, {minimal, hide, playlists, suggestions}) {
+    render({size, track_key, title, album, interpret, people, composer}, {minimal, hide, playlists, suggestions, downloading}) {
         if(hide)
             return;
 
@@ -167,7 +200,12 @@ export default class Track extends Component {
                                 <PlayButton track_key={track_key} />
                                 <AddToQueueButton track_key={track_key} />
                                 <Button onClick={this.upvote}><Icon icon="insert emoticon" /></Button>
-                                <Button onClick={this.upvote}><Icon icon="file download" /></Button>
+                                <Button onClick={this.download}>
+                                { downloading && (
+                                    <div style="align-text: right">{downloading}%</div>
+                                )}
+                                { !downloading && (<Icon icon="file download" />)}
+                                </Button>
                                 <Button onClick={this.open_web}><Icon icon="language" /></Button>
                                 <Button onClick={this.delete_forever} style="flex-grow: 1"><Icon icon="delete forever" /></Button>
                             </div>
