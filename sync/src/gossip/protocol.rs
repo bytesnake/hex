@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::collections::HashMap;
 
+use futures::task::Task;
 use futures::sync::mpsc::Sender;
 use futures::stream::{futures_unordered, FuturesUnordered};
 use tokio::prelude::*;
@@ -24,7 +25,8 @@ use gossip::{PeerId, PeerPresence};
 pub enum Packet {
     Join(PeerPresence),
     GetPeers(Option<Vec<PeerPresence>>),
-    Push(Vec<u8>)
+    Push(Vec<u8>),
+    Close
 }
 
 /// List of peers to be resolved
@@ -47,15 +49,9 @@ impl ResolvePeers {
 
     pub fn poll(&mut self) -> Result<Async<Option<(PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>, PeerPresence)>>, io::Error> {
         if let Some((read, write, presence)) = try_ready!(self.awaiting.poll()) {
-            if self.ids.contains_key(&presence.id) {
-                write.shutdown();
+            self.ids.insert(presence.id.clone(), ());
 
-                Ok(Async::NotReady)
-            } else {
-                self.ids.insert(presence.id.clone(), ());
-
-                Ok(Async::Ready(Some((read, write, presence))))
-            }
+            Ok(Async::Ready(Some((read, write, presence))))
         } else {
             Ok(Async::Ready(None))
         }
@@ -188,16 +184,26 @@ impl PeerCodecRead<TcpStream> {
     /// This will allow to connect many peers to a single GossipCodec. The channel unifies every
     /// arriving messages by wrapping it with the PeerId. The GossipCodec can then process the
     /// arriving messages according to the identification.
-    pub fn redirect_to(self, mut sender: Sender<(PeerId, Packet)>, id: PeerId) {
-        // redirect every single message.
+    pub fn redirect_to(self, mut sender: Sender<(PeerId, Packet)>, id: PeerId, task: Task) {
+        let (task2, mut sender2, id2) = (task.clone(), sender.clone(), id.clone());
+
         let stream = self.for_each(move |x| {
             sender.try_send((id.clone(), x)).unwrap();
+            task.notify();
 
             Ok(())
-        });
+        })
+        .and_then(move |x| {
+            // ugh
+            sender2.try_send((id2.clone(), Packet::Close)).unwrap();
+            task2.notify();
+
+            Ok(())
+        }).map_err(|_| ());
+
 
         // create a new task which handles the copying
-        tokio::spawn(stream.into_future().map(|_| ()).map_err(|_| ()));
+        tokio::spawn(stream);
     }
 }
 
@@ -357,6 +363,7 @@ impl<T: Debug + AsyncRead> Stream for PeerCodecRead<T> {
         if is_closed {
             // the socket seems to have closed after the last call, signal that
             // the stream is finished, because we can't receive any new data
+            //return Ok(Async::Ready(None));
             return Ok(Async::Ready(None));
         }
 
@@ -387,41 +394,5 @@ impl<T: Debug + AsyncRead> Stream for PeerCodecRead<T> {
             // the codec needs more data before it can construct the message sucessfully
             Ok(Async::NotReady)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use tokio::io::AsyncRead;
-    use std::io::Cursor;
-    use bytes::{BytesMut, BufMut};
-
-    use super::*;
-
-    fn create_dummy() -> (PeerCodecRead<Cursor<Vec<u8>>>, PeerCodecWrite<Cursor<Vec<u8>>>) {
-        let buf: Cursor<Vec<u8>> = Cursor::new(vec![0u8; 1024]);
-        let (reader, writer) = AsyncRead::split(buf);
-
-        let reader = PeerCodecRead {
-            read: reader,
-            rd: BytesMut::new()
-        };
-
-        let writer = PeerCodecWrite {
-            write: writer,
-            wr: BytesMut::new()
-        };
-
-        (reader, writer)
-    }
-
-    #[test]
-    fn encode_packet() {
-        let (mut reader, mut writer) = create_dummy();
-
-        writer.buffer(Packet::Push(vec![1,2,3,4,5]));
-        assert_eq!(writer.poll_flush().unwrap(), Async::Ready(()));
-
-        println!("{:?}", reader.poll());
     }
 }

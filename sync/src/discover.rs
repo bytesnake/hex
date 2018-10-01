@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, Write};
 use std::time::{Instant, Duration};
 
 use tokio::net::UdpSocket;
@@ -36,11 +36,15 @@ impl Stream for Discover {
 
 impl Discover {
     pub fn new(version: u8) -> Discover {
+        let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8004);
+        let socket = UdpSocket::bind(&addr.into()).unwrap();
+        socket.set_broadcast(true).unwrap();
+
         Discover {
-            socket: UdpSocket::bind(&("0.0.0.0:8004".parse().unwrap())).unwrap(),
             buf: vec![0; 16],
             answer_to: None,
-            version
+            version,
+            socket
         }
     }
 }
@@ -50,18 +54,29 @@ pub struct Beacon {
     version: u8,
     interval: Interval,
     buf: Vec<u8>,
-    local_addrs: Vec<IpAddr>
+    local_addrs: Vec<IpAddr>,
+    timer: Option<Instant>
 }
 
 impl Future for Beacon {
-    type Item=SocketAddr;
+    type Item=Option<SocketAddr>;
     type Error = io::Error;
 
     fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
+        if let Some(time) = self.timer {
+            print!(".");
+            io::stdout().flush().unwrap();
+
+            if Instant::now().duration_since(time).as_secs() >= 2 {
+                return Ok(Async::Ready(None));
+            }
+        } else {
+            self.timer = Some(Instant::now());
+        }
+
         match self.interval.poll() {
             Ok(Async::Ready(_)) => { 
-                println!("POLL"); 
-
+                //println!("Send!");
                 try_ready!(self.socket.poll_send_to(
                         &[self.version, 0x00, 0x00, 0x01], 
                         &(SocketAddrV4::new(Ipv4Addr::BROADCAST, 8004).into())));
@@ -75,7 +90,7 @@ impl Future for Beacon {
             if self.local_addrs.contains(&addr.ip()) {
                 Ok(Async::NotReady)
             } else {
-                Ok(Async::Ready(addr))
+                Ok(Async::Ready(Some(addr)))
             }
         } else {
             Ok(Async::NotReady)
@@ -93,6 +108,7 @@ impl Beacon {
             interval: Interval::new(Instant::now(), Duration::from_millis(interval)),
             buf: vec![0; 16],
             local_addrs: local_ip::get().unwrap(),
+            timer: None,
             version,
             socket
         }
@@ -101,8 +117,8 @@ impl Beacon {
 
 #[cfg(test)]
 mod tests {
-    use super::Beacon;
-    use futures::Future;
+    use super::{Beacon, Discover};
+    use futures::{Future, Stream};
     use tokio;
 
     #[test]
@@ -111,4 +127,14 @@ mod tests {
 
         tokio::run(beacon.map_err(|e| println!("Beacon error = {:?}", e)).map(|x| println!("Beacon got = {:?}", x)));
     }
+
+    /*#[test]
+    fn discover() {
+        let discover = Discover::new(1);
+
+        tokio::run(discover
+           .for_each(|x| { println!("Detected peer = {:?}", x); Ok(())})
+           .map_err(|_| ())
+        );
+    }*/
 }

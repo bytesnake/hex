@@ -4,7 +4,7 @@ use std::sync::{Mutex, Arc};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
-use futures::{Async, Stream};
+use futures::{Async, Stream, task};
 use futures::sync::mpsc::{Receiver, Sender, channel};
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream, Incoming};
@@ -47,12 +47,15 @@ impl GossipPush {
         return len;
     }
 
-    pub fn push(&self, id: &PeerId, data: Packet) -> Result<(), io::Error> {
+    pub fn write_packet(&self, id: &PeerId, data: Packet) -> Result<(), io::Error> {
         let mut peers = self.peers.lock().unwrap();
 
         let writer = peers.get_mut(id).ok_or(io::ErrorKind::NotFound)?;
         writer.buffer(data);
         writer.poll_flush().map(|_| ())
+    }
+    pub fn write(&self, id: &PeerId, buf: Vec<u8>) -> Result<(), io::Error> {
+        self.write_packet(id, Packet::Push(buf))
     }
 }
 
@@ -152,9 +155,11 @@ impl Stream for Gossip {
                     presence.writer = Some(idx);
 
                     // hook up the packet output to us
-                    reader.redirect_to(self.sender.clone(), presence.id.clone());
+                    reader.redirect_to(self.sender.clone(), presence.id.clone(), task::current());
+                    self.books.insert(presence.id.clone(), presence.clone());
 
-                    self.books.insert(presence.id.clone(), presence);;
+                    // the connection is established
+                    return Ok(Async::Ready(Some((presence.id, Vec::new()))));
                 }
 
 
@@ -179,7 +184,7 @@ impl Stream for Gossip {
                         return None;
                     }).collect();
 
-                self.writer.push(&id, Packet::GetPeers(Some(list)));
+                self.writer.write_packet(&id, Packet::GetPeers(Some(list))).unwrap();
             },
             Packet::GetPeers(Some(peers)) => {
                 for presence in peers {
@@ -190,9 +195,13 @@ impl Stream for Gossip {
                 }
             }
             Packet::Push(data) => {
-                println!("Got block from: {:?}", id);
                 // the peer has send us a new block of data, forward it
                 return Ok(Async::Ready(Some((id, data))));
+            },
+            Packet::Close => {
+                self.books.remove(&id);
+
+                println!("Gossip: Connection closed to {}", id);
             },
             _ => {}
         }

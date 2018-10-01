@@ -6,14 +6,9 @@ extern crate bytes;
 extern crate serde_derive;
 extern crate bincode;
 
-mod gossip;
-mod discover;
-mod local_ip;
+pub mod gossip;
+pub mod discover;
+pub mod local_ip;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub use discover::{Discover, Beacon};
+pub use gossip::Gossip;
