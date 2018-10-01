@@ -10,3 +10,7 @@ db_path  = "/tmp/music/music.db"
 path = "../frontend/build/"
 host = "127.0.0.1"
 port = 8081
+
+[sync]
+mode = "all"
+name = "Hex Karlsgraben"
