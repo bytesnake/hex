@@ -57,6 +57,18 @@ impl GossipPush {
     pub fn write(&self, id: &PeerId, buf: Vec<u8>) -> Result<(), io::Error> {
         self.write_packet(id, Packet::Push(buf))
     }
+
+    pub fn push(&self, buf: Vec<u8>) -> Result<(), io::Error> {
+        let mut peers = self.peers.lock().unwrap();
+        let packet = Packet::Push(buf);
+
+        for peer in peers.values_mut() {
+            peer.buffer(packet.clone());
+            peer.poll_flush().map(|_| ())?;
+        }
+
+        Ok(())
+    }
 }
 
 /// Implements the peer sampling and data dissemination

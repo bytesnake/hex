@@ -229,7 +229,7 @@ impl State {
             },
 
             proto::Incoming::AddPlaylist { name } => {
-                ("add_playlist", self.collection.add_playlist(&name)
+                ("add_playlist", self.collection.add_playlist(&name, None)
                     .map(|x| proto::Playlist::from_db_obj(x))
                     .map(|x| proto::Outgoing::AddPlaylist(x))
                     .map_err(|err| Error::Database(err))
@@ -244,7 +244,7 @@ impl State {
             },
 
             proto::Incoming::UpdatePlaylist { key, title, desc } => {
-                ("update_playlist", self.collection.update_playlist(&key, title, desc)
+                ("update_playlist", self.collection.update_playlist(&key, title, desc, None)
                     .map(|_| proto::Outgoing::UpdatePlaylist)
                     .map_err(|err| Error::Database(err))
                 )

@@ -34,7 +34,9 @@ pub struct Playlist {
     pub key: String,
     pub title: String,
     pub desc: Option<String>,
-    pub count: u32
+    pub tracks: Option<String>,
+    pub count: u32,
+    pub origin: Option<String>
 }
 
 #[derive(Debug)]

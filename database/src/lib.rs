@@ -19,7 +19,19 @@ pub struct Collection {
 
 impl Collection {
     pub fn from_file(path: &str) -> Collection {
-        Collection { socket: rusqlite::Connection::open(path).unwrap() }
+        let socket = rusqlite::Connection::open(path).unwrap();
+    
+        socket.execute("CREATE TABLE IF NOT EXISTS music (Title TEXT, Album TEXT, Interpret TEXT, Fingerprint TEXT NOT NULL, People TEXT, Composer TEXT, Key TEXT NOT NULL, Duration REAL NOT NULL, FavsCount INTEGER, Channels INTEGER)", &[]).unwrap();
+
+        socket.execute("CREATE TABLE IF NOT EXISTS Playlists (Key TEXT NOT NULL, Title TEXT, Desc TEXT, Tracks TEXT, Count INTEGER NOT NULL, Origin TEXT)", &[]).unwrap();
+
+        socket.execute("CREATE TABLE IF NOT EXISTS Events (Date Text, Origin Text, Event Text, Data TEXT)", &[]).unwrap();
+
+        socket.execute("CREATE TABLE IF NOT EXISTS Summarise (Day TEXT, Connects INTEGER, Plays INTEGER, Adds INTEGER, Removes INTEGER)", &[]).unwrap();
+
+        socket.execute("CREATE TABLE IF NOT EXISTS Tokens (Token INTEGER, Key TEXT, Played TEXT, Pos NUMERIC)", &[]).unwrap();
+    
+        Collection { socket }
     }
 
     /// Search for a certain track. The SearchQuery ensures that a valid string is generated.
@@ -61,14 +73,38 @@ impl Collection {
 
     /// Returns the metadata of all available playlists
     pub fn get_playlists(&self) -> Vec<Playlist> {
-        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Count FROM Playlists").unwrap();
+        let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Tracks, Count, Origin FROM Playlists").unwrap();
 
         let vec = stmt.query_map(&[], |row| {
             Playlist {
                 key: row.get(0),
                 title: row.get(1),
                 desc: row.get(2),
-                count: row.get(3)
+                tracks: row.get(3),
+                count: row.get(4),
+                origin: row.get(5)
+            }
+        }).unwrap().filter_map(|x| x.ok()).collect();
+
+        vec
+    }
+
+    /// Returns the metadata of all available tracks
+    pub fn get_tracks(&self) -> Vec<Track> {
+        let mut stmt = self.socket.prepare("SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music").unwrap();
+
+        let vec = stmt.query_map(&[], |row| {
+            Track {
+                title: row.get(0),
+                album: row.get(1),
+                interpret: row.get(2),
+                fingerprint: row.get(3),
+                people: row.get(4),
+                composer: row.get(5),
+                key: row.get(6),
+                duration: row.get(7),
+                favs_count: row.get(8),
+                channels: row.get(9)
             }
         }).unwrap().filter_map(|x| x.ok()).collect();
 
@@ -78,7 +114,7 @@ impl Collection {
     /// Get the metadata and tracks for a certain playlist
     pub fn get_playlist(&self, key: &str) -> Result<(Playlist, Vec<Track>)> {
         let mut stmt = self.socket.prepare(
-            "SELECT Key, Title, Desc, Count, tracks 
+            "SELECT Key, Title, Desc, Tracks, Count, Origin
                 FROM Playlists WHERE key=?;")?;
 
         let mut query = stmt.query(&[&key])?;
@@ -88,7 +124,9 @@ impl Collection {
             key: row.get(0),
             title: row.get(1),
             desc: row.get(2),
-            count: row.get(3)
+            tracks: row.get(3),
+            count: row.get(4),
+            origin: row.get(5)
         };
 
         let keys: Option<String> = row.get(4);
@@ -107,14 +145,16 @@ impl Collection {
     }
 
     pub fn get_playlists_of_track(&self, key: &str) -> Result<Vec<Playlist>> {
-        let mut stmt = self.socket.prepare(&format!("SELECT Key, Title, Desc, Count FROM Playlists WHERE tracks like '%{}%'", key))?;
+        let mut stmt = self.socket.prepare(&format!("SELECT Key, Title, Desc, Tracks, Count, Origin FROM Playlists WHERE tracks like '%{}%'", key))?;
 
         let res = stmt.query_map(&[], |row| {
             Playlist {
                 key: row.get(0),
                 title: row.get(1),
                 desc: row.get(2),
-                count: row.get(3)
+                tracks: row.get(3),
+                count: row.get(4),
+                origin: row.get(5)
             }
         })?.filter_map(|x| x.ok()).collect();
 
@@ -122,16 +162,18 @@ impl Collection {
     }
 
 
-    pub fn add_playlist(&self, title: &str) -> Result<Playlist> {
+    pub fn add_playlist(&self, title: &str, origin: Option<String>) -> Result<Playlist> {
         let key = Uuid::new_v4().simple().to_string();
 
-        self.socket.execute("INSERT INTO playlists (key, title, count) VALUES (?1, ?2, ?3)", &[&key, &title, &0])?;
+        self.socket.execute("INSERT INTO playlists (key, title, count, origin) VALUES (?1, ?2, ?3, ?4)", &[&key, &title, &0, &origin])?;
 
         Ok(Playlist {
             key: key,
             title: title.into(),
             desc: None,
-            count: 0
+            tracks: None,
+            count: 0,
+            origin: origin
         })
     }
 
@@ -140,12 +182,21 @@ impl Collection {
             .map(|_| ())
     }
 
-    pub fn update_playlist(&self, key: &str, title: Option<String>, desc: Option<String>) -> Result<()> {
+    pub fn update_playlist(&self, key: &str, title: Option<String>, desc: Option<String>, tracks: Option<String>, count: Option<u32>, origin: Option<String>) -> Result<()> {
         if let Some(title) = title {
             self.socket.execute("UPDATE playlists SET title = ?1 WHERE Key = ?2", &[&title, &key])?;
         }
         if let Some(desc) = desc {
             self.socket.execute("UPDATE playlists SET desc = ?1 WHERE Key = ?2", &[&desc, &key])?;
+        }
+        if let Some(tracks) = tracks {
+            self.socket.execute("UPDATE playlists SET tracks = ?1 WHERE Key = ?2", &[&tracks, &key])?;
+        }
+        if let Some(count) = count {
+            self.socket.execute("UPDATE playlists SET count = ?1 WHERE Key = ?2", &[&count, &key])?;
+        }
+        if let Some(origin) = origin {
+            self.socket.execute("UPDATE playlists SET origin = ?1 WHERE Key = ?2", &[&origin, &key])?;
         }
 
         Ok(())
@@ -153,7 +204,7 @@ impl Collection {
 
     pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
         let mut stmt = self.socket.prepare(
-            "SELECT Key, Title, Desc, Count, tracks 
+            "SELECT Key, Title, Desc, Count, Tracks, Origin, Origin
                 FROM Playlists WHERE Title=?;")?;
         
         let mut query = stmt.query(&[&playlist])?;
@@ -163,7 +214,9 @@ impl Collection {
             key: row.get(0),
             title: row.get(1),
             desc: row.get(2),
-            count: row.get(3)
+            tracks: row.get(3),
+            count: row.get(4),
+            origin: row.get(5)
         };
 
         _playlist.count += 1;
@@ -184,6 +237,14 @@ impl Collection {
                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                                     &[&track.title, &track.album, &track.interpret, &track.people, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels]).map(|_| ())
     }
+
+    pub fn insert_playlist(&self, p: Playlist) -> Result<()> {
+        self.socket.execute("INSERT INTO playlists
+                                (Key, Title, Desc, Tracks, Count, Origin)
+                                VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                                &[&p.key, &p.title, &p.desc, &p.tracks, &p.count, &p.origin]).map(|_| ())
+    }
+
 
     pub fn delete_track(&self, key: &str) -> Result<()> {
         self.socket.execute("DELETE FROM music WHERE key = ?", &[&key]).map(|_| ())
@@ -299,13 +360,5 @@ impl Collection {
         let row = query.next().ok_or(Error::QueryReturnedNoRows)??;
 
         Ok(row.get(0))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }

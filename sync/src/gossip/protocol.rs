@@ -193,7 +193,7 @@ impl PeerCodecRead<TcpStream> {
 
             Ok(())
         })
-        .and_then(move |x| {
+        .and_then(move |_| {
             // ugh
             sender2.try_send((id2.clone(), Packet::Close)).unwrap();
             task2.notify();
@@ -259,6 +259,7 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
         loop {
             self.rd.reserve(1024);
             let read = self.read.read_buf(&mut self.rd);
+
             let n = match read {
                 Ok(Async::Ready(n)) => n,
                 Ok(Async::NotReady) => return Ok(Async::NotReady),
@@ -322,22 +323,22 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
     /// Flush the whole write buffer to the underlying socket
     pub fn poll_flush(&mut self) -> Poll<(), io::Error> {
         while !self.wr.is_empty() {
-            loop {
+            'inner: loop {
                 match self.write.poll_write(&self.wr) {
                     Ok(Async::Ready(n)) => {
                         assert!(n > 0);
 
                         let _ = self.wr.split_to(n);
 
-                        self.write.poll_flush().unwrap();
-
-                        return Ok(Async::Ready(()));
+                        break 'inner;
                     },
                     Ok(Async::NotReady) => {},
                     Err(err) => return Err(err)
                 }
             }
         }
+
+        self.write.poll_flush().unwrap();
 
         Ok(Async::Ready(()))
     }
