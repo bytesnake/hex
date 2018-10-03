@@ -1,5 +1,6 @@
-[server]
 host = "127.0.0.1"
+
+[server]
 port = 2794
 
 [music]
@@ -8,9 +9,9 @@ db_path  = "/tmp/music/music.db"
 
 [webserver]
 path = "../frontend/build/"
-host = "127.0.0.1"
 port = 8081
 
 [sync]
-mode = "all"
+port = 8004
 name = "Hex Karlsgraben"
+sync_all = true

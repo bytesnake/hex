@@ -48,17 +48,19 @@ fn main() {
 
     if let Some(webserver) = conf.webserver.clone() {
         let data_path = conf.music.data_path.clone();
+        let addr = SocketAddr::new(conf.host.clone(), webserver.port);
         thread::spawn(move || {
-            webserver::create_webserver(&webserver.host, webserver.port, &webserver.path, &data_path);
+            webserver::create_webserver(addr, &webserver.path, &data_path);
         });
     }
 
     if let Some(sync) = conf.sync.clone() {
         let (peer, chain) = hex_sync::Peer::new(
-            PathBuf::from(&conf.music.db_path),
-            PathBuf::from(&conf.music.data_path), 
-            SocketAddr::from_str(&format!("{}:8004", conf.server.host)).unwrap(),
-            sync.name
+            conf.music.db_path.clone(),
+            conf.music.data_path.clone(), 
+            SocketAddr::new(conf.host.clone(), sync.port),
+            sync.name,
+            sync.sync_all
         );
 
         thread::spawn(|| {

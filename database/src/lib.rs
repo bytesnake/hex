@@ -10,6 +10,7 @@ pub use rusqlite::{Result, Statement, Error};
 pub use events::{Action, Event};
 
 use uuid::Uuid;
+use std::path::Path;
 
 use search::SearchQuery;
 
@@ -18,7 +19,7 @@ pub struct Collection {
 }
 
 impl Collection {
-    pub fn from_file(path: &str) -> Collection {
+    pub fn from_file(path: &Path) -> Collection {
         let socket = rusqlite::Connection::open(path).unwrap();
     
         socket.execute("CREATE TABLE IF NOT EXISTS music (Title TEXT, Album TEXT, Interpret TEXT, Fingerprint TEXT NOT NULL, People TEXT, Composer TEXT, Key TEXT NOT NULL, Duration REAL NOT NULL, FavsCount INTEGER, Channels INTEGER)", &[]).unwrap();

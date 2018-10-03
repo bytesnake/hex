@@ -49,7 +49,7 @@ impl State {
             handle: handle,
             reqs: HashMap::new(),
             collection: hex_database::Collection::from_file(&conf.db_path),
-            data_path: conf.data_path,
+            data_path: conf.data_path.to_str().unwrap().into(),
             buffer: Vec::new(),
             uploads: Vec::new(),
             downloads: Vec::new()

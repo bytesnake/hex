@@ -6,6 +6,7 @@ use hyper_staticfile::Static;
 use std::path::Path;
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpListener;
+use std::net::SocketAddr;
 
 type ResponseFuture = Box<Future<Item=Response, Error=Error>>;
 
@@ -15,10 +16,10 @@ struct MainService {
 }
 
 impl MainService {
-    fn new(handle: &Handle, path: &str, data_path: &str) -> MainService {
+    fn new(handle: &Handle, path: &Path, data_path: &Path) -> MainService {
         MainService {
-            static_: Static::new(&handle.clone(), Path::new(path)),
-            download: Static::new(&handle, Path::new(data_path).parent().unwrap())
+            static_: Static::new(&handle.clone(), path),
+            download: Static::new(&handle, data_path.parent().unwrap())
         }
     }
 }
@@ -41,12 +42,12 @@ impl Service for MainService {
     }
 }
 
-pub fn create_webserver(host: &str, port: u16, path: &str, data_path: &str) {
+pub fn create_webserver(addr: SocketAddr, path: &Path, data_path: &Path) {
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
     //let addr = (host, port).parse().unwrap();
-    let listener = TcpListener::bind(&format!("{}:{}", host, port).parse().unwrap(), &handle).unwrap();
+    let listener = TcpListener::bind(&addr, &handle).unwrap();
 
     let http = Http::new();
     let server = listener.incoming().for_each(|(sock, addr)| {
@@ -55,6 +56,6 @@ pub fn create_webserver(host: &str, port: u16, path: &str, data_path: &str) {
         Ok(())
     });
 
-    println!("Web server running on http://{}:{}", host, port);
+    println!("Web server running on http://{}", addr);
     core.run(server).unwrap();
 }

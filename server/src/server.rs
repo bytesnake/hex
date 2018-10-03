@@ -18,7 +18,7 @@ pub fn start(conf: Conf) {
 	let handle = core.handle();
 
 	// bind to the server
-    let addr = (conf.server.host.as_str(), conf.server.port);
+    let addr = (conf.host, conf.server.port);
 	let server = Server::bind(addr, &handle).unwrap();
 
 	// a stream of incoming connections
