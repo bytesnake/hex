@@ -55,13 +55,21 @@ pub struct WebServer {
     pub port: u16
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct Syncc {
+    mode: String,
+    pub name: String
+}
+
 #[derive(Deserialize, Default, Debug)]
 pub struct Conf {
     #[serde(default)]
     pub server: Server,
     #[serde(default)]
     pub music: Music,
-    pub webserver: Option<WebServer>
+    pub webserver: Option<WebServer>,
+    pub sync: Option<Syncc>
+
 }
 
 impl Conf {

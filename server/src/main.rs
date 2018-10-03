@@ -17,6 +17,7 @@ extern crate uuid;
 
 extern crate hex_database;
 extern crate hex_music_container;
+extern crate hex_sync;
 
 mod error;
 mod conf;
@@ -29,7 +30,12 @@ mod state;
 
 use std::env;
 use std::thread;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::time::Duration;
+
+use tokio_core::reactor::Core;
 
 fn main() {
     // check if we got the configuration, otherwise just load the default settings
@@ -47,6 +53,21 @@ fn main() {
         });
     }
 
+    if let Some(sync) = conf.sync.clone() {
+        let (peer, chain) = hex_sync::Peer::new(
+            PathBuf::from(&conf.music.db_path),
+            PathBuf::from(&conf.music.data_path), 
+            SocketAddr::from_str(&format!("{}:8004", conf.server.host)).unwrap(),
+            sync.name
+        );
+
+        thread::spawn(|| {
+            thread::sleep(Duration::from_millis(300));
+
+            let mut core = Core::new().unwrap();
+            core.run(chain);
+        });
+    }
 
     server::start(conf)
 }

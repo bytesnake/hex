@@ -244,7 +244,7 @@ impl State {
             },
 
             proto::Incoming::UpdatePlaylist { key, title, desc } => {
-                ("update_playlist", self.collection.update_playlist(&key, title, desc, None)
+                ("update_playlist", self.collection.update_playlist(&key, title, desc, None, None, None)
                     .map(|_| proto::Outgoing::UpdatePlaylist)
                     .map_err(|err| Error::Database(err))
                 )
