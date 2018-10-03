@@ -186,10 +186,16 @@ impl PeerCodecRead<TcpStream> {
     /// arriving messages according to the identification.
     pub fn redirect_to(self, mut sender: Sender<(PeerId, Packet)>, id: PeerId, task: Task) {
         let (task2, mut sender2, id2) = (task.clone(), sender.clone(), id.clone());
+        let mut sender3 = sender.clone();
 
-        let stream = self.for_each(move |x| {
-            sender.try_send((id.clone(), x)).unwrap();
+        let stream = self.map_err(|_| ())
+        .and_then(move |x| {
             task.notify();
+            sender.start_send((id.clone(), x)).map_err(|err| {println!("Send error: {}", err); ()})
+        })    
+        .and_then(move |_| sender3.poll_complete().map_err(|_| ()))
+        .for_each(move |_| {
+            //sender.send((id.clone(), x)).wait();
 
             Ok(())
         })

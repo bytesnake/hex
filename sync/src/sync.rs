@@ -73,6 +73,11 @@ pub struct Peer {
 
 impl Peer {
     pub fn new(db_path: PathBuf, data_path: PathBuf, addr: SocketAddr, name: String, sync_all: bool) -> (Peer, impl Future<Item=(), Error=()> ){
+        if !data_path.exists() {
+            println!("Data path does not exists .. creating");
+            fs::create_dir_all(&data_path).unwrap();
+        }
+
         let (sender, receiver) = mpsc::channel(1024);
 
         let chain = Self::probe_for_peers(addr, name).and_then(move |(discover, gossip)| {
@@ -112,8 +117,8 @@ impl Peer {
 
             let discover = discover.for_each(move |_| Ok(()));
 
-            Future::join(discover, Future::join(gossip, receiver)).map(|_| println!("Finished!"))
-        }).map_err(|_| ());
+            Future::join(discover, Future::join(gossip, receiver)).map(|_| ())
+        }).map_err(|err| println!("Got error in sync: {}", err));
 
         (Peer { sender: sender }, chain)
     }
@@ -143,6 +148,8 @@ impl Peer {
                 println!("Updated {} tracks and {} playlists", tracks.len(), nplaylists);
 
                 if sync_all {
+                    //println!("SYNC ALL!");
+
                     Ok(tracks.into_iter().map(|x| Protocol::GetTrack(x, None)).collect())
                 } else {
                     Ok(Vec::new())

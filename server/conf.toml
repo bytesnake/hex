@@ -1,4 +1,4 @@
-host = "127.0.0.1"
+host = "192.168.1.9"
 
 [server]
 port = 2794
@@ -13,5 +13,5 @@ port = 8081
 
 [sync]
 port = 8004
-name = "Hex Karlsgraben"
+name = "Computer Lorenz"
 sync_all = true
