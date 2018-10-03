@@ -199,12 +199,13 @@ impl PeerCodecRead<TcpStream> {
 
             Ok(())
         })
-        .and_then(move |_| {
+        .then(move |_| {
             // ugh
             sender2.try_send((id2.clone(), Packet::Close)).unwrap();
             task2.notify();
 
-            Ok(())
+            let res: Result<(), ()> = Ok(());
+            res
         }).map_err(|_| ());
 
 

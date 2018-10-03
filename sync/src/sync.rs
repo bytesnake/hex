@@ -140,17 +140,21 @@ impl Peer {
     fn process_packet(name: String, collection: &Collection, data_path: &PathBuf, buf: Vec<u8>, wait_map: &Arc<RwLock<HashMap<String, oneshot::Sender<String>>>>, sync_all: bool) -> Result<Vec<Protocol>, io::Error> {
         match deserialize::<Protocol>(&buf) {
             Ok(Protocol::Syncing(Some((tracks, playlists)))) => {
-                println!("Got sync with {} tracks and {} playlists", tracks.len(), playlists.len());
+                let ntracks = Self::update_tracks(collection, tracks.clone());
+                let nplaylists = Self::update_playlists(name.clone(), collection, playlists);
 
-                let tracks = Self::update_tracks(collection, tracks);
-                let nplaylists = Self::update_playlists(name, collection, playlists);
-
-                println!("Updated {} tracks and {} playlists", tracks.len(), nplaylists);
+                println!("Updated {} tracks and {} playlists from '{}'", ntracks, nplaylists, name);
 
                 if sync_all {
-                    //println!("SYNC ALL!");
+                    let map = Self::existing_tracks(data_path).unwrap();
 
-                    Ok(tracks.into_iter().map(|x| Protocol::GetTrack(x, None)).collect())
+                    Ok(tracks.into_iter().filter_map(|x| {
+                        if !map.contains_key(&x.key) {
+                            Some(Protocol::GetTrack(x.key, None))
+                        } else {
+                            None
+                        }
+                    }).collect())
                 } else {
                     Ok(Vec::new())
                 }
@@ -207,21 +211,21 @@ impl Peer {
 
     }
 
-    fn update_tracks(collection: &Collection, tracks: Vec<Track>) -> Vec<String> {
+    fn update_tracks(collection: &Collection, tracks: Vec<Track>) -> usize {
         let map: HashSet<String> = collection.get_tracks()
             .into_iter()
             .map(|x| x.key.clone())
             .collect();
 
-        let mut out = Vec::new();
+        let mut i = 0;
         for track in tracks {
             if !map.contains(&track.key) {
-                out.push(track.key.clone());
                 collection.insert_track(track.to_db()).unwrap();
+                i += 1;
             }
         }
 
-        out
+        i
     }
 
     fn update_playlists(name: String, collection: &Collection, playlists: Vec<Playlist>) -> usize {

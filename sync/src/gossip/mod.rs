@@ -100,8 +100,6 @@ impl Gossip {
 
         let peers = match contact {
             Some(addr) => {
-                println!("Gossip: Contact client: {:?}", addr);
-
                 vec![Peer::connect(&addr, myself.clone())]
             },
             None => Vec::new()
@@ -148,7 +146,7 @@ impl Stream for Gossip {
         //
         match self.resolve.poll() {
             Ok(Async::Ready(Some((reader, mut writer, mut presence)))) => {
-                println!("Gossip: connection established from {} to {}", self.myself.id, presence.id);
+                //println!("Gossip: connection established from {} to {}", self.myself.id, presence.id);
 
                 // ask for other peers if this is our contact
                 if self.books.is_empty() {
@@ -213,7 +211,7 @@ impl Stream for Gossip {
             Packet::Close => {
                 self.books.remove(&id);
 
-                println!("Gossip: Connection closed to {}", id);
+                //println!("Gossip: Connection closed to {}", id);
             },
             _ => {}
         }

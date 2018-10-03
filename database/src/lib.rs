@@ -130,7 +130,7 @@ impl Collection {
             origin: row.get(5)
         };
 
-        let keys: Option<String> = row.get(4);
+        let keys: Option<String> = playlist.tracks.clone();
 
         if let Some(keys) = keys {
             let query = format!("SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music WHERE key in ({});", keys.split(",").map(|row| { format!("'{}'", row) }).collect::<Vec<String>>().join(","));
