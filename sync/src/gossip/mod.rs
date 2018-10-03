@@ -50,21 +50,48 @@ impl GossipPush {
     pub fn write_packet(&self, id: &PeerId, data: Packet) -> Result<(), io::Error> {
         let mut peers = self.peers.lock().unwrap();
 
-        let writer = peers.get_mut(id).ok_or(io::ErrorKind::NotFound)?;
-        writer.buffer(data);
-        writer.poll_flush().map(|_| ())
+        let mut remove = false;
+        {
+            let writer = peers.get_mut(id).ok_or(io::ErrorKind::NotFound)?;
+            writer.buffer(data);
+
+            writer.poll_flush().map_err(|err| {
+                println!("Could not write = {:?}", err);
+
+                remove = true;
+            });
+        }
+
+        if remove {
+            peers.remove(id).unwrap().shutdown();
+        }
+
+        Ok(())
+
     }
     pub fn write(&self, id: &PeerId, buf: Vec<u8>) -> Result<(), io::Error> {
         self.write_packet(id, Packet::Push(buf))
     }
 
     pub fn push(&self, buf: Vec<u8>) -> Result<(), io::Error> {
-        let mut peers = self.peers.lock().unwrap();
         let packet = Packet::Push(buf);
 
-        for peer in peers.values_mut() {
-            peer.buffer(packet.clone());
-            peer.poll_flush().map(|_| ())?;
+        let mut remove = Vec::new();
+        {
+            let mut peers = self.peers.lock().unwrap();
+            for (id, peer) in peers.iter_mut() {
+                peer.buffer(packet.clone());
+                peer.poll_flush().map_err(|err| {
+                    println!("Could not write = {:?}", err);
+
+                    remove.push(id.clone());
+                });
+            }
+        }
+
+        let mut peers = self.peers.lock().unwrap();
+        for id in remove {
+            peers.remove(&id).unwrap().shutdown();
         }
 
         Ok(())

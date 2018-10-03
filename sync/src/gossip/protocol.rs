@@ -340,7 +340,9 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
                         break 'inner;
                     },
                     Ok(Async::NotReady) => {},
-                    Err(err) => return Err(err)
+                    Err(err) => {
+                        return Err(err);
+                    }
                 }
             }
         }
