@@ -266,7 +266,7 @@ pub enum Outgoing {
     UploadTrack,
     VoteForTrack,
     AskUploadProgress(Vec<UploadProgress>),
-    GetToken((Token, Playlist, Vec<Track>)),
+    GetToken((Token, Option<(Playlist, Vec<Track>)>)),
     UpdateToken,
     CreateToken(u32),
     LastToken(Option<u32>),

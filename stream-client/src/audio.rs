@@ -50,7 +50,7 @@ impl AudioDevice {
         }
     }
 
-    pub fn clean(&mut self) {
+    pub fn clear(&mut self) {
         self.rb.clear();
     }
 

@@ -36,8 +36,8 @@ fn main() {
                     Event::ButtonPressed(x) => {
                         if let Some(ref mut token) = token {
                             match x {
-                                3 => token.next_track(),
-                                1 => token.prev_track(),
+                                3 => {audio.clear(); token.next_track()},
+                                1 => {audio.clear(); token.prev_track()},
                                 0 => {create_counter += 1; token.shuffle()},
                                 2 => token.upvote(&mut client),
                                 _ => println!("Not supported yet!")
@@ -60,7 +60,9 @@ fn main() {
                             token.removed(&mut client);
                         }
                         
-                        token = None
+                        token = None;
+                        
+                        audio.clear();
                     }
                 }
             }

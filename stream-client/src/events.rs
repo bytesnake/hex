@@ -4,7 +4,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use spidev::{self, Spidev, SpidevOptions};
 use sysfs_gpio::{Pin, Direction};
 
-use mfrc522::{MFRC522, pcd::Reg, picc::UID};
+use mfrc522::{picc, MFRC522, pcd::Reg, picc::UID, picc::mifare};
 
 use std::thread;
 use std::time::Duration;
@@ -67,13 +67,17 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
     loop {
         if let Ok(new_id) = recv.try_recv() {
             if card_avail {
-                let mut buffer = [0u8; 18];
+                let mut buffer = [0u8; 16];
                 buffer[0] = (new_id << 24) as u8;
                 buffer[1] = (new_id << 16) as u8;
                 buffer[2] = (new_id << 8) as u8;
                 buffer[3] = (new_id << 0) as u8;
 
-                mfrc522.mifare_write(8, &buffer);
+                if mfrc522.mifare_write(8, &buffer).is_ok() {
+                    println!("Id written ..");
+                } else {
+                    panic!("Could not write ID :(!");
+                }
 
                 // reread the id ..
                 card_avail = false;
@@ -111,6 +115,7 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
             let new_card = mfrc522.picc_is_new_card_present();
 
             if let Some(_) = new_card {
+                uid.clear();
                 //println!("New card detected. ATQA: {:04x}", atqa.bits());
                 let status = mfrc522.picc_select(&mut uid);
             
@@ -128,7 +133,6 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
                     }
                 }
 
-                uid.clear();
             }
         }
 

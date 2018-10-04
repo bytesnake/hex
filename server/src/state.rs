@@ -356,15 +356,21 @@ impl State {
                 self.last_token = Some(token);
 
                 ("get_token", self.collection.get_token(token)
-                    .map(|x| {
-                        let tracks: Vec<proto::Track> = x.2.into_iter()
-                            .map(|x| proto::Track::from_db_obj(x))
-                            .collect();
-                        (
-                            proto::Token::from_db_obj(x.0),
-                            proto::Playlist::from_db_obj(x.1),
-                            tracks
-                        )
+                    .map(|(token, x)| {
+                        if let Some((playlist, tracks)) = x {
+                            let tracks: Vec<proto::Track> = tracks.into_iter()
+                                .map(|x| proto::Track::from_db_obj(x))
+                                .collect();
+                            (
+                                proto::Token::from_db_obj(token),
+                                Some((proto::Playlist::from_db_obj(playlist),tracks))
+                            )
+                        } else {
+                            (
+                                proto::Token::from_db_obj(token),
+                                None
+                            )
+                        }
                     })
                     .map(|x| proto::Outgoing::GetToken(x))
                     .map_err(|err| Error::Database(err))

@@ -283,7 +283,7 @@ impl Collection {
     }
 
     /// Get the metadata and tracks for a certain playlist
-    pub fn get_token(&self, token: u32) -> Result<(Token, Playlist, Vec<Track>)> {
+    pub fn get_token(&self, token: u32) -> Result<(Token, Option<(Playlist, Vec<Track>)>)> {
         let mut stmt = self.socket.prepare(
             "SELECT Token, Key, Played, Pos
                 FROM Tokens WHERE Token=?;")?;
@@ -298,9 +298,13 @@ impl Collection {
             pos: row.get(3)
         };
 
-        let (playlist, tracks) = self.get_playlist(&token.key)?;
+        if token.key.is_empty() {
+            Ok((token, None))
+        } else {
+            let (playlist, tracks) = self.get_playlist(&token.key)?;
 
-        Ok((token, playlist, tracks))
+            Ok((token, Some((playlist, tracks))))
+        }
     }
 
     pub fn create_token(&self) -> Result<u32> {

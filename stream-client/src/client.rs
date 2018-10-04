@@ -120,7 +120,6 @@ pub enum Incoming {
 
 impl Incoming {
     pub fn deserialize(buf: String) -> Result<Incoming, Error> {
-        println!("Got: {}", buf);
         let mut wrapper: IncomingWrapper = serde_json::from_str(&buf).expect("Failed to deserialize Incoming Wrapper!");
 
         println!("{}", buf);
