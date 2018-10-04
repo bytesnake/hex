@@ -18,15 +18,16 @@ pub enum Event {
     CardLost
 }
 
-pub fn events() -> Receiver<Vec<Event>> {
+pub fn events() -> (Receiver<Vec<Event>>, Sender<u32>) {
     let (sender, recv) = channel();
+    let (sender2, recv2) = channel();
 
-    thread::spawn(|| events_fn(sender));
+    thread::spawn(|| events_fn(sender, recv2));
 
-    recv
+    (recv, sender2)
 }
 
-fn events_fn(sender: Sender<Vec<Event>>) {
+fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
     let inputs: Result<Vec<_>, _> = BUTTON_PINS.iter().map(|pin| {
         let input = Pin::new(*pin);
         
@@ -64,6 +65,21 @@ fn events_fn(sender: Sender<Vec<Event>>) {
     let mut uid = UID::default();
     let mut prev = vec![1,1,1,1];
     loop {
+        if let Ok(new_id) = recv.try_recv() {
+            if card_avail {
+                let mut buffer = [0u8; 18];
+                buffer[0] = (new_id << 24) as u8;
+                buffer[1] = (new_id << 16) as u8;
+                buffer[2] = (new_id << 8) as u8;
+                buffer[3] = (new_id << 0) as u8;
+
+                mfrc522.mifare_write(8, &buffer);
+
+                // reread the id ..
+                card_avail = false;
+            }
+        }
+
         let vals: Result<Vec<u8>, _> = inputs.iter().map(|dev| dev.get_value()).collect();
 
         let mut events = Vec::new();

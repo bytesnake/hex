@@ -12,18 +12,18 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(client: &mut Client, token: u32) -> Token {
-        client.send_once(Outgoing::GetToken { token: 0 });
+    pub fn new(client: &mut Client, token: u32) -> Option<Token> {
+        client.send_once(Outgoing::GetToken { token });
         match client.recv() {
             Ok(Incoming::GetToken((token, playlist, tracks))) => {
                 if token.played.is_empty() {
-                    return Token {
+                    return Some(Token {
                         token: token.token,
                         pos: 0,
                         sample: 0,
                         tracks: tracks,
                         id: Uuid::new_v4()
-                    };
+                    });
                 }
 
                 let mut played: Vec<Track> = token.played.split(",").filter_map(|x| {
@@ -56,15 +56,24 @@ impl Token {
                 //client.send(id, Outgoing::StreamSeek { sample: (token.pos * 48000.0) as u32 });
                 //client.recv();
 
-                return Token {
+                Some(Token {
                     token: token.token,
                     pos: pos,
                     tracks: tracks,
                     id: id,
                     sample: (token.pos * 48000.0) as u64
-                };
+                })
             },
-            _ => panic!("Invalid token!")
+            _ => None
+        }
+    }
+
+    pub fn create(client: &mut Client) -> u32 {
+        client.send_once(Outgoing::CreateToken);
+        if let Ok(Incoming::CreateToken(id)) = client.recv() {
+            id
+        } else {
+            panic!("Got wrong return!");
         }
     }
 

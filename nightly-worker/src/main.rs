@@ -2,12 +2,13 @@ extern crate chrono;
 extern crate hex_database;
 
 use std::env;
+use std::path::Path;
 use hex_database::{Collection, Event, events::Action};
 use chrono::{TimeZone, Utc, Date, Duration};
 
 fn main() {
     let db = env::args().skip(1).next()
-        .map(|x| Collection::from_file(&x)).expect("Please specify database path");
+        .map(|x| Collection::from_file(Path::new(&x))).expect("Please specify database path");
 
     let newest_date = db.get_newest_summarise_day()
         .map(|x| Utc.datetime_from_str(&format!("{} 10:10:00", x), "%Y-%m-%d %H:%M:%S").unwrap().date())

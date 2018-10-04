@@ -204,16 +204,16 @@ pub enum Incoming {
     GetToken {
         token: u32
     },
-    #[serde(rename="insert_token")]
-    InsertToken {
-        token: Token
-    },
     #[serde(rename="update_token")]
     UpdateToken {
         token: u32,
         played: String,
         pos: f64
     },
+    #[serde(rename="create_token")]
+    CreateToken,
+    #[serde(rename="last_token")]
+    LastToken,
     #[serde(rename="get_summarise")]
     GetSummarise,
     #[serde(rename="get_events")]
@@ -267,8 +267,9 @@ pub enum Outgoing {
     VoteForTrack,
     AskUploadProgress(Vec<UploadProgress>),
     GetToken((Token, Playlist, Vec<Track>)),
-    InsertToken,
     UpdateToken,
+    CreateToken(u32),
+    LastToken(Option<u32>),
     GetSummarise(Vec<(String, u32, u32, u32, u32)>),
     GetEvents(Vec<(String, Event)>),
     Download,

@@ -65,10 +65,8 @@ pub enum Outgoing {
     GetToken {
         token: u32
     },
-    #[serde(rename="insert_token")]
-    InsertToken {
-        token: Token
-    },
+    #[serde(rename="create_token")]
+    CreateToken,
     #[serde(rename="update_token")]
     UpdateToken {
         token: u32,
@@ -109,17 +107,20 @@ pub enum Incoming {
     },
     #[serde(rename = "stream_end")]
     StreamEnd,
-    #[serde(rename = "get_token")]
-    GetToken((Token, Playlist, Vec<Track>)),
-    #[serde(rename = "insert_token")]
-    InsertToken,
+    #[serde(rename = "update_token")]
+    UpdateToken,
     #[serde(rename = "vote_for_track")]
     VoteForTrack,
+    #[serde(rename = "create_token")]
+    CreateToken(u32),
+    #[serde(rename = "get_token")]
+    GetToken((Token, Playlist, Vec<Track>)),
     Buffer(Vec<u8>)
 }
 
 impl Incoming {
     pub fn deserialize(buf: String) -> Result<Incoming, Error> {
+        println!("Got: {}", buf);
         let mut wrapper: IncomingWrapper = serde_json::from_str(&buf).expect("Failed to deserialize Incoming Wrapper!");
 
         println!("{}", buf);
@@ -130,7 +131,7 @@ impl Incoming {
             match wrapper.fnc.as_ref() {
                 "stream_next" => Incoming::StreamNext,
                 "stream_end" => Incoming::StreamEnd,
-                "insert_token" => Incoming::InsertToken,
+                "update_token" => Incoming::UpdateToken,
                 "vote_for_track" => Incoming::VoteForTrack,
                 _ => serde_json::from_value(x).unwrap()
             }
@@ -141,7 +142,9 @@ impl Incoming {
 #[derive(Deserialize, Debug)]
 pub enum Error {
     #[serde(rename = "MusicContainer(ReachedEnd)")]
-    EndOfStream
+    EndOfStream,
+    #[serde(rename = "Database(QueryReturnedNoRows)")]
+    QueryReturnedNoRows
 }
 
 #[derive(Deserialize, Debug)]

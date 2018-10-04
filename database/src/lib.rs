@@ -303,10 +303,16 @@ impl Collection {
         Ok((token, playlist, tracks))
     }
 
-    pub fn insert_token(&self, token: Token) -> Result<()> {
+    pub fn create_token(&self) -> Result<u32> {
+        let id: u32 = self.socket.query_row(
+            "SELECT MAX(token) FROM Tokens", &[], |row| row.get(0))?;
+
+        // the next token id is one bigger than the largest
+        let id = id + 1;
+
         self.socket.execute(
             "INSERT INTO Tokens(token, key, played, pos) VALUES (?1, ?2, ?3, ?4)",
-                &[&token.token, &token.key, &token.played, &token.pos]).map(|_| ())
+                &[&id, &"", &"", &0.0]).map(|_| id)
     }
 
     pub fn update_token(&self, token: u32, played: String, pos: f64) -> Result<()> {

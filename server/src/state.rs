@@ -41,6 +41,7 @@ pub struct State {
     buffer: Vec<u8>,
     uploads: Vec<UploadState>,
     downloads: Vec<DownloadState>,
+    last_token: Option<u32>
 }
 
 impl State {
@@ -52,7 +53,8 @@ impl State {
             data_path: conf.data_path.to_str().unwrap().into(),
             buffer: Vec::new(),
             uploads: Vec::new(),
-            downloads: Vec::new()
+            downloads: Vec::new(),
+            last_token: None
         }
     }
 
@@ -351,6 +353,8 @@ impl State {
                 )
             },
             proto::Incoming::GetToken { token } => {
+                self.last_token = Some(token);
+
                 ("get_token", self.collection.get_token(token)
                     .map(|x| {
                         let tracks: Vec<proto::Track> = x.2.into_iter()
@@ -367,9 +371,9 @@ impl State {
                 )
             
             },
-            proto::Incoming::InsertToken { token } => {
-                ("insert_token", self.collection.insert_token(Token::to_db_obj(token))
-                    .map(|_| proto::Outgoing::InsertToken)
+            proto::Incoming::CreateToken => {
+                ("create_token", self.collection.create_token()
+                    .map(|id| proto::Outgoing::CreateToken(id))
                     .map_err(|err| Error::Database(err))
                 )
             },
@@ -378,6 +382,9 @@ impl State {
                      .map(|_| proto::Outgoing::UpdateToken)
                      .map_err(|err| Error::Database(err))
                 )
+            },
+            proto::Incoming::LastToken => {
+                ("last_token", Ok(proto::Outgoing::LastToken(self.last_token)))
             },
             proto::Incoming::GetSummarise => {
                 ("get_summarise", Ok(proto::Outgoing::GetSummarise(self.collection.get_summarisation())))

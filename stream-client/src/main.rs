@@ -23,11 +23,12 @@ use client::{Client, Outgoing, Token, Incoming};
 use events::Event;        
 
 fn main() {
-    let events = events::events();
+    let (events, push_new) = events::events();
     let mut client = Client::new();
     let mut audio = audio::AudioDevice::new();
 
     let mut token: Option<token::Token> = None;
+    let mut create_counter = 0;
     loop {
         if let Ok(events) = events.try_recv() {
             for event in events {
@@ -37,13 +38,23 @@ fn main() {
                             match x {
                                 3 => token.next_track(),
                                 1 => token.prev_track(),
-                                0 => token.shuffle(),
+                                0 => {create_counter += 1; token.shuffle()},
                                 2 => token.upvote(&mut client),
                                 _ => println!("Not supported yet!")
                             }
+                        } else {
+                            create_counter = 0;
                         }
                     },
-                    Event::NewCard(num) => token = Some(token::Token::new(&mut client, 0)),
+                    Event::NewCard(num) => {
+                        println!("Got card with number {}", num);
+
+                        if let Some(new_token) = token::Token::new(&mut client, num) {
+                            token = Some(new_token);
+                        } else {
+                            push_new.send(token::Token::create(&mut client)).unwrap();
+                        }
+                    },
                     Event::CardLost => {
                         if let Some(ref mut token) = token {
                             token.removed(&mut client);
@@ -54,6 +65,10 @@ fn main() {
                 }
             }
         }
+
+        /*if create_counter == 10 {
+            1
+        }*/
 
         if let Some(ref mut token) = token {
             if let Some(packet) = token.next_packet(&mut client) {
