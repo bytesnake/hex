@@ -205,7 +205,7 @@ impl Collection {
 
     pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
         let mut stmt = self.socket.prepare(
-            "SELECT Key, Title, Desc, Count, Tracks, Origin, Origin
+            "SELECT Key, Title, Desc, Tracks, Count, Origin
                 FROM Playlists WHERE Title=?;")?;
         
         let mut query = stmt.query(&[&playlist])?;
