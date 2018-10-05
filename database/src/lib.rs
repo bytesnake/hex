@@ -222,7 +222,7 @@ impl Collection {
 
         _playlist.count += 1;
 
-        let keys: Option<String> = row.get(4);
+        let keys: Option<String> = row.get(3);
         let keys: String = keys.map(|x| format!("{},{}", x, key)).unwrap_or(key.into());
 
         println!("Track: {}", keys);
