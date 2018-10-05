@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use std::time::Instant;
-use std::sync::atomic::AtomicIsize;
+use std::sync::Mutex;
 use std::sync::Arc;
 
 use websocket::message::OwnedMessage;
@@ -22,6 +22,7 @@ pub fn start(conf: Conf) {
 	// bind to the server
     let addr = (conf.host, conf.server.port);
 	let server = Server::bind(addr, &handle).unwrap();
+    let token = Arc::new(Mutex::new(-1));
 
 	// a stream of incoming connections
 	let f = server.incoming()
@@ -38,7 +39,7 @@ pub fn start(conf: Conf) {
 
             let handle2 = handle.clone();
             let conf_music = conf.music.clone();
-            let token = Arc::new(AtomicIsize::new(-1));
+            let token = token.clone();
             //let cards_2 = cards.clone();
 
             // accept the request to be a ws connection if it does

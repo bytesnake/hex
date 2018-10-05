@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::collections::HashMap;
 use std::slice;
-use std::sync::{atomic::{AtomicIsize, Ordering}, Arc};
+use std::sync::{Mutex, Arc};
 
 use serde_json;
 
@@ -59,7 +59,7 @@ impl State {
         }
     }
 
-    pub fn process(&mut self, origin: String, msg: String, gtoken: Arc<AtomicIsize>) -> Result<OwnedMessage> {
+    pub fn process(&mut self, origin: String, msg: String, gtoken: Arc<Mutex<isize>>) -> Result<OwnedMessage> {
         println!("Got: {}", &msg);
 
         let packet: proto::IncomingWrapper = serde_json::from_str(&msg)
@@ -355,7 +355,7 @@ impl State {
             },
             proto::Incoming::GetToken { token } => {
                 self.token_avail = true;
-                gtoken.store(token as isize, Ordering::Relaxed);
+                *gtoken.lock().unwrap() = token as isize;
 
                 ("get_token", self.collection.get_token(token)
                     .map(|(token, x)| {
@@ -387,7 +387,7 @@ impl State {
             },
             proto::Incoming::UpdateToken { token, key, played, pos } => {
                 if self.token_avail {
-                    gtoken.store(-1, Ordering::Relaxed);
+                    *gtoken.lock().unwrap() = -1;
                     self.token_avail = false;
                 }
 
@@ -397,7 +397,7 @@ impl State {
                 )
             },
             proto::Incoming::LastToken => {
-                let val = match gtoken.load(Ordering::Relaxed) {
+                let val = match *gtoken.lock().unwrap() {
                     -1 => None,
                     x => Some(x as u32)
                 };
