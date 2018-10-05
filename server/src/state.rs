@@ -354,6 +354,7 @@ impl State {
             },
             proto::Incoming::GetToken { token } => {
                 self.last_token = Some((token, origin.clone()));
+                println!("Get token: {:?}", self.last_token);
 
                 ("get_token", self.collection.get_token(token)
                     .map(|(token, x)| {
@@ -401,6 +402,8 @@ impl State {
                 )
             },
             proto::Incoming::LastToken => {
+                println!("Last token: {:?}", self.last_token);
+
                 ("last_token", Ok(proto::Outgoing::LastToken(self.last_token.clone().map(|x| x.0))))
             },
             proto::Incoming::GetSummarise => {
