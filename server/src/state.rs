@@ -41,7 +41,7 @@ pub struct State {
     buffer: Vec<u8>,
     uploads: Vec<UploadState>,
     downloads: Vec<DownloadState>,
-    last_token: Option<u32>
+    last_token: Option<(u32, String)>
 }
 
 impl State {
@@ -353,7 +353,7 @@ impl State {
                 )
             },
             proto::Incoming::GetToken { token } => {
-                self.last_token = Some(token);
+                self.last_token = Some((token, origin.clone()));
 
                 ("get_token", self.collection.get_token(token)
                     .map(|(token, x)| {
@@ -384,13 +384,24 @@ impl State {
                 )
             },
             proto::Incoming::UpdateToken { token, key, played, pos } => {
+                let mut remove = false;
+                if let Some((_, ref a)) = self.last_token {
+                    if &origin == a {
+                        remove = true;
+                    }
+                }
+
+                if remove {
+                    self.last_token = None;
+                }
+
                 ("update_token", self.collection.update_token(token, key, played, pos)
                      .map(|_| proto::Outgoing::UpdateToken)
                      .map_err(|err| Error::Database(err))
                 )
             },
             proto::Incoming::LastToken => {
-                ("last_token", Ok(proto::Outgoing::LastToken(self.last_token)))
+                ("last_token", Ok(proto::Outgoing::LastToken(self.last_token.clone().map(|x| x.0))))
             },
             proto::Incoming::GetSummarise => {
                 ("get_summarise", Ok(proto::Outgoing::GetSummarise(self.collection.get_summarisation())))
