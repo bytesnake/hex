@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 use std::time::Instant;
+use std::sync::atomic::AtomicIsize;
+use std::sync::Arc;
 
 use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
@@ -36,20 +38,16 @@ pub fn start(conf: Conf) {
 
             let handle2 = handle.clone();
             let conf_music = conf.music.clone();
+            let token = Arc::new(AtomicIsize::new(-1));
             //let cards_2 = cards.clone();
 
             // accept the request to be a ws connection if it does
             let f = upgrade
                 .use_protocol("rust-websocket")
                 .accept()
-                // send a greeting!
-                //.and_then(|(s, _)| s.send(Message::text("Hello World!").into()))
-                // simple echo server impl
                 .and_then(move |(s,_)| {
                     let now = Instant::now();
                     let mut state = State::new(handle2, conf_music);
-
-                    //state.collection.add_event(Action::PlaySong(key.clone().unwrap()).with_origin(origin)).unwrap();
 
                     let (sink, stream) = s.split();
 
@@ -60,7 +58,7 @@ pub fn start(conf: Conf) {
                             OwnedMessage::Ping(p) => Some(OwnedMessage::Pong(p)),
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(msg) => {
-                                let msg = match state.process(addr.to_string(), msg) {
+                                let msg = match state.process(addr.to_string(), msg, token.clone()) {
                                     Ok(msg) => msg,
                                     Err(_) => OwnedMessage::Text("Err(CouldNotParse)".into())
                                 };

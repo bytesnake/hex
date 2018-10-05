@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::collections::HashMap;
 use std::slice;
+use std::sync::{atomic::{AtomicIsize, Ordering}, Arc};
 
 use serde_json;
 
@@ -41,7 +42,7 @@ pub struct State {
     buffer: Vec<u8>,
     uploads: Vec<UploadState>,
     downloads: Vec<DownloadState>,
-    last_token: Option<(u32, String)>
+    token_avail: bool
 }
 
 impl State {
@@ -54,11 +55,11 @@ impl State {
             buffer: Vec::new(),
             uploads: Vec::new(),
             downloads: Vec::new(),
-            last_token: None
+            token_avail: false
         }
     }
 
-    pub fn process(&mut self, origin: String, msg: String) -> Result<OwnedMessage> {
+    pub fn process(&mut self, origin: String, msg: String, gtoken: Arc<AtomicIsize>) -> Result<OwnedMessage> {
         println!("Got: {}", &msg);
 
         let packet: proto::IncomingWrapper = serde_json::from_str(&msg)
@@ -353,8 +354,8 @@ impl State {
                 )
             },
             proto::Incoming::GetToken { token } => {
-                self.last_token = Some((token, origin.clone()));
-                println!("Get token: {:?}", self.last_token);
+                self.token_avail = true;
+                gtoken.store(token as isize, Ordering::Relaxed);
 
                 ("get_token", self.collection.get_token(token)
                     .map(|(token, x)| {
@@ -385,15 +386,9 @@ impl State {
                 )
             },
             proto::Incoming::UpdateToken { token, key, played, pos } => {
-                let mut remove = false;
-                if let Some((_, ref a)) = self.last_token {
-                    if &origin == a {
-                        remove = true;
-                    }
-                }
-
-                if remove {
-                    self.last_token = None;
+                if self.token_avail {
+                    gtoken.store(-1, Ordering::Relaxed);
+                    self.token_avail = false;
                 }
 
                 ("update_token", self.collection.update_token(token, key, played, pos)
@@ -402,9 +397,12 @@ impl State {
                 )
             },
             proto::Incoming::LastToken => {
-                println!("Last token: {:?}", self.last_token);
-
-                ("last_token", Ok(proto::Outgoing::LastToken(self.last_token.clone().map(|x| x.0))))
+                let val = match gtoken.load(Ordering::Relaxed) {
+                    -1 => None,
+                    x => Some(x as u32)
+                };
+                
+                ("last_token", Ok(proto::Outgoing::LastToken(val)))
             },
             proto::Incoming::GetSummarise => {
                 ("get_summarise", Ok(proto::Outgoing::GetSummarise(self.collection.get_summarisation())))
