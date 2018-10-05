@@ -114,7 +114,7 @@ pub enum Incoming {
     #[serde(rename = "create_token")]
     CreateToken(u32),
     #[serde(rename = "get_token")]
-    GetToken((Token, Playlist, Vec<Track>)),
+    GetToken((Token, Option<(Playlist, Vec<Track>)>)),
     Buffer(Vec<u8>)
 }
 

@@ -207,8 +207,9 @@ pub enum Incoming {
     #[serde(rename="update_token")]
     UpdateToken {
         token: u32,
-        played: String,
-        pos: f64
+        key: Option<String>,
+        played: Option<String>,
+        pos: Option<f64>
     },
     #[serde(rename="create_token")]
     CreateToken,

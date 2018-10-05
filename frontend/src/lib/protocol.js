@@ -109,6 +109,24 @@ class Protocol {
         return this.send_msg(uuid, 'get_summarise', {});
     }
 
+    update_token(token, key) {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'update_token', {'token': token, 'key': key});
+    }
+
+    last_token() {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'last_token', {});
+    }
+
+    get_token(id) {
+        const uuid = guid();
+
+        return this.send_msg(uuid, 'get_token', {'token': id});
+    }
+
     download(uuid, format, tracks) {
         console.log("Downloading " + tracks + " in " + format);
 
@@ -213,8 +231,7 @@ class Protocol {
                     var parsed = JSON.parse(e.data);
 
                     if(parsed.id == uuid) {
-                        //console.log("Got: " + e.data);
-
+                        //console.log(parsed);
                         // remove listener
                         self.socket.removeEventListener('message', listener);
                         if(parsed.fn != fn)

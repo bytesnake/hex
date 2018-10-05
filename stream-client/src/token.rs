@@ -15,7 +15,7 @@ impl Token {
     pub fn new(client: &mut Client, token: u32) -> Option<Token> {
         client.send_once(Outgoing::GetToken { token });
         match client.recv() {
-            Ok(Incoming::GetToken((token, playlist, tracks))) => {
+            Ok(Incoming::GetToken((token, Some((playlist, tracks))))) => {
                 if token.played.is_empty() {
                     return Some(Token {
                         token: token.token,
@@ -64,6 +64,15 @@ impl Token {
                     sample: (token.pos * 48000.0) as u64
                 })
             },
+            Ok(Incoming::GetToken((token, None))) => {
+                return Some(Token {
+                    token: token.token,
+                    pos: 0,
+                    sample: 0,
+                    tracks: Vec::new(),
+                    id: Uuid::new_v4()
+                });
+            },
             _ => None
         }
     }
@@ -78,7 +87,11 @@ impl Token {
     }
 
     pub fn removed(&mut self, client: &mut Client) {
-        self.tracks.split_off(self.pos+1);
+        if self.tracks.len() == self.pos {
+            self.tracks.clear();
+        } else {
+            self.tracks.split_off(self.pos+1);
+        }
         let played: Vec<String> = self.tracks.iter().map(|x| x.key.clone()).collect();
         let pos = (self.sample as f64) / 48000.0;
 
@@ -88,6 +101,10 @@ impl Token {
             pos: pos 
         });
         client.recv();
+    }
+
+    pub fn has_tracks(&self) -> bool {
+        self.tracks.len() > 0
     }
 
     pub fn next_packet(&mut self, client: &mut Client) -> Option<&[i16]> {

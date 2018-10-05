@@ -383,8 +383,8 @@ impl State {
                     .map_err(|err| Error::Database(err))
                 )
             },
-            proto::Incoming::UpdateToken { token, played, pos } => {
-                ("update_token", self.collection.update_token(token, played, pos)
+            proto::Incoming::UpdateToken { token, key, played, pos } => {
+                ("update_token", self.collection.update_token(token, key, played, pos)
                      .map(|_| proto::Outgoing::UpdateToken)
                      .map_err(|err| Error::Database(err))
                 )

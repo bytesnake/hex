@@ -22,16 +22,16 @@ impl Collection {
     pub fn from_file(path: &Path) -> Collection {
         let socket = rusqlite::Connection::open(path).unwrap();
     
-        socket.execute("CREATE TABLE IF NOT EXISTS music (Title TEXT, Album TEXT, Interpret TEXT, Fingerprint TEXT NOT NULL, People TEXT, Composer TEXT, Key TEXT NOT NULL, Duration REAL NOT NULL, FavsCount INTEGER, Channels INTEGER)", &[]).unwrap();
+        socket.execute_batch(
+            "BEGIN;
+                CREATE TABLE IF NOT EXISTS music (Title TEXT, Album TEXT, Interpret TEXT, Fingerprint TEXT NOT NULL, People TEXT, Composer TEXT, Key TEXT NOT NULL, Duration REAL NOT NULL, FavsCount INTEGER, Channels INTEGER);
+                CREATE TABLE IF NOT EXISTS Playlists (Key TEXT NOT NULL, Title TEXT, Desc TEXT, Tracks TEXT, Count INTEGER NOT NULL, Origin TEXT);
+                CREATE TABLE IF NOT EXISTS Events (Date Text, Origin Text, Event Text, Data TEXT);
+                CREATE TABLE IF NOT EXISTS Summarise (Day TEXT, Connects INTEGER, Plays INTEGER, Adds INTEGER, Removes INTEGER);
+                CREATE TABLE IF NOT EXISTS Tokens (Token INTEGER, Key TEXT, Played TEXT, Pos NUMERIC);
+            COMMIT;"
+        ).unwrap();
 
-        socket.execute("CREATE TABLE IF NOT EXISTS Playlists (Key TEXT NOT NULL, Title TEXT, Desc TEXT, Tracks TEXT, Count INTEGER NOT NULL, Origin TEXT)", &[]).unwrap();
-
-        socket.execute("CREATE TABLE IF NOT EXISTS Events (Date Text, Origin Text, Event Text, Data TEXT)", &[]).unwrap();
-
-        socket.execute("CREATE TABLE IF NOT EXISTS Summarise (Day TEXT, Connects INTEGER, Plays INTEGER, Adds INTEGER, Removes INTEGER)", &[]).unwrap();
-
-        socket.execute("CREATE TABLE IF NOT EXISTS Tokens (Token INTEGER, Key TEXT, Played TEXT, Pos NUMERIC)", &[]).unwrap();
-    
         Collection { socket }
     }
 
@@ -319,8 +319,18 @@ impl Collection {
                 &[&id, &"", &"", &0.0]).map(|_| id)
     }
 
-    pub fn update_token(&self, token: u32, played: String, pos: f64) -> Result<()> {
-        self.socket.execute("UPDATE tokens SET played = ?1, pos = ?2 WHERE token = ?3", &[&played, &pos, &token]).map(|_| ())
+    pub fn update_token(&self, token: u32, key: Option<String>, played: Option<String>, pos: Option<f64>) -> Result<()> {
+        if let Some(key) = key {
+            self.socket.execute("UPDATE tokens SET key = ?1 WHERE token = ?2", &[&key, &token]).map(|_| ())?;
+        }
+        if let Some(played) = played {
+            self.socket.execute("UPDATE tokens SET played = ?1 WHERE token = ?2", &[&played, &token]).map(|_| ())?;
+        }
+        if let Some(pos) = pos {
+            self.socket.execute("UPDATE tokens SET pos = ?1 WHERE token = ?2", &[&pos, &token]).map(|_| ())?;
+        }
+
+        Ok(())
     }
 
     pub fn add_event(&self, event: Event) -> Result<()> {

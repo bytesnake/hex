@@ -73,8 +73,10 @@ fn main() {
         }*/
 
         if let Some(ref mut token) = token {
-            if let Some(packet) = token.next_packet(&mut client) {
-                audio.buffer(packet);
+            if token.has_tracks() {
+                if let Some(packet) = token.next_packet(&mut client) {
+                    audio.buffer(packet);
+                }
             }
         }
     }

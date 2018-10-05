@@ -4,6 +4,7 @@ import style from './style.less';
 import {Layout, TextField, Icon} from 'preact-mdl';
 import Protocol from '../../lib/protocol.js';
 import Upload from '../upload';
+import Zyklop from '../zyklop';
 import TokenInput from 'preact-token-input';
 
 export default class Header extends Component {
@@ -29,6 +30,7 @@ export default class Header extends Component {
                 </div>
             </div>
             <div class={style.upload}>
+                <Zyklop />
                 <Upload />
                 <Icon icon="info outline" />
             </div>
