@@ -4,7 +4,7 @@ use std::sync::{Mutex, Arc};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
-use futures::{Async, Stream, task};
+use futures::{Async, Poll, Stream, task};
 use futures::sync::mpsc::{Receiver, Sender, channel};
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream, Incoming};
@@ -52,14 +52,15 @@ impl GossipPush {
 
         let mut remove = false;
         {
-            let writer = peers.get_mut(id).ok_or(io::ErrorKind::NotFound)?;
-            writer.buffer(data);
+            if let Some(writer) = peers.get_mut(id) {
+                writer.buffer(data);
 
-            writer.poll_flush().map_err(|err| {
-                println!("Could not write = {:?}", err);
+                writer.poll_flush().map_err(|err| {
+                    println!("Could not write = {:?}", err);
 
-                remove = true;
-            });
+                    remove = true;
+                });
+            }
         }
 
         if remove {

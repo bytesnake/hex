@@ -352,8 +352,9 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
         Ok(Async::Ready(()))
     }
 
-    pub fn shutdown(self) {
-        io::shutdown(self.write);
+    pub fn shutdown(mut self) {
+        //io::shutdown(self.write);
+        self.write.shutdown();
     }
 }
 
