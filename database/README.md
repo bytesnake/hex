@@ -1,7 +1,7 @@
 <img align="left" src="/assets/github.png" width="220px"/>
 
 #  Hex database - manage metadata of tracks, playlists and tokens
-_This crate is part of the [http://github.com/bytesnake/hex](Hex) project_
+_This crate is part of the [Hex](http://github.com/bytesnake/hex) project and is used in various implementations like `server`, `local-client` and `sync`_
 What would a music collection be without any metadata? Very boring. The `hex_database` crate manages all metadata concerning tracks, playlists and tokens, and provides the infrastructure for logs and summarization of each day. Furthermore it contains a parser for search queries and an easy-to-use interface encapsulating important functions like adding tracks, favouriting tracks or creating tokens.
 
 ```rust
