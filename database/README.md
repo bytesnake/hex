@@ -1,13 +1,13 @@
-<img align="left" src="assets/github.png" width="220px"/>
+<img align="left" src="/assets/github.png" width="220px"/>
 
 #  Hex database - manage metadata of tracks, playlists and tokens
 _This crate is part of the [http://github.com/bytesnake/hex](Hex) project_
-What would a music collection be without any metadata? Very boring. The `hex_database` crate manages all metadata concerning tracks, playlists and tokens, and provides the infrastructure for logs and summarization of each day. Furthermore it contains a parser for search queries and an easy-to-use interface encapsulating important functions like adding tracks, favourite a tracks or creating tokens.
+What would a music collection be without any metadata? Very boring. The `hex_database` crate manages all metadata concerning tracks, playlists and tokens, and provides the infrastructure for logs and summarization of each day. Furthermore it contains a parser for search queries and an easy-to-use interface encapsulating important functions like adding tracks, favouriting tracks or creating tokens.
 
 ```rust
 extern crate hex_database;
 
-use hex_database::Collection;
+use hex_database::{Collection, SearchQuery};
 
 fn main() {
     // open a connection to the database
