@@ -1,3 +1,18 @@
+//! Spatial encoding and compressing with Opus of raw audio data
+//!
+//! This crate takes raw audio data with a configuration describing the channel arrangement and
+//! converts it into Hex own audio format. It compresses it thereby with Opus and encodes it in an
+//! Spherical Harmonic representation, supporting spatial audio. The decoding step can
+//! convert the audio file to any loudspeaker configuration, reconstructing the spatial audio
+//! field.
+//!
+//! ## File format
+//!
+//! The file format is the following:
+//! |       |    1    |     1    |     4    | (order+1)**2 * 4 | (order+1)**2 * samples * 2 |
+//! |-------|---------|----------|----------|------------------|----------------------------|
+//! | field | version | sh order | samples  | scales ..        | audio data ...             |
+//!
 extern crate byteorder;
 extern crate opus;
 extern crate futures;
@@ -5,31 +20,37 @@ extern crate futures;
 pub mod error;
 pub mod configuration;
 
-use error::{Error, Result};
 use std::io::{Seek, SeekFrom};
 use std::fs::File;
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
-
 use futures::sync::mpsc::Sender;
-
 use opus::{Channels, Application};
 
+use error::{Error, Result};
 pub use configuration::Configuration;
 
+/// Size of a single raw audio block
 const RAW_BLOCK_SIZE: usize = 1920;
 
+/// Represents an open audio file
 pub struct Container<T> {
+    /// Each SH channel needs its own decoder
     decoder: Vec<opus::Decoder>,
+    /// The underlying audio file
     inner: T,
+    /// Spherical Harmonic order (describing the spatial resolution)
     sh_order: u8,
+    /// Number of samples in the audio file
     samples: u32,
+    /// SH scales for each SH channel
     scales: Vec<f32>
 }
 
 impl<T> Container<T> 
     where T: ReadBytesExt + WriteBytesExt + Seek 
 {
+    /// Creates a new `Container`
     pub fn new(sh_order: u8, samples: u32, scales: Vec<f32>, inner: T) -> Container<T> {
         let mut ct = Container {
             decoder: (0..(sh_order+1)*(sh_order+1)).map(|_| opus::Decoder::new(48000, Channels::Mono).unwrap()).collect(),
@@ -44,26 +65,32 @@ impl<T> Container<T>
         ct
     }
 
+    /// Creates a new empty container
     pub fn empty(sh_order: u8, inner: T) -> Container<T> {
         Container::new(sh_order, 0, vec![1.0; (sh_order as usize+1)*(sh_order as usize+1)], inner)
     }
 
+    /// Load a file and parses the header
     pub fn load(mut inner: T) -> Result<Container<T>> {
         // read the version and SphericalHarmonic order fields
         let version = inner.read_u8().map_err(|err| Error::File(err))?;
         let sh_order = inner.read_u8().map_err(|err| Error::File(err))?;
        
+        // read in the number of samples
         let samples = inner.read_u32::<LittleEndian>().map_err(|err| Error::File(err))?;
 
+        // read in all SH scales
         let mut scales = Vec::new();
         for _ in 0..(sh_order+1)*(sh_order+1) {
             scales.push(inner.read_f32::<LittleEndian>().map_err(|err| Error::File(err))?);
         }
 
+        // Only this version is supported at the moment
         if version != 1 {
             return Err(Error::CorruptedFile);
         }
 
+        // There will never be a order larger than 6
         if sh_order > 6 {
             return Err(Error::CorruptedFile);
         }
@@ -80,16 +107,19 @@ impl<T> Container<T>
         Ok(Container::new(sh_order, samples, scales, inner))
     }
 
+    /// Open a audio file from a certain path
     pub fn with_key(path: &str, key: &str) -> Result<Container<File>> {
         let file = File::open(format!("{}{}", path, key)).map_err(|err| Error::File(err))?;
 
         Container::load(file)
     }
 
+    /// Get number of samples
     pub fn samples(&self) -> u32 {
         self.samples
     }
 
+    /// Seek to the beginning of the data section
     pub fn seek_to_data(&mut self) {
         self.inner.seek(SeekFrom::Start(6 + 4 * (self.sh_order as u64 + 1) * (self.sh_order as u64 + 1))).unwrap();
     }
@@ -113,6 +143,7 @@ impl<T> Container<T>
     }
     */
 
+    /// Seek to a certain sample in the underlying memory
     pub fn seek_to_sample(&mut self, sample: u32) {
         self.seek_to_data();
 
@@ -129,10 +160,12 @@ impl<T> Container<T>
         }
     }
 
+    /// Number of Spherical Harmonic channels
     pub fn num_harmonics(&self) -> u32 {
         (self.sh_order as u32 + 1)*(self.sh_order as u32 + 1)
     }
 
+    /// Decode a single raw audio buffer with a certain loudspeaker configuration
     pub fn next_packet(&mut self, conf: Configuration) -> Result<Vec<i16>> {
         let sizes: Vec<Result<u8>> = (0..self.num_harmonics()).map(|_| {
             self.inner.read_u8().map_err(|_| Error::ReachedEnd)
@@ -173,6 +206,10 @@ impl<T> Container<T>
         codec.to_channels(&harmonics, self.sh_order)
     }
 
+    /// Converts raw audio with loudspeaker configuration to a new `Container`
+    ///
+    /// The `progress` field can be used to connect a channel to the convesion process and get live
+    /// updates of the progress.
     pub fn save_pcm(conf: Configuration, pcm: &[i16], mut inner: T, mut progress: Option<Sender<f32>>) -> Result<Container<T>> {
         inner.write_u8(1).map_err(|err| Error::File(err))?;
         inner.write_u8(conf.sh_order()).map_err(|err| Error::File(err))?;

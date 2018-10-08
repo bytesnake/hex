@@ -1,20 +1,32 @@
+//! Loudspeaker configuration
+//!
+//! This module is used in `hex_music_container` to describe the loudspeaker configuration of raw
+//! audio. It can also be disabled in case the raw audio is already in SH format.
+
 use error::{Error, Result};
 
+/// A loudspeaker configuration
 #[derive(Clone)]
 pub enum Configuration {
+    /// One channel describes sound coming from all directions at the same time
     Omnidirectional,
+    /// Two channels contains sound coming from the left and right direction
     Stereo,
+    /// Binaural coding (only useful in decoding, not encoding)
     Binaural,
+    /// Spherical Harmonic format
     SphericalHarmonics(u8)
 }
 
 impl Configuration {
+    /// Get the number of SH channels
     pub fn num_harmonics(&self) -> u32 {
         let order = self.sh_order() as u32;
 
         (order+1)*(order+1)
     }
 
+    /// Get the SH order
     pub fn sh_order(&self) -> u8 {
         match *self {
             Configuration::Omnidirectional => 0,
@@ -24,6 +36,7 @@ impl Configuration {
         }
     }
 
+    /// Get the number of loudspeaker channels
     pub fn num_channels(&self) -> u32 {
         match *self {
             Configuration::Omnidirectional => 1,
@@ -33,6 +46,7 @@ impl Configuration {
         }
     }
 
+    /// Create a codec from this configuration
     pub fn codec(&self) -> Codec {
         Codec {
             conf: self.clone()
@@ -40,11 +54,13 @@ impl Configuration {
     }
 }
 
+/// This codec converts a block of raw audio to a loudspeaker independent audio representation
 pub struct Codec {
     conf: Configuration
 }
 
 impl Codec {
+    /// Converts raw audio to SH representation
     pub fn to_harmonics(&self, channels: &[i16]) -> Result<Vec<f32>> {
         let num_channels = self.conf.num_channels() as usize;
         let num_harmonics = self.conf.num_harmonics() as usize;
@@ -78,6 +94,7 @@ impl Codec {
         Ok(harmonics)
     }
 
+    /// Converts SH representation to loudspeaker dependent representation
     pub fn to_channels(&self, harmonics: &[f32], from_harmonics: u8) -> Result<Vec<i16>> {
         let num_channels = self.conf.num_channels() as usize;
         let num_from_harmonics = (from_harmonics as usize + 1) * (from_harmonics as usize + 1);

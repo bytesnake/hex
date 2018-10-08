@@ -25,7 +25,7 @@ pub enum Action {
 }
 
 impl Action {
-    /// Tag the `Action` with an origin an return an `Event`
+    /// Tag the `Action` with an origin and return an `Event`
     pub fn with_origin(self, origin: String) -> Event {
         Event {
             origin: origin,
