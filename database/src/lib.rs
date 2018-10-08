@@ -1,3 +1,18 @@
+//! Manage the music database and provide `Track`, `Playlist` and `Token` structs
+//!
+//! This crate can be used to search, get all playlists, find a certain token and do a lot of other
+//! useful stuff. The underlying implementation uses a SQLite database and manages all information
+//! with some tables. It is used in the `server` binary, `sync` library and other libraries which
+//! have to alter the database in a stable way.
+//!
+//! ## Example:
+//! ```rust
+//! let collection = Collection::new(Path::new("/opt/music/music.db"));
+//! for playlist in collection.get_playlists() {
+//!     println!("{:#?}", playlist);
+//! }
+//! ```
+
 extern crate rusqlite;
 extern crate uuid;
 
@@ -14,11 +29,14 @@ use std::path::Path;
 
 use search::SearchQuery;
 
+/// Represents an open connection to a database
 pub struct Collection {
     socket: rusqlite::Connection
 }
 
 impl Collection {
+    /// Open a SQLite database from a file and create the neccessary tables in case they don't
+    /// exist.
     pub fn from_file(path: &Path) -> Collection {
         let socket = rusqlite::Connection::open(path).unwrap();
     
@@ -35,9 +53,8 @@ impl Collection {
         Collection { socket }
     }
 
-    /// Search for a certain track. The SearchQuery ensures that a valid string is generated.
-    /// TODO: search for tracks in a certain playlist
-
+    /// Prepare a search with a provided query and translate it to SQL. This method fails in case
+    /// of an invalid query.
     pub fn search_prep(&self, query: SearchQuery) -> Result<Statement> {
         let query = query.to_sql_query();
 
@@ -45,7 +62,7 @@ impl Collection {
         self.socket.prepare(&query)
     }
 
-    /// Execute the search and returns an iterator over tracks.
+    /// Execute the prepared search and return an iterator over all results
     pub fn search<'a>(&self, stmt: &'a mut Statement) -> impl Iterator<Item = Track> + 'a {
         stmt.query_map(&[], |row| {
             Track {
@@ -63,6 +80,7 @@ impl Collection {
         }).unwrap().filter_map(|x| x.ok())
     }
 
+    /// Search for a query and returns 50 tracks starting at `start`
     pub fn search_limited(&self, query: &str, start: usize) -> Result<Vec<Track>> {
         let query = SearchQuery::new(query).ok_or(Error::QueryReturnedNoRows)?;
 
@@ -72,7 +90,7 @@ impl Collection {
         Ok(res)
     }
 
-    /// Returns the metadata of all available playlists
+    /// Get all available playlists and return their metadata
     pub fn get_playlists(&self) -> Vec<Playlist> {
         let mut stmt = self.socket.prepare("SELECT Key, Title, Desc, Tracks, Count, Origin FROM Playlists").unwrap();
 
@@ -90,7 +108,7 @@ impl Collection {
         vec
     }
 
-    /// Returns the metadata of all available tracks
+    /// Get all available tracks and return their metadata
     pub fn get_tracks(&self) -> Vec<Track> {
         let mut stmt = self.socket.prepare("SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music").unwrap();
 
@@ -112,7 +130,7 @@ impl Collection {
         vec
     }
 
-    /// Get the metadata and tracks for a certain playlist
+    /// Get a playlist with a certain key and return the metadata and tracks
     pub fn get_playlist(&self, key: &str) -> Result<(Playlist, Vec<Track>)> {
         let mut stmt = self.socket.prepare(
             "SELECT Key, Title, Desc, Tracks, Count, Origin
@@ -145,6 +163,7 @@ impl Collection {
         }
     }
 
+    /// Look all playlists up belonging to a certain track
     pub fn get_playlists_of_track(&self, key: &str) -> Result<Vec<Playlist>> {
         let mut stmt = self.socket.prepare(&format!("SELECT Key, Title, Desc, Tracks, Count, Origin FROM Playlists WHERE tracks like '%{}%'", key))?;
 
@@ -163,6 +182,10 @@ impl Collection {
     }
 
 
+    /// Create a empty playlist with a `title` and `origin`
+    ///
+    /// The `origin` field is only used when the playlist originates from a different server and
+    /// should therefore be updated after a new version appears.
     pub fn add_playlist(&self, title: &str, origin: Option<String>) -> Result<Playlist> {
         let key = Uuid::new_v4().simple().to_string();
 
@@ -178,6 +201,7 @@ impl Collection {
         })
     }
 
+    /// Deletes a playlist with key `key`
     pub fn delete_playlist(&self, key: &str) -> Result<()> {
         self.socket.execute("DELETE FROM playlists WHERE key = ?", &[&key])
             .map(|_| ())
@@ -203,6 +227,10 @@ impl Collection {
         Ok(())
     }
 
+    /// Add a track to a certain playlist
+    ///
+    /// It is important that `playlist` is the title of the playlist and not the key. This method
+    /// returns the updated playlist.
     pub fn add_to_playlist(&self, key: &str, playlist: &str) -> Result<Playlist> {
         let mut stmt = self.socket.prepare(
             "SELECT Key, Title, Desc, Tracks, Count, Origin
@@ -232,6 +260,7 @@ impl Collection {
         Ok(_playlist)
     }
 
+    /// Insert a new track into the database
     pub fn insert_track(&self, track: Track) -> Result<()> {
         self.socket.execute("INSERT INTO music
                                     (Title, Album, Interpret, People, Composer, Key, Fingerprint, Duration, FavsCount, Channels)
@@ -239,6 +268,7 @@ impl Collection {
                                     &[&track.title, &track.album, &track.interpret, &track.people, &track.composer, &track.key, &track.fingerprint, &track.duration, &track.favs_count, &track.channels]).map(|_| ())
     }
 
+    /// Insert a new playlist into the database
     pub fn insert_playlist(&self, p: Playlist) -> Result<()> {
         self.socket.execute("INSERT INTO playlists
                                 (Key, Title, Desc, Tracks, Count, Origin)
@@ -246,11 +276,12 @@ impl Collection {
                                 &[&p.key, &p.title, &p.desc, &p.tracks, &p.count, &p.origin]).map(|_| ())
     }
 
-
+    /// Delete a track with key `key`
     pub fn delete_track(&self, key: &str) -> Result<()> {
         self.socket.execute("DELETE FROM music WHERE key = ?", &[&key]).map(|_| ())
     }
 
+    /// Get a track with key `key`
     pub fn get_track(&self, key: &str) -> Result<Track> {
         let mut stmt = self.socket.prepare(&format!("SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music WHERE Key = '{}'", key))?;
 
@@ -258,6 +289,10 @@ impl Collection {
         
         result.next().ok_or(Error::QueryReturnedNoRows)
     }
+
+    /// Update the metadata of tracks
+    ///
+    /// In case none of the parameters is Option::Some, then no field is updated.
     pub fn update_track(&self, key: &str, title: Option<String>, album: Option<String>, interpret: Option<String>, people: Option<String>, composer: Option<String>) -> Result<String> {
         if let Some(title) = title {
             self.socket.execute("UPDATE music SET Title = ? WHERE Key = ?", &[&title, &key])?;
@@ -278,6 +313,7 @@ impl Collection {
         return Ok(key.into());
     }
 
+    /// Increment the favourite count for a track
     pub fn vote_for_track(&self, key: &str) -> Result<()> {
         self.socket.execute("UPDATE music SET FavsCount = FavsCount + 1 WHERE Key = ?1", &[&key]).map(|_| ())
     }
@@ -307,6 +343,7 @@ impl Collection {
         }
     }
 
+    /// Create a new token with a valid id
     pub fn create_token(&self) -> Result<u32> {
         let id: u32 = self.socket.query_row(
             "SELECT MAX(token) FROM Tokens", &[], |row| row.get(0))?;
@@ -319,6 +356,9 @@ impl Collection {
                 &[&id, &"", &"", &0.0]).map(|_| id)
     }
 
+    /// Update the metadata of a token
+    ///
+    /// When no parameter is Option::Some no metadata will be updated.
     pub fn update_token(&self, token: u32, key: Option<String>, played: Option<String>, pos: Option<f64>) -> Result<()> {
         if let Some(key) = key {
             self.socket.execute("UPDATE tokens SET key = ?1 WHERE token = ?2", &[&key, &token]).map(|_| ())?;
@@ -333,12 +373,14 @@ impl Collection {
         Ok(())
     }
 
+    /// Add a new event to the database with a timestamp
     pub fn add_event(&self, event: Event) -> Result<()> {
         self.socket.execute(
             "INSERT INTO Events (Date, Origin, Event, Data) VALUES (datetime('now'), ?1, ?2, ?3)",
                 &[&event.origin(), &event.tag(), &event.data()]).map(|_| ())
     }
 
+    /// Return all registered events
     pub fn get_events(&self) -> Vec<(String, Event)> {
         let mut stmt = self.socket.prepare(
             "SELECT Date, Origin, Event, Data FROM Events;").unwrap();
@@ -356,12 +398,14 @@ impl Collection {
         rows
     }
 
+    /// Summarise a day (used by `nightly-worker`)
     pub fn summarise_day(&self, day: String, connects: u32, plays: u32, adds: u32, removes: u32) -> Result<()> {
         self.socket.execute(
             "INSERT INTO Summarise (day, connects, plays, adds, removes) VALUES (?1, ?2, ?3, ?4, ?5)",
                 &[&day, &connects, &plays, &adds, &removes]).map(|_| ())
     }
 
+    /// Get a summarise of all days since beginning of use
     pub fn get_summarisation(&self) -> Vec<(String, u32, u32, u32, u32)> {
         let mut stmt = self.socket.prepare(
             "SELECT day, connects, plays, adds, removes FROM Summarise;").unwrap();
@@ -373,6 +417,7 @@ impl Collection {
         rows
     }
 
+    /// Find the latest summarise day in the database
     pub fn get_newest_summarise_day(&self) -> Result<String> {
         let mut stmt = self.socket.prepare(
             "SELECT day FROM Summarise order by day desc limit 1;").unwrap();

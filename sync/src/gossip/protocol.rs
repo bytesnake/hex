@@ -1,3 +1,5 @@
+//! Handle packet encoding and peer ACK
+
 use std::net::SocketAddr;
 use std::mem;
 use std::fmt::Debug;
@@ -70,6 +72,7 @@ impl ResolvePeers {
 
 pub enum Peer {
     Connecting((ConnectFuture, PeerPresence)),
+    SendJoin((PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>)),
     WaitForJoin((PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>)),
     Ready
 }
@@ -81,14 +84,13 @@ impl Peer {
     }
 
     /// Initialise a full peer connection with a connected TcpStream
-    pub fn wait_for_join(socket: TcpStream, myself: PeerPresence) -> Peer {
+    pub fn send_join(socket: TcpStream, myself: PeerPresence) -> Peer {
         //println!("Send join from {}", myself.id);
         let (read, mut write) = new(socket);
 
         write.buffer(Packet::Join(myself));
-        write.poll_flush().unwrap();
 
-        Peer::WaitForJoin((read, write))
+        Peer::SendJoin((read, write))
     }
 }
 
@@ -109,19 +111,24 @@ impl Future for Peer {
                 // We are here in the connecting state, the TcpStream has no connection yet. As
                 // soon as the connection is established we will send the join message and then
                 // poll again.
-                match socket_future.poll() {
-                    Ok(Async::Ready(socket)) => {poll_again = true; Peer::wait_for_join(socket, myself)},
-                    Err(err) => return Err(err),
-                    _ => Peer::Connecting((socket_future, myself))
+                match socket_future.poll()? {
+                    Async::Ready(socket) => {poll_again = true; Peer::send_join(socket, myself)},
+                    Async::NotReady => Peer::Connecting((socket_future, myself))
+                }
+            },
+
+            Peer::SendJoin((read, mut write)) => {
+                match write.poll_flush()? {
+                    Async::Ready(_) => {poll_again = true; Peer::WaitForJoin((read, write))},
+                    Async::NotReady => Peer::SendJoin((read, write))
                 }
             },
 
             Peer::WaitForJoin((mut read, write)) => {
                 // Poll the underlying socket through the PeerCodec for a Join message. If one
                 // arrives, we can resolve the future.
-                match read.poll() {
-                    Ok(Async::Ready(Some(Packet::Join(presence)))) => return Ok(Async::Ready((read, write, presence))),
-                    Err(err) => return Err(err),
+                match read.poll()? {
+                    Async::Ready(Some(Packet::Join(presence))) => return Ok(Async::Ready((read, write, presence))),
                     _ => Peer::WaitForJoin((read, write))
                 }
             },
@@ -194,11 +201,7 @@ impl PeerCodecRead<TcpStream> {
             sender.start_send((id.clone(), x)).map_err(|err| {println!("Send error: {}", err); ()})
         })    
         .and_then(move |_| sender3.poll_complete().map_err(|_| ()))
-        .for_each(move |_| {
-            //sender.send((id.clone(), x)).wait();
-
-            Ok(())
-        })
+        .for_each(move |_| Ok(()))
         .then(move |_| {
             // ugh
             sender2.try_send((id2.clone(), Packet::Close)).unwrap();
@@ -347,14 +350,11 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
             }
         }
 
-        self.write.poll_flush().unwrap();
-
-        Ok(Async::Ready(()))
+        self.write.poll_flush()
     }
 
-    pub fn shutdown(mut self) {
-        //io::shutdown(self.write);
-        self.write.shutdown();
+    pub fn shutdown(mut self) -> Poll<(), io::Error> {
+        self.write.shutdown()
     }
 }
 

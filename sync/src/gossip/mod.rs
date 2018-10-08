@@ -1,11 +1,34 @@
+//! Implements peer membership and gossip protocol to communicate in P2P fashion
+//!
+//! Every peer has a unique name and manages a certain number of open connections to other peers
+//! (atm fully connected to all peers). After a connection is established all known peers are
+//! exchanged, resulting in a global membership view. We assume a low order of peers here,
+//! therefore this should not be problematic. This module cares about all details of connection and
+//! trust between peers and offers a stream and thread-safe `GossipPush` structure to dissiminate
+//! requests to other peers.
+//!
+//! ## Example
+//! ```rust
+//! let gossip = Gossip::new("127.0.0.1:8001".parse::<SocketAddr>(), None, "My Peer".into());
+//! let writer = gossip.writer();
+//!
+//! let gossip = gossip.for_each(|id, buf| {
+//!     println!("Got buf(n = {}) from {}", buf.len(), id);
+//!
+//!     Ok(())
+//! });
+//!
+//! tokio::run(gossip);
+//! ```
 mod protocol;
 
 use std::sync::{Mutex, Arc};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
-use futures::{Async, Poll, Stream, task};
+use futures::{Async, Poll, Stream, task, future, Future};
 use futures::sync::mpsc::{Receiver, Sender, channel};
+use tokio;
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream, Incoming};
 
@@ -28,8 +51,11 @@ pub struct PeerPresence {
     writer: Option<usize>
 }
 
-// TODO pub struct PeerHabits;
-
+/// Push packets to peers, either to everyone or to a single destination. 
+///
+/// This wraps the write map inside a mutex and is therefore safe to share across threads. Any
+/// attempts to write to a closed socket is at the moment ignored. Furthermore it is assumed that
+/// flushing is immediately successful.
 pub struct GossipPush {
     peers: Mutex<HashMap<PeerId, PeerCodecWrite<TcpStream>>>
 }
@@ -160,7 +186,7 @@ impl Stream for Gossip {
         // first look for newly arriving peers and await a Join message
         match self.incoming.poll() {
             Ok(Async::Ready(Some(socket))) => {
-                self.resolve.add_peer(Peer::wait_for_join(socket, self.myself.clone()));
+                self.resolve.add_peer(Peer::send_join(socket, self.myself.clone()));
             },
             Err(err) => {
                 println!("Listener err: {:?}", err);
@@ -185,7 +211,7 @@ impl Stream for Gossip {
                 if self.books.contains_key(&presence.id) || self.myself.id == presence.id {
                     println!("Got already existing id: {}", presence.id);
 
-                    writer.shutdown();
+                    tokio::spawn(future::poll_fn(move || writer.shutdown()).map_err(|_| ()));
                 } else {
 
                     // empty a new log entry for our peer

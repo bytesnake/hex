@@ -15,7 +15,8 @@ What are the goals?
 From which parts is Hex made of?
  * [database](database/) library - interface to a SQLite database
  * [music-container](music-container/) library - codec for the music with Opus and Spherical Harmonics
- * [server](server) binary - a HTTP and websocket server providing the necessary calls
+ * [sync](sync/) library - replicate database between instances (e.g. server and end device)
+ * [server](server) binary - a HTTP and websocket server providing all the necessary calls
  * [frontend](frontend) website - nice GUI for music management
  * [local-client](local-client) binary - local management of the music collection without any server
  * [stream-client](stream-client) binary - music playing system with support for tags in conjunction with a server
@@ -23,12 +24,10 @@ From which parts is Hex made of?
 
 How are these crates interacting?
 
-The Hex project is all about music and its very important for us to have a acessible and easy user experience. For a developer this means that the project is chunked into useful components. The server plays the role of providing the music to every client with help of the database and music-container crates. The database crate defines all objects like _Playlist_, _Track_, _Token_, etc. and provides useful functions to manage them in a SQLite database. The _music-container_ converts raw audio to the Hex specific audio format. Two important points are that is uses the Opus codec to achieve good compression levels and saves the audio in a Spherical Harmonic format (though only minimal support at the moment, but extendable and backward compatible). With help of those libraries the server offers JSON calls to modify the database, play and swallow music. It can also provide the _frontend_ with help of a HTTP server. The _frontend_ connects to the websocket server and gives a nice overview and some tools to manage the music. The second streaming client (working with websockets) is the _stream-client_ which supports Tokens and runs on a small ARM chip with four buttons and the MFRC522 reader. The _local-client_ is a handy tool to manage the database without the graphical burden of a frontend. It can add music, change metadata and list information about Hex. As a local client it can only be used on the same computer as the server.
-
-<img align="left" src="assets/zyklop_confused.png" width="190px"/>
+The Hex project is all about music and its very important for us to have a acessible and easy user experience. For a developer this means that the project is chunked into useful components. The server plays the role of providing the music to every client with help of the database and music-container crates. The database crate defines objects like _Playlist_, _Track_, _Token_, etc. and provides useful functions to manage them in a SQLite database. The _music-container_ converts raw audio to the Hex specific audio format. Two important points are that is uses the Opus codec to achieve good compression levels and saves the audio in a Spherical Harmonic format (though only minimal support at the moment, but extendable and backward compatible). With help of those libraries the server offers JSON calls to modify the database, play and swallow music. It can also provide the _frontend_ with help of a HTTP server. The _frontend_ connects to the websocket server and gives a nice overview and some tools to manage the music. The second streaming client (working with websockets) is the _stream-client_ which supports Tokens and runs on a small ARM chip with four buttons and the MFRC522 reader. The _local-client_ is a handy tool to manage the database without the graphical burden of a frontend. It can add music, change metadata and list information about Hex. As a local client it can only be used on the same computer as the server.
 
 ## Future directions
- * improve frontend with people, playlist image and download
+ * improve frontend with people, playlist image, etc.
  * full SH support
  * more MUSIC!
 

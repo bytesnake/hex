@@ -1,3 +1,10 @@
+//! Discover other peers in the same network with UDP broadcast.
+//!
+//! This module uses a very simple UDP broadcast and reply approach to find a contact addr to a
+//! peer-to-peer network. This address can then be used to bootstrap the join process.
+//! The probing packet consists of [version, 0x00, 0x00, 0x01], allowing the
+//! replying server to ignore in incompatible peers
+
 use std::io::{self, Write};
 use std::time::{Instant, Duration};
 
@@ -8,6 +15,12 @@ use std::net::{SocketAddrV4, Ipv4Addr, SocketAddr, IpAddr};
 
 use local_ip;
 
+/// Reply to probing packets with the correct version field
+///
+/// ## Example
+/// ```rust
+/// tokio::run(Discover::new(0).map_err(|err| println!("Got error = {:?}", err)));
+/// ```
 pub struct Discover {
     socket: UdpSocket,
     buf: Vec<u8>,
@@ -35,6 +48,7 @@ impl Stream for Discover {
 }
 
 impl Discover {
+    /// Create a new reply server, only replying to the specified version
     pub fn new(version: u8) -> Discover {
         let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8004);
         let socket = UdpSocket::bind(&addr.into()).unwrap();
@@ -49,6 +63,17 @@ impl Discover {
     }
 }
 
+/// Probe into an unknown network structure and discover other peers. 
+///
+/// If no peer replies after two seconds, the `Future` will be resolved with `Option::None`
+///
+/// ## Example
+/// ```rust
+/// let beacon = Beacon::new(0, 200)
+///     .map(|addr| println!("Discovered contact at {:?}", addr));
+///
+/// tokio::run(beacon);
+/// ```
 pub struct Beacon {
     socket: UdpSocket,
     version: u8,
@@ -99,6 +124,8 @@ impl Future for Beacon {
 }
 
 impl Beacon {
+    /// Create a new `Beacon` struct which tries to discover peers at an interval `interval` and
+    /// with version `version`
     pub fn new(version: u8, interval: u64) -> Beacon {
         let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8004);
         let socket = UdpSocket::bind(&addr.into()).unwrap();
