@@ -1,3 +1,8 @@
+//! Websocket server implementation
+//!
+//! The websocket uses Tokio under the hood and manages a state for each connection. It also shares
+//! the latest token to all clients and logs every events concerning connecting and disconnecting. 
+
 use std::fmt::Debug;
 use std::time::Instant;
 use std::sync::Mutex;
@@ -15,6 +20,7 @@ use conf::Conf;
 
 use hex_database::events::Action;
 
+/// Start the websocket server, supplied with a configuration
 pub fn start(conf: Conf) {
 	let mut core = Core::new().unwrap();
 	let handle = core.handle();

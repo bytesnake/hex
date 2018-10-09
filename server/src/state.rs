@@ -1,3 +1,9 @@
+//! Connection based state
+//!
+//! Every client has an own state which contains a byte buffer, uploads, downloads, pending
+//! requests and the database connection. The state exists as long as the connection and for
+//! example allows the client to create an iterator of search results.
+
 use std::fs::File;
 use std::collections::HashMap;
 use std::slice;
@@ -22,30 +28,46 @@ use hex_music_container::{self, Configuration, Container};
 
 use acousticid;
 
+/// A pending request
+///
+/// There are requests which are not finished after a single call. They are rembered with the `id`
+/// supplemented in the first call and can be further executed with the same `id`.
 enum RequestState {
+    /// A search query should remember which results were already transmitted
     Search {
         query: String,
         seek: usize
     },
 
+    /// A running stream
     Stream {
         track: hex_database::Track,
         container: Container<File>
     }
 }
 
+/// State containing useful items
 pub struct State {
+    /// Handle to the event queue
     handle: Handle,
+    /// All pending requests
     reqs: HashMap<String, RequestState>,
+    /// Open connection to the database
     pub collection: hex_database::Collection,
+    /// Path to the data section
     data_path: String,
+    /// Buffer for incoming buffering requests
     buffer: Vec<u8>,
+    /// All uploads
     uploads: Vec<UploadState>,
+    /// All downloads
     downloads: Vec<DownloadState>,
+    /// Have we inserted a token last time?
     token_avail: bool
 }
 
 impl State {
+    /// Create a new `State` from a configuration
     pub fn new(handle: Handle, conf: conf::Music) -> State {
         State {
             handle: handle,
@@ -59,6 +81,11 @@ impl State {
         }
     }
 
+    /// Process a single packet
+    ///
+    /// * `origin` - where does the request originates from
+    /// * `msg` - what is the content of the message
+    /// * `gtoken` - globally shared token, used to change the token in frontend
     pub fn process(&mut self, origin: String, msg: String, gtoken: Arc<Mutex<isize>>) -> Result<OwnedMessage> {
         println!("Got: {}", &msg);
 
@@ -454,6 +481,7 @@ impl State {
         }
     }
 
+    /// Process a binary packet, just append it to he buffer
     pub fn process_binary(&mut self, data: &[u8]) {
         println!("Got binary with length: {}", data.len());
 

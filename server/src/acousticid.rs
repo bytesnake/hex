@@ -1,3 +1,5 @@
+//! Create fingerprint for a track and ask for metadata at acousticid.org
+
 use chromaprint::Chromaprint;
 use std::str;
 use serde_json;
@@ -6,6 +8,13 @@ use curl::easy::{Form,Easy};
 
 use error::{Error, Result};
 
+/// Calculate a fingerprint to lookup music
+///
+/// This function takes a raw audio and number of channels and calculates the corresponding
+/// fingerprint, strongly connected to the content.
+///
+///  * `num_channel`- Number of channel in `data`
+///  * `data` - Raw audio data with succeeding channels
 pub fn get_hash(num_channel: u16, data: &[i16]) -> Result<String> {
     let mut ctx = Chromaprint::new();
     ctx.start(48000, num_channel as i32);
@@ -16,6 +25,13 @@ pub fn get_hash(num_channel: u16, data: &[i16]) -> Result<String> {
     ctx.fingerprint().ok_or(Error::AcousticID)
 }
 
+/// Fetch metadata from acousticid.org
+///
+/// With the fingerprint the acousticid server can be asked for the metadata. This function creates
+/// a request and awaits its return.
+///
+///  * `hash` - Fingerprint of the audio file
+///  * `duration` - Duration of the audio in millis
 pub fn get_metadata(hash: &str, duration: u32) -> Result<String> {
     let mut dst = Vec::new();
     let mut easy = Easy::new();

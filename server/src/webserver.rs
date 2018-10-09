@@ -1,3 +1,4 @@
+//! The HTTP implementation serves the frontend
 use futures::{Future, Stream, future};
 use hyper;
 use hyper::Error;
@@ -10,12 +11,14 @@ use std::net::SocketAddr;
 
 type ResponseFuture = Box<Future<Item=Response, Error=Error>>;
 
+/// The service should just offer all fields in a single directory
 struct MainService {
     static_: Static,
     download: Static
 }
 
 impl MainService {
+    /// Create a new service
     fn new(handle: &Handle, path: &Path, data_path: &Path) -> MainService {
         MainService {
             static_: Static::new(&handle.clone(), path),
@@ -42,6 +45,11 @@ impl Service for MainService {
     }
 }
 
+/// Create the webserver
+///
+/// * `addr` - Listen to this address
+/// * `path` - Serve this directory
+/// * `data_path` - Serve the data from this directory
 pub fn create_webserver(addr: SocketAddr, path: &Path, data_path: &Path) {
     let mut core = Core::new().unwrap();
     let handle = core.handle();

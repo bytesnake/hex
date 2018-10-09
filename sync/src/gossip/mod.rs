@@ -211,7 +211,8 @@ impl Stream for Gossip {
                 if self.books.contains_key(&presence.id) || self.myself.id == presence.id {
                     println!("Got already existing id: {}", presence.id);
 
-                    tokio::spawn(future::poll_fn(move || writer.shutdown()).map_err(|_| ()));
+                    writer.shutdown().unwrap();
+                    //tokio::spawn(future::poll_fn(move || writer.shutdown()).map_err(|_| ()));
                 } else {
 
                     // empty a new log entry for our peer

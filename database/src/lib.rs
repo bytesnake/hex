@@ -377,7 +377,7 @@ impl Collection {
     pub fn add_event(&self, event: Event) -> Result<()> {
         self.socket.execute(
             "INSERT INTO Events (Date, Origin, Event, Data) VALUES (datetime('now'), ?1, ?2, ?3)",
-                &[&event.origin(), &event.tag(), &event.data()]).map(|_| ())
+                &[&event.origin(), &event.tag(), &event.data_to_string()]).map(|_| ())
     }
 
     /// Return all registered events
