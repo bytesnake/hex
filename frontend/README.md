@@ -1,14 +1,17 @@
 <img align="left" src="/assets/github.png" width="220px"/>
 
 #  Hex frontend - web client
-_This crate is part of the [Hex](http://github.com/bytesnake/hex) project and is served by the server._
+_This website is part of the [Hex](http://github.com/bytesnake/hex) project and is served by the server._
 
-The web client allows the user to manage all music. It provides a nice visual interface to change the database and manages tracks, playlists and tokens. For example it will:
+The web client provides a nice visual interface to manage the database. It is developed with preact and connects to the server to play music and update the database. Furthermore it can change the playlist connected to a token and knows useful links to inform about a song.
+
+It can be used to:
  * show a summarize in the start page about available and most favourite tracks
  * let you create playlists and change their description
  * allow to search for tracks
  * connect token to playlist and shows the latest played token
  * upload and download tracks from the server
+ * play music and retrieve information about them
  * etc.
 
 ## Example
