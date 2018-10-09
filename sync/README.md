@@ -12,19 +12,29 @@ playlists with you. In the _full_ mode everything is pulled in, useful in server
 
 # Example
 ```rust
-// create a new peer with database path, data path, peer address, sync_everything
-let (peer, chain) = Peer::new(
-    Path::new("/opt/music/music.db"),
-    Path::new("/opt/music/data/"),
-    "127.0.0.1:8000".parse::<SocketAddr>(),
-    false
-);
+extern crate hex_database;
+extern crate hex_sync;
+extern crate tokio;
 
-// start the peer in a seperate thread
-thread::spawn(|| tokio::run(chain));
+use hex_sync::{Peer};
 
-// ask for a certain track to be available
-peer.ask_for_track("<track_id>").wait();
+fn main() {
+    // create a new peer with database path, data path, peer address, sync_everything
+    let (peer, chain) = Peer::new(
+        Path::new("/opt/music/music.db"),
+        Path::new("/opt/music/data/"),
+        "127.0.0.1:8000".parse::<SocketAddr>(),
+        false
+    );
+
+    // start the peer in a seperate thread
+    thread::spawn(|| tokio::run(chain));
+
+    // ask for a certain track to be available
+    peer.ask_for_track("<track_id>").wait();
+
+    println!("Finished! Track is available");
+}
 ```
 
 ## License
