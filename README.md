@@ -7,7 +7,7 @@
 
 Hex is a collection of crates which can store, manage, tokenise and play music. It was born out of the desire to be independent from any music provider and to support music tags (real world objects like CDs representing a playlist). The project is written in Rust and at the moment running on two platforms, a music server and player.
 
-What are the goals?
+What is the motivation for this project?
  * having a music server running on a Raspberry Pi
  * proper support for a text interface as well as a web interface
  * a substitute for objects (e.g. CD) with tags

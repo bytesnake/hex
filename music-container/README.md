@@ -1,9 +1,9 @@
 <img align="left" src="/assets/github.png" width="220px"/>
 
-#  Hex music-container - compress audio to loudspeaker independent representation
-_This crate is part of the [Hex](http://github.com/bytesnake/hex) project and used as a codec._
+#  Hex music-container - compress and encode audio
+_This crate is part of the [Hex](http://github.com/bytesnake/hex) project and used to compress with Opus and encode to a loudspeaker independent format._
 
-The music data has to be stored in a certain way. One approach would be to use the MP3 format with stereo encoding all the time. This would be sufficient for many cases, but not compatible to spatial audio or binaural reproduction. This crate followed therefore a different path. It encodes the raw audio to a source independent representation with Spherical Harmonics and compresses each SH channel with the Opus codec. Most of the SH codec calculation is missing for now, but can be added later on in a compatible way.
+This library exists because the music data has to be stored in some way. One, simple, approach would be to use the MP3 format with stereo encoding all the time and just upmix or downmix different channel ordering. This would be sufficient for many cases, but not compatible to spatial audio or binaural reproduction. This crate followes therefore a different path. It encodes the raw audio to a source independent representation with Spherical Harmonics and compresses each SH channel with the Opus codec. Later on the audio file can be decoded again to any loudspeaker arrangement. (in limitation of the spatial resolution) Most of the SH codec calculation is missing for now, but can be added later on in a compatible way.
 
 ## Example
 ```rust
