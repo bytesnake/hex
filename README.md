@@ -22,9 +22,17 @@ From which parts is Hex made of?
  * [stream-client](stream-client) binary - music playing system with support for tags in conjunction with a server
  * [nightly-worker](nightly-worker) binary - summarise each day and perform some kind of cleanup
 
-How are these crates interacting?
+Can you give me a rough overview?
 
 The Hex project is all about music and its very important for us to have a acessible and easy user experience. For a developer this means that the project is chunked into useful components. The server plays the role of providing the music to every client with help of the database and music-container crates. The database crate defines objects like _Playlist_, _Track_, _Token_, etc. and provides useful functions to manage them in a SQLite database. The _music-container_ converts raw audio to the Hex specific audio format. Two important points are that is uses the Opus codec to achieve good compression levels and saves the audio in a Spherical Harmonic format (though only minimal support at the moment, but extendable and backward compatible). With help of those libraries the server offers JSON calls to modify the database, play and swallow music. It can also provide the _frontend_ with help of a HTTP server. The _frontend_ connects to the websocket server and gives a nice overview and some tools to manage the music. The second streaming client (working with websockets) is the _stream-client_ which supports Tokens and runs on a small ARM chip with four buttons and the MFRC522 reader. The _local-client_ is a handy tool to manage the database without the graphical burden of a frontend. It can add music, change metadata and list information about Hex. As a local client it can only be used on the same computer as the server.
+
+Where can I start to use Hex?
+
+As a user you should start by [installing](http://rust-lang.org/install.html) Rust and compiling the [server](server). It should pull in all necessary libraries. Then you can define the configuration as described there. This gives you a webinterface to manage your music, download, upload and play it. I'm using a `systemd` job to start the [nightly-worker](nightly-worker/) every night. If you want to use the [stream-client](stream-client/) and start using tokens, then please contact me, we build a prototype with a [chip](getchip.com) and used a MFC522 reader to read out the tokens.
+
+Is there a text interface available?
+
+This is planned and has a high priority. For now I'm trying to fix more important bugs and get the existing system working without problems.
 
 ## License
 
@@ -42,7 +50,11 @@ If you have any question or suggestion please just open an issue in Github. Feel
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
-## Future directions
- * improve frontend with people, playlist image, etc.
- * full SH support
+## Future direction
+
+There are a lot of changes going on right now and I'm trying to improve the frontend and backend quality in several ways:
+ * introduce proper support for people and playlist images in the frontend
+ * have a full Spherical Harmonic support and give some examples out
+ * improve speed and memory usage of the compression algorithm
+ * draw icons for instruments and have them in the frontent
  * more MUSIC!
