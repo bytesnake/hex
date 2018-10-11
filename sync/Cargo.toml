@@ -14,3 +14,4 @@ bincode = "1.0"
 
 [dependencies.hex-database]
 path = "../database"
+features = ["serde"]

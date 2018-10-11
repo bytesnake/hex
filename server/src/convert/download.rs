@@ -13,9 +13,9 @@ use futures::sync::mpsc::{channel, Sender, Receiver};
 use tokio_core::reactor::Handle;
 
 use error::{Result, Error};
-use proto::Track;
 
 use hex_music_container::{Container, Configuration, error::Error as MusicError};
+use hex_database::Track;
 
 fn worker(mut sender: Sender<DownloadProgress>, id: String, format: String, tracks: Vec<Track>, num_channel: u32, data_path: String) -> Result<()> {
     let mut out_files = Vec::new();

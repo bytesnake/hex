@@ -7,59 +7,7 @@ use std::net::SocketAddr;
 use futures::{Future, Stream, sync::{mpsc, oneshot}};
 use super::{Beacon, Discover, Gossip};
 use bincode::{deserialize, serialize};
-use hex_database::{Collection, Track as DTrack, Playlist as DPlaylist};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Track {
-    pub title: Option<String>,
-    pub album: Option<String>,
-    pub interpret: Option<String>,
-    pub people: Option<String>,
-    pub composer: Option<String>,
-    pub fingerprint: String,
-    pub key: String,
-    pub duration: f64,
-    pub favs_count: u32,
-    pub channels: u32 
-}
-
-impl Track {
-    pub fn from_db(obj: DTrack) -> Track {
-        let DTrack { title, album, interpret, people, composer, fingerprint, key, duration, favs_count, channels } = obj;
-        
-        Track { title, album, interpret, people, composer, fingerprint, key, duration, favs_count, channels }
-    }
-
-    pub fn to_db(self) -> DTrack {
-        let Track { title, album, interpret, people, composer, fingerprint, key, duration, favs_count, channels } = self;
-
-        DTrack { title, album, interpret, people, composer, fingerprint, key, duration, favs_count, channels }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Playlist {
-    pub key: String,
-    pub title: String,
-    pub desc: Option<String>,
-    pub tracks: Option<String>,
-    pub count: u32,
-    pub origin: Option<String>
-}
-
-impl Playlist {
-    pub fn from_db(obj: DPlaylist) -> Playlist {
-        let DPlaylist { key, title, desc, tracks, count, origin } = obj;
-
-        Playlist { key, title, desc, tracks, count, origin }
-    }
-
-    pub fn to_db(self) -> DPlaylist {
-        let Playlist { key, title, desc, tracks, count, origin } = self;
-
-        DPlaylist { key, title, desc, tracks, count, origin }
-    }
-}
+use hex_database::{Collection, Track, Playlist};
 
 #[derive(Serialize, Deserialize, Debug)]
 enum Protocol {
@@ -160,14 +108,14 @@ impl Peer {
                 }
             },
             Ok(Protocol::Syncing(None)) => {
-                let playlists = collection.get_playlists().into_iter().map(|x| Playlist::from_db(x)).collect();
+                let playlists = collection.get_playlists();
 
                 // weed out non existent tracks
                 let existing_tracks = Self::existing_tracks(data_path)?;
 
                 let tracks = collection.get_tracks().into_iter().filter_map(|x| {
                     if existing_tracks.contains_key(&x.key) {
-                        Some(Track::from_db(x))
+                        Some(x)
                     } else {
                         None
                     }
@@ -220,7 +168,7 @@ impl Peer {
         let mut i = 0;
         for track in tracks {
             if !map.contains(&track.key) {
-                collection.insert_track(track.to_db()).unwrap();
+                collection.insert_track(track).unwrap();
                 i += 1;
             }
         }
@@ -249,7 +197,7 @@ impl Peer {
             } else if !map_other.contains_key(&playlist.key) {
                 playlist.origin = Some(name.clone());
 
-                collection.insert_playlist(playlist.to_db()).unwrap();
+                collection.insert_playlist(playlist).unwrap();
 
                 i += 1;
             }

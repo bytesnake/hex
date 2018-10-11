@@ -15,6 +15,9 @@
 
 extern crate rusqlite;
 extern crate uuid;
+#[cfg(feature="serde")]
+#[macro_use]
+extern crate serde;
 
 pub mod objects;
 pub mod search;

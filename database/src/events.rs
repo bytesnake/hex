@@ -10,6 +10,7 @@ use rusqlite::{Error, Result};
 /// An Event occurs from an origin and contains an action. The origin is most of the time an IP
 /// address.
 #[derive(Debug)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Event {
     origin: String,
     action: Action
@@ -17,6 +18,7 @@ pub struct Event {
 
 /// All possible actions
 #[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub enum Action {
     Connect(f32),
     PlaySong(String),

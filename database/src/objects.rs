@@ -4,6 +4,7 @@
 ///
 /// In case of no interpret and an original composition the interpret is the same as the composer.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Track {
     /// The title of the track
     pub title: Option<String>,
@@ -47,6 +48,7 @@ impl Track {
 
 /// A single playlist containing many tracks
 #[derive(Debug)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Playlist {
     /// A unique key used to access the playlist
     pub key: String,
@@ -65,6 +67,7 @@ pub struct Playlist {
 
 /// A single token connecting a token to a playlist
 #[derive(Debug)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Token {
     /// Token number saved on the cardridge
     pub token: u32,

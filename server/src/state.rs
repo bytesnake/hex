@@ -19,11 +19,10 @@ use proto;
 
 use conf;
 use error::{Result, Error};
-use proto::{Track, Token, Event};
 
 use convert::{UploadState, UploadProgress, download::{DownloadState, DownloadProgress}};
 
-use hex_database::{self, events::Action};
+use hex_database::{self, events::Action, Track, Token, Event};
 use hex_music_container::{self, Configuration, Container};
 
 use acousticid;
@@ -98,7 +97,6 @@ impl State {
         let payload: (&str, Result<proto::Outgoing>) = match packet.msg {
             proto::Incoming::GetTrack { key } => { 
                 ("get_track", self.collection.get_track(&key)
-                    .map(|x| Track::from_db_obj(x))
                     .map(|x| proto::Outgoing::Track(x))
                     .map_err(|err| Error::Database(err))
                 )
@@ -116,11 +114,6 @@ impl State {
                 };
 
                 let res = self.collection.search_limited(&query, *seek)
-                    .map(|x| {
-                        x.into_iter()
-                            .map(|x| Track::from_db_obj(x))
-                            .collect::<Vec<Track>>()
-                    })
                     .map(|x| {
                         // update information about position in stream
                         let more = x.len() >= 50;
@@ -260,7 +253,6 @@ impl State {
 
             proto::Incoming::AddPlaylist { name } => {
                 ("add_playlist", self.collection.add_playlist(&name, None)
-                    .map(|x| proto::Playlist::from_db_obj(x))
                     .map(|x| proto::Outgoing::AddPlaylist(x))
                     .map_err(|err| Error::Database(err))
                 )
@@ -286,25 +278,19 @@ impl State {
 
             proto::Incoming::AddToPlaylist { key, playlist } => {
                 ("add_to_playlist", self.collection.add_to_playlist(&key, &playlist)
-                    .map(|x|proto::Playlist::from_db_obj(x))
                     .map(|x| proto::Outgoing::AddToPlaylist(x))
                     .map_err(|err| Error::Database(err))
                 )
             },
 
             proto::Incoming::GetPlaylists => {
-                let pls = self.collection.get_playlists().into_iter()
-                    .map(|x| proto::Playlist::from_db_obj(x)).collect();
+                let pls = self.collection.get_playlists();
 
                 ("get_playlists", Ok(proto::Outgoing::GetPlaylists(pls)))
             },
 
             proto::Incoming::GetPlaylist { key }=> {
                 ("get_playlist", self.collection.get_playlist(&key)
-                    .map(|x| (
-                        proto::Playlist::from_db_obj(x.0), 
-                        x.1.into_iter().map(proto::Track::from_db_obj).collect()
-                    ))
                     .map(|x| proto::Outgoing::GetPlaylist(x))
                     .map_err(|err| Error::Database(err))
                 )
@@ -312,9 +298,6 @@ impl State {
 
             proto::Incoming::GetPlaylistsOfTrack { key } => {
                 ("get_playlists_of_track", self.collection.get_playlists_of_track(&key)
-                    .map(|x| {
-                        x.into_iter().map(proto::Playlist::from_db_obj).collect()
-                    })
                     .map(|x| proto::Outgoing::GetPlaylistsOfTrack(x))
                     .map_err(|err| Error::Database(err))
                 )
@@ -387,16 +370,13 @@ impl State {
                 ("get_token", self.collection.get_token(token)
                     .map(|(token, x)| {
                         if let Some((playlist, tracks)) = x {
-                            let tracks: Vec<proto::Track> = tracks.into_iter()
-                                .map(|x| proto::Track::from_db_obj(x))
-                                .collect();
                             (
-                                proto::Token::from_db_obj(token),
-                                Some((proto::Playlist::from_db_obj(playlist),tracks))
+                                token,
+                                Some((playlist, tracks))
                             )
                         } else {
                             (
-                                proto::Token::from_db_obj(token),
+                                token,
                                 None
                             )
                         }
@@ -436,16 +416,13 @@ impl State {
             },
             proto::Incoming::GetEvents => {
                 ("get_events", Ok(proto::Outgoing::GetEvents(
-                    self.collection.get_events().into_iter()
-                        .map(|x| (x.0, Event::from_db_obj(x.1)))
-                        .collect()
+                    self.collection.get_events()
                 )))
             },
             proto::Incoming::Download { format, tracks } => {
                 let id = packet.id.clone();
                 let res = tracks.into_iter()
                     .map(|x| self.collection.get_track(&x)
-                        .map(|x| Track::from_db_obj(x))
                         .map_err(|err| Error::Database(err))
                     )
                     .collect::<Result<Vec<Track>>>()
