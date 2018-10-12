@@ -4,7 +4,6 @@ members = [
     "database",
     "music-container",
     "server",
-    "server/protocol",
     "stream-client",
     "local-client",
     "nightly-worker",
