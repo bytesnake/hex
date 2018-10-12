@@ -30,6 +30,14 @@ The Hex project is all about music and its very important for us to have a acess
 
 As a user you should start by [installing](http://rust-lang.org/install.html) Rust and compiling the [server](server). It should pull in all necessary libraries. Then you can define the configuration as described there. This gives you a webinterface to manage your music, download, upload and play it. I'm using a `systemd` job to start the [nightly-worker](nightly-worker/) every night. If you want to use the [stream-client](stream-client/) and start using tokens, then please contact me, we built a prototype with a [chip](getchip.com) and used a MFC522 reader to read out the tokens.
 
+*Will Hex support my file format in the futures?*
+Please consider that the goal of Hex is not a general purpose audio player, but to provide a music library. For this we don't support any audio files, only storing to and retrieving audio from Hex. The file format is irrelevant and can be choosen as long as `ffmpeg` supports it.
+
+*Can you explain the concept of tokens?*
+In my childhood I had a lot of audio tapes and CDs, they were very convenient to put somewhere and to use at wish. I didn't have to stare at a computer screen or learn some complicated GUI structure. Just put them in the audio player and listen to music. With the emergence of streaming service this changed a lot. I have now to scroll through a list of playlists and the physical remebrance of a particular playlist is missing for me. In my opinion no computer interface can replace the way an object helps your brain to remember the associated content. 
+
+So we changed the idea of a tape a little bit and are using now NFC tags encapsulated by a small wodden block to put a sticker on it. They can be stacked and put into a player which immediately starts to play the associated playlist. One nice thing is that the play/stop button are not needed anymore, because just removing the token pauses the music and saves the position.
+
 *Is there a text interface available?*
 
 This is planned and has a high priority. For now I'm trying to fix more important bugs and get the existing system working without problems.
