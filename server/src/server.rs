@@ -64,23 +64,16 @@ pub fn start(conf: Conf) {
                         match m {
                             OwnedMessage::Ping(p) => Some(OwnedMessage::Pong(p)),
                             OwnedMessage::Pong(_) => None,
-                            OwnedMessage::Text(msg) => {
-                                let msg = match state.process(addr.to_string(), msg, token.clone()) {
-                                    Ok(msg) => msg,
-                                    Err(_) => OwnedMessage::Text("Err(CouldNotParse)".into())
-                                };
-
-                                Some(msg)
-                            },
+                            OwnedMessage::Text(msg) => Some(OwnedMessage::Text("Text not supported".into())),
                             OwnedMessage::Binary(data) => {
-                                state.process_binary(&data);
+                                state.process(addr.to_string(), data, token.clone()).map(|x| OwnedMessage::Binary(x))
+                                //state.process_binary(&data);
 
-                                Some(OwnedMessage::Text("{\"fn\": \"upload\"}".into()))
+                                //Some(OwnedMessage::Text("{\"fn\": \"upload\"}".into()))
                             },
                             OwnedMessage::Close(_) => {
                                 state.collection.add_event(Action::Connect(now.elapsed().as_secs() as f32).with_origin(addr.to_string())).unwrap();
                                 println!("BLUB2");
-
 
                                 Some(OwnedMessage::Close(None))
                             },

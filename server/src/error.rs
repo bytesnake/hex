@@ -3,6 +3,7 @@
 use std::{io, result};
 use hex_database;
 use hex_music_container;
+use hex_server_protocol;
 
 /// Our custom `Result` using the `Error` struct
 pub type Result<T> = result::Result<T, Error>;
@@ -14,6 +15,8 @@ pub enum Error {
     MusicContainer(hex_music_container::error::Error),
     /// Error originating from the database
     Database(hex_database::Error),
+    /// Protocol error
+    Protocol(hex_server_protocol::Error),
     /// Input/Output error in Rust std
     Io(io::Error),
     /// Configuration error, most of the time wrong format

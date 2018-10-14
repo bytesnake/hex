@@ -16,8 +16,10 @@ use error::{Result, Error};
 
 use hex_music_container::{Container, Configuration, error::Error as MusicError};
 use hex_database::Track;
+use hex_server_protocol::objects::DownloadProgress;
+use hex_server_protocol::PacketId;
 
-fn worker(mut sender: Sender<DownloadProgress>, id: String, format: String, tracks: Vec<Track>, num_channel: u32, data_path: String) -> Result<()> {
+fn worker(mut sender: Sender<DownloadProgress>, id: PacketId, format: String, tracks: Vec<Track>, num_channel: u32, data_path: String) -> Result<()> {
     let mut out_files = Vec::new();
     let download_path = Path::new(&data_path).join("download");
     println!("start working!");
@@ -87,7 +89,7 @@ fn worker(mut sender: Sender<DownloadProgress>, id: String, format: String, trac
 
     Command::new("tar")
         .arg("cvzf")
-        .arg(download_path.join(format!("{}.tar.gz", id)))
+        .arg(download_path.join(format!("{}.tar.gz", id[0])))
         .args(out_files)
         .spawn().expect("Could not start tar!").wait().unwrap();
 
@@ -95,29 +97,10 @@ fn worker(mut sender: Sender<DownloadProgress>, id: String, format: String, trac
         id: id.clone(),
         format: format,
         progress: 1.0,
-        download: Some(format!("/data/download/{}.tar.gz", id))
+        download: Some(format!("/data/download/{}.tar.gz", id[0]))
     }).map_err(|_| Error::ChannelFailed)?;
 
     Ok(())
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct DownloadProgress {
-    id: String,
-    format: String,
-    progress: f32,
-    download: Option<String>
-}
-
-impl DownloadProgress {
-    pub fn empty() -> DownloadProgress {
-        DownloadProgress {
-            id: "".into(),
-            format: "".into(),
-            progress: 0.0,
-            download: None
-        }
-    }
 }
 
 pub struct DownloadState {
@@ -127,7 +110,7 @@ pub struct DownloadState {
 }
 
 impl DownloadState {
-    pub fn new(handle: Handle, id: String, format: String, tracks: Vec<Track>, num_channel: u32, data_path: String) -> DownloadState {
+    pub fn new(handle: Handle, id: PacketId, format: String, tracks: Vec<Track>, num_channel: u32, data_path: String) -> DownloadState {
         let (sender, recv) = channel(10);
 
         let thread = thread::spawn(move || {

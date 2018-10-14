@@ -13,6 +13,7 @@
 //! }
 //! ```
 
+#[cfg(not(feature="objects_only"))]
 extern crate rusqlite;
 extern crate uuid;
 #[cfg(feature="serde")]
@@ -24,19 +25,23 @@ pub mod search;
 pub mod events;
 
 pub use objects::{Track, Playlist, Token};
+#[cfg(not(feature="objects_only"))]
 pub use rusqlite::{Result, Statement, Error};
 pub use events::{Action, Event};
-
-use uuid::Uuid;
-use std::path::Path;
-
 use search::SearchQuery;
 
+#[cfg(not(feature="objects_only"))]
+use uuid::Uuid;
+#[cfg(not(feature="objects_only"))]
+use std::path::Path;
+
 /// Represents an open connection to a database
+#[cfg(not(feature="objects_only"))]
 pub struct Collection {
     socket: rusqlite::Connection
 }
 
+#[cfg(not(feature="objects_only"))]
 impl Collection {
     /// Open a SQLite database from a file and create the neccessary tables in case they don't
     /// exist.

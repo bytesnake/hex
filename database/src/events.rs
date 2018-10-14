@@ -5,6 +5,7 @@
 //! and wrapped inside `Event`
 //! 
 
+#[cfg(not(feature="objects_only"))]
 use rusqlite::{Error, Result};
 
 /// An Event occurs from an origin and contains an action. The origin is most of the time an IP
@@ -67,6 +68,7 @@ impl Event {
         }
     }
 
+    #[cfg(not(feature="objects_only"))]
     /// Convenient function to create an `Event`
     pub fn from(origin: String, tag: String, data: String) -> Result<Event> {
         let action = match tag.as_ref() {

@@ -15,15 +15,14 @@ use tokio_core::reactor::Handle;
 
 use websocket::message::OwnedMessage;
 
-use proto;
-
 use conf;
 use error::{Result, Error};
 
-use convert::{UploadState, UploadProgress, download::{DownloadState, DownloadProgress}};
+use convert::{UploadState, download::{DownloadState}};
 
 use hex_database::{self, events::Action, Track, Token, Event};
 use hex_music_container::{self, Configuration, Container};
+use hex_server_protocol::{Request, Answer, RequestAction, AnswerAction, PacketId, objects::UploadProgress};
 
 use acousticid;
 
@@ -50,7 +49,7 @@ pub struct State {
     /// Handle to the event queue
     handle: Handle,
     /// All pending requests
-    reqs: HashMap<String, RequestState>,
+    reqs: HashMap<PacketId, RequestState>,
     /// Open connection to the database
     pub collection: hex_database::Collection,
     /// Path to the data section
@@ -80,29 +79,23 @@ impl State {
         }
     }
 
-    /// Process a single packet
-    ///
-    /// * `origin` - where does the request originates from
-    /// * `msg` - what is the content of the message
-    /// * `gtoken` - globally shared token, used to change the token in frontend
-    pub fn process(&mut self, origin: String, msg: String, gtoken: Arc<Mutex<isize>>) -> Result<OwnedMessage> {
-        println!("Got: {}", &msg);
-
-        let packet: proto::IncomingWrapper = serde_json::from_str(&msg)
-            .map_err(|_| Error::Parsing)?;
-    
+    pub fn process_request(&mut self, origin: String, req: Request, gtoken: Arc<Mutex<isize>>) -> Result<Answer> {
+        let Request { id, msg } = req;
         let mut remove = false;
-        let mut binary_data: Option<Vec<u8>> = None;
 
-        let payload: (&str, Result<proto::Outgoing>) = match packet.msg {
-            proto::Incoming::GetTrack { key } => { 
-                ("get_track", self.collection.get_track(&key)
-                    .map(|x| proto::Outgoing::Track(x))
+        let answ = match msg {
+            RequestAction::GetTrack { key } => {
+                self.collection.get_track(&key)
+                    .map(|x| AnswerAction::Track(x))
                     .map_err(|err| Error::Database(err))
-                )
             },
-            proto::Incoming::Search { query } => {
-                let prior_state = self.reqs.entry(packet.id.clone())
+            RequestAction::UpdateTrack { key, title, album, interpret, people, composer } => {
+                self.collection.update_track(&key, title, album, interpret, people, composer)
+                    .map(|x| AnswerAction::UpdateTrack(x))
+                    .map_err(|err| Error::Database(err))
+            },
+            RequestAction::Search { query } => {
+                let prior_state = self.reqs.entry(id.clone())
                     .or_insert(RequestState::Search { 
                         query: query,
                         seek: 0
@@ -113,7 +106,7 @@ impl State {
                     _ => panic!("blub")
                 };
 
-                let res = self.collection.search_limited(&query, *seek)
+                self.collection.search_limited(&query, *seek)
                     .map(|x| {
                         // update information about position in stream
                         let more = x.len() >= 50;
@@ -121,17 +114,15 @@ impl State {
                         *seek += x.len() + 1;
 
                         // create a struct containing all results
-                        proto::Outgoing::SearchResult {
+                        AnswerAction::SearchResult {
                             query: query.clone(),
                             answ: x,
                             more: more
                         }
                     })
-                    .map_err(|err| Error::Database(err));
-
-                ("search", res)
+                    .map_err(|err| Error::Database(err))
             },
-            proto::Incoming::StreamNext { key } => {
+            RequestAction::StreamNext { key } => {
                 let State {
                     ref data_path,
                     ref collection,
@@ -139,7 +130,7 @@ impl State {
                     ..
                 } = *self;
 
-                let entry = reqs.entry(packet.id.clone());
+                let entry = reqs.entry(id.clone());
 
                 let prior_state = entry
                     .or_insert_with(|| {
@@ -190,20 +181,17 @@ impl State {
                 match pcm {
                     Ok(pcm) => {
                         if pcm.len() == 0 {
-                            ("stream_next", Err(Error::MusicContainer(hex_music_container::error::Error::ReachedEnd)))
+                            Err(Error::MusicContainer(hex_music_container::error::Error::ReachedEnd))
                         } else {
-                            binary_data = Some(pcm);
-                            ("stream_next", Ok(proto::Outgoing::StreamNext))
+                            Ok(AnswerAction::StreamNext(pcm))
                         }
                     },
-                    Err(err) => {
-                        ("stream_next", Err(err))
-                    }
+                    Err(err) => Err(err)
                 }
             },
 
-            proto::Incoming::StreamSeek { sample } => {
-                let (mut container, track) = match self.reqs.get_mut(&packet.id).unwrap() {
+            RequestAction::StreamSeek { sample } => {
+                let (mut container, track) = match self.reqs.get_mut(&id).unwrap() {
                     &mut RequestState::Stream { ref mut container, ref mut track } => (container, track),
                     _ => panic!("blub")
                 };
@@ -215,126 +203,108 @@ impl State {
                 //let pos = self.collection.stream_seek(pos, &track, &mut file);
                 container.seek_to_sample(sample as u32);
 
-                ("stream_seek", Ok(proto::Outgoing::StreamSeek {
-                    sample: sample
-                }))
+                Ok(AnswerAction::StreamSeek { sample })
             },
 
-            proto::Incoming::StreamEnd => {
+            RequestAction::StreamEnd => {
                 remove = true;
 
-                ("stream_end", Ok(proto::Outgoing::StreamEnd))
+                Ok(AnswerAction::StreamEnd)
             },
-            proto::Incoming::ClearBuffer => {
-                self.buffer.clear();
-
-                ("clear_buffer", Ok(proto::Outgoing::ClearBuffer))
+            RequestAction::ClearBuffer => {
+                Ok(AnswerAction::ClearBuffer)
             },
 
-            proto::Incoming::UpdateTrack { key, title, album, interpret, people, composer } => {
-                ("update_track", 
-                    self.collection.update_track(&key, title, album, interpret, people, composer)
-                        .map(|x| proto::Outgoing::UpdateTrack(x))
-                        .map_err(|err| Error::Database(err))
-
-                )
+            RequestAction::UpdateTrack { key, title, album, interpret, people, composer } => {
+                self.collection.update_track(&key, title, album, interpret, people, composer)
+                    .map(|x| AnswerAction::UpdateTrack(x))
+                    .map_err(|err| Error::Database(err))
             },
 
-            proto::Incoming::GetSuggestion { key } => {
+            RequestAction::GetSuggestion { key } => {
                 let suggestion = self.collection.get_track(&key)
                     .map_err(|x| Error::Database(x))
                     .and_then(|x| acousticid::get_metadata(&x.fingerprint, x.duration as u32));
 
-                ("get_suggestion", suggestion.map(|x| proto::Outgoing::GetSuggestion {
+                suggestion.map(|x| AnswerAction::GetSuggestion {
                         key: key.clone(),
                         data: x
-                }))
+                })
             },
 
-            proto::Incoming::AddPlaylist { name } => {
-                ("add_playlist", self.collection.add_playlist(&name, None)
-                    .map(|x| proto::Outgoing::AddPlaylist(x))
+            RequestAction::AddPlaylist { name } => {
+                self.collection.add_playlist(&name, None)
+                    .map(|x| AnswerAction::AddPlaylist(x))
                     .map_err(|err| Error::Database(err))
-                )
             },
 
-            proto::Incoming::DeletePlaylist { key } => {
-                ("delete_playlist", self.collection.delete_playlist(&key)
-                    .map(|_| proto::Outgoing::DeletePlaylist)
+            RequestAction::DeletePlaylist { key } => {
+                self.collection.delete_playlist(&key)
+                    .map(|_| AnswerAction::DeletePlaylist)
                     .map_err(|err| Error::Database(err))
-                )
             },
 
-            proto::Incoming::UpdatePlaylist { key, title, desc } => {
-                ("update_playlist", self.collection.update_playlist(&key, title, desc, None, None, None)
-                    .map(|_| proto::Outgoing::UpdatePlaylist)
+            RequestAction::UpdatePlaylist { key, title, desc } => {
+                self.collection.update_playlist(&key, title, desc, None, None, None)
+                    .map(|_| AnswerAction::UpdatePlaylist)
                     .map_err(|err| Error::Database(err))
-                )
             },
 
-            proto::Incoming::SetPlaylistImage { key } => {
-                ("set_playlist_image", Ok(proto::Outgoing::SetPlaylistImage))
+            RequestAction::SetPlaylistImage { key } => {
+                Ok(AnswerAction::SetPlaylistImage)
             },
 
-            proto::Incoming::AddToPlaylist { key, playlist } => {
-                ("add_to_playlist", self.collection.add_to_playlist(&key, &playlist)
-                    .map(|x| proto::Outgoing::AddToPlaylist(x))
+            RequestAction::AddToPlaylist { key, playlist } => {
+                self.collection.add_to_playlist(&key, &playlist)
+                    .map(|x| AnswerAction::AddToPlaylist(x))
                     .map_err(|err| Error::Database(err))
-                )
             },
 
-            proto::Incoming::GetPlaylists => {
-                let pls = self.collection.get_playlists();
-
-                ("get_playlists", Ok(proto::Outgoing::GetPlaylists(pls)))
+            RequestAction::GetPlaylists => {
+                Ok(AnswerAction::GetPlaylists(self.collection.get_playlists()))
             },
 
-            proto::Incoming::GetPlaylist { key }=> {
-                ("get_playlist", self.collection.get_playlist(&key)
-                    .map(|x| proto::Outgoing::GetPlaylist(x))
+            RequestAction::GetPlaylist { key }=> {
+                self.collection.get_playlist(&key)
+                    .map(|x| AnswerAction::GetPlaylist(x))
                     .map_err(|err| Error::Database(err))
-                )
             },
 
-            proto::Incoming::GetPlaylistsOfTrack { key } => {
-                ("get_playlists_of_track", self.collection.get_playlists_of_track(&key)
-                    .map(|x| proto::Outgoing::GetPlaylistsOfTrack(x))
+            RequestAction::GetPlaylistsOfTrack { key } => {
+                self.collection.get_playlists_of_track(&key)
+                    .map(|x| AnswerAction::GetPlaylistsOfTrack(x))
                     .map_err(|err| Error::Database(err))
-                )
             },
-            proto::Incoming::DeleteTrack { key } => {
+            RequestAction::DeleteTrack { key } => {
                 self.collection.add_event(Action::DeleteSong(key.clone()).with_origin(origin.clone())).unwrap();
 
-                ("delete_track", self.collection.delete_track(&key)
-                    .map(|x| proto::Outgoing::DeleteTrack(x))
+                self.collection.delete_track(&key)
+                    .map(|x| AnswerAction::DeleteTrack(x))
                     .map_err(|err| Error::Database(err))
-                )
             },
 
-            proto::Incoming::UploadYoutube { path } => {
-                println!("YOUTUBE ID {}", packet.id);
-
+            RequestAction::UploadYoutube { path } => {
                 let handle = self.handle.clone();
 
-                self.uploads.push(UploadState::youtube(packet.id.clone(), &path, handle));
+                self.uploads.push(UploadState::youtube(id.clone(), &path, handle));
 
-                ("upload_youtube", Ok(proto::Outgoing::UploadYoutube))
+                Ok(AnswerAction::UploadYoutube)
             },
 
-            proto::Incoming::UploadTrack { name, format } => {
+            RequestAction::UploadTrack { name, format, data } => {
                 let handle = self.handle.clone();
 
-                self.uploads.push(UploadState::converting_ffmpeg(handle, name, packet.id.clone(), &self.buffer, &format));
+                self.uploads.push(UploadState::converting_ffmpeg(handle, name, id.clone(), &data, &format));
 
-                ("upload_track", Ok(proto::Outgoing::UploadTrack))
+                Ok(AnswerAction::UploadTrack)
             },
 
-            proto::Incoming::AskUploadProgress => {
+            RequestAction::AskUploadProgress => {
                 println!("Ask upload progress");
 
                 // tick each item
                 for item in &mut self.uploads {
-                    if let Some(track) = item.tick(packet.id.clone(), self.data_path.clone()) {
+                    if let Some(track) = item.tick(id.clone(), self.data_path.clone()) {
                         self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
                         self.collection.insert_track(track).unwrap();
                     }
@@ -346,28 +316,27 @@ impl State {
                         desc: item.desc().clone(),
                         kind: item.kind().into(),
                         progress: item.progress(),
-                        key: item.key(),
-                        track_key: item.track_key()
+                        id: item.id(),
+                        key: item.track_key()
                     }
                 }).collect();
 
                 // delete finished uploads
                 self.uploads.retain(|x| x.should_retain());
 
-                ("ask_upload_progress", Ok(proto::Outgoing::AskUploadProgress(infos)))
+                Ok(AnswerAction::AskUploadProgress(infos))
             },
 
-            proto::Incoming::VoteForTrack { key } => {
-                ("vote_for_track", self.collection.vote_for_track(&key)
-                    .map(|_| proto::Outgoing::VoteForTrack)
+            RequestAction::VoteForTrack { key } => {
+                self.collection.vote_for_track(&key)
+                    .map(|_| AnswerAction::VoteForTrack)
                     .map_err(|err| Error::Database(err))
-                )
             },
-            proto::Incoming::GetToken { token } => {
+            RequestAction::GetToken { token } => {
                 self.token_avail = true;
                 *gtoken.lock().unwrap() = token as isize;
 
-                ("get_token", self.collection.get_token(token)
+                self.collection.get_token(token)
                     .map(|(token, x)| {
                         if let Some((playlist, tracks)) = x {
                             (
@@ -381,47 +350,41 @@ impl State {
                             )
                         }
                     })
-                    .map(|x| proto::Outgoing::GetToken(x))
+                    .map(|x| AnswerAction::GetToken(x))
                     .map_err(|err| Error::Database(err))
-                )
-            
             },
-            proto::Incoming::CreateToken => {
-                ("create_token", self.collection.create_token()
-                    .map(|id| proto::Outgoing::CreateToken(id))
+            RequestAction::CreateToken => {
+                self.collection.create_token()
+                    .map(|id| AnswerAction::CreateToken(id))
                     .map_err(|err| Error::Database(err))
-                )
             },
-            proto::Incoming::UpdateToken { token, key, played, pos } => {
+            RequestAction::UpdateToken { token, key, played, pos } => {
                 if self.token_avail {
                     *gtoken.lock().unwrap() = -1;
                     self.token_avail = false;
                 }
 
-                ("update_token", self.collection.update_token(token, key, played, pos)
-                     .map(|_| proto::Outgoing::UpdateToken)
+                self.collection.update_token(token, key, played, pos)
+                     .map(|_| AnswerAction::UpdateToken)
                      .map_err(|err| Error::Database(err))
-                )
             },
-            proto::Incoming::LastToken => {
+            RequestAction::LastToken => {
                 let val = match *gtoken.lock().unwrap() {
                     -1 => None,
                     x => Some(x as u32)
                 };
                 
-                ("last_token", Ok(proto::Outgoing::LastToken(val)))
+                Ok(AnswerAction::LastToken(val))
             },
-            proto::Incoming::GetSummarise => {
-                ("get_summarise", Ok(proto::Outgoing::GetSummarise(self.collection.get_summarisation())))
+            RequestAction::GetSummarise => {
+                Ok(AnswerAction::GetSummarise(self.collection.get_summarisation()))
             },
-            proto::Incoming::GetEvents => {
-                ("get_events", Ok(proto::Outgoing::GetEvents(
-                    self.collection.get_events()
-                )))
+            RequestAction::GetEvents => {
+                Ok(AnswerAction::GetEvents(self.collection.get_events()))
             },
-            proto::Incoming::Download { format, tracks } => {
-                let id = packet.id.clone();
-                let res = tracks.into_iter()
+            RequestAction::Download { format, tracks } => {
+                let id = id.clone();
+                tracks.into_iter()
                     .map(|x| self.collection.get_track(&x)
                         .map_err(|err| Error::Database(err))
                     )
@@ -429,23 +392,55 @@ impl State {
                     .map(|tracks| {
                         self.downloads.push(DownloadState::new(self.handle.clone(), id, format, tracks, 2, self.data_path.clone()));
 
-                        proto::Outgoing::Download
-                    });
-
-                ("download", res)
+                        AnswerAction::Download
+                    })
             },
-            proto::Incoming::AskDownloadProgress => {
+            RequestAction::AskDownloadProgress => {
                 let res = self.downloads.iter_mut()
                     .map(|x| x.progress())
                     .collect();
 
-                ("ask_download_progress", Ok(proto::Outgoing::AskDownloadProgress(res)))
+                Ok(AnswerAction::AskDownloadProgress(res))
             }
+        };
+
+        answ.map(|answ| Answer::new(id, answ))
+    }
+
+    /// Process a single packet
+    ///
+    /// * `origin` - where does the request originates from
+    /// * `msg` - what is the content of the message
+    /// * `gtoken` - globally shared token, used to change the token in frontend
+    pub fn process(&mut self, origin: String, buf: Vec<u8>, gtoken: Arc<Mutex<isize>>) -> Option<Vec<u8>> {
+        Request::try_from(&buf)
+        .map_err(|err| Error::Protocol(err))
+        .and_then(|packet| self.process_request(origin, packet, gtoken))
+        .and_then(|x| x.to_buf().map_err(|err| Error::Protocol(err)))
+        .ok()
+        
+            /*
+
+        println!("Got: {}", &msg);
+
+        let packet: RequestActionWrapper = serde_json::from_str(&msg)
+            .map_err(|_| Error::Parsing)?;
+    
+        let mut remove = false;
+        let mut binary_data: Option<Vec<u8>> = None;
+
+        let payload: (&str, Result<AnswerAction>) = match packet.msg {
+            RequestAction::GetTrack { key } => { 
+                ("get_track", self.collection.get_track(&key)
+                    .map(|x| AnswerAction::Track(x))
+                    .map_err(|err| Error::Database(err))
+                )
+            },
         };
 
         // remove if no longer needed
         if remove {
-            self.reqs.remove(&packet.id);
+            self.reqs.remove(&id);
         }
 
         println!("Outgoing: {:?}", payload);
@@ -454,8 +449,9 @@ impl State {
             Ok(OwnedMessage::Binary(data))
         } else {
             // wrap the payload to a full packet and convert to a string
-            proto::OutgoingResult(payload.1.map_err(|err| format!("{:?}", err))).to_string(&packet.id, payload.0).map(|x| OwnedMessage::Text(x))
+            AnswerActionResult(payload.1.map_err(|err| format!("{:?}", err))).to_string(&id, payload.0).map(|x| OwnedMessage::Text(x))
         }
+        */
     }
 
     /// Process a binary packet, just append it to he buffer

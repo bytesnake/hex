@@ -12,39 +12,31 @@ use tokio_core::reactor::Handle;
 use futures::{Stream, Future, IntoFuture};
 
 use hex_database::Track;
+use hex_server_protocol::PacketId;
 
-pub use self::download::{DownloadState, DownloadProgress};
-
-#[derive(Serialize, Debug)]
-pub struct UploadProgress {
-    pub desc: String,
-    pub kind: String,
-    pub progress: f32,
-    pub key: String,
-    pub track_key: Option<String>
-}
+pub use self::download::DownloadState;
 
 pub enum UploadState {
     YoutubeDownload {
         downloader: youtube::Downloader,
         state: Rc<RefCell<youtube::State>>,
-        key: String
+        id: PacketId
     },
     ConvertingFFMPEG {
         converter: ffmpeg::Converter,
         state: Rc<RefCell<ffmpeg::State>>,
-        key: String
+        id: PacketId
     },
     ConvertingOpus {
         converter: opus::Converter,
         state: Rc<RefCell<opus::State>>,
-        key: String,
+        id: PacketId
     },
-    Finished(Option<(String, String, String)>)
+    Finished(Option<(PacketId, String, String)>)
 }
 
 impl UploadState {
-    pub fn youtube(key: String, path: &str, handle: Handle) -> UploadState {
+    pub fn youtube(id: PacketId, path: &str, handle: Handle) -> UploadState {
         let mut dwnd = youtube::Downloader::new(handle.clone(), path);
 
         let state = Rc::new(RefCell::new(youtube::State::empty()));
@@ -62,11 +54,11 @@ impl UploadState {
         UploadState::YoutubeDownload {
             downloader: dwnd,
             state: state,
-            key: key
+            id: id
         }
     }
 
-    pub fn converting_ffmpeg(handle: Handle, desc: String, key: String, data: &[u8], format: &str) -> UploadState {
+    pub fn converting_ffmpeg(handle: Handle, desc: String, id: PacketId, data: &[u8], format: &str) -> UploadState {
         let mut dwnd = ffmpeg::Converter::new(handle.clone(), desc.clone(), data, format).unwrap();
 
         let state = Rc::new(RefCell::new(ffmpeg::State::empty(desc, "", "")));
@@ -84,11 +76,11 @@ impl UploadState {
         UploadState::ConvertingFFMPEG {
             converter: dwnd,
             state: state,
-            key: key
+            id: id
         }
     }
 
-    pub fn converting_opus(handle: Handle, key: String, desc: String, samples: &[i16], duration: f32, num_channel: u32, data_path: String) -> UploadState {
+    pub fn converting_opus(handle: Handle, id: PacketId, desc: String, samples: &[i16], duration: f32, num_channel: u32, data_path: String) -> UploadState {
         let mut dwnd = opus::Converter::new(handle.clone(), desc.clone(), Vec::from(samples), duration, num_channel, data_path);
 
         let state = Rc::new(RefCell::new(opus::State::empty(desc)));
@@ -106,16 +98,16 @@ impl UploadState {
         UploadState::ConvertingOpus {
             converter: dwnd,
             state: state,
-            key: key
+            id: id
         }
         
     }
 
-    pub fn tick(&mut self, id: String, data_path: String) -> Option<Track> {
+    pub fn tick(&mut self, id: PacketId, data_path: String) -> Option<Track> {
         let item = mem::replace(self, UploadState::Finished(None));
 
         match item {
-            UploadState::YoutubeDownload { ref state, key: _, ref downloader } => {
+            UploadState::YoutubeDownload { ref state, id: _, ref downloader } => {
                 let state = state.borrow();
                 if state.progress >= 1.0 {
                     //TODO
@@ -125,7 +117,7 @@ impl UploadState {
 
                 None
             },
-            UploadState::ConvertingFFMPEG { key: _, ref state, ref converter } => {
+            UploadState::ConvertingFFMPEG { id: _, ref state, ref converter } => {
                 let state = state.borrow();
 
                 if state.progress >= 0.999 {
@@ -137,12 +129,12 @@ impl UploadState {
 
                 None
             },
-            UploadState::ConvertingOpus { state, .. } => {
+            UploadState::ConvertingOpus { state, id, .. } => {
                 let state = state.borrow();
 
                 if state.progress >= 1.0 {
                     if let Some(ref track) = state.data {
-                        mem::replace(self, UploadState::Finished(Some((id, state.desc.clone(), track.key.clone()))));
+                        mem::replace(self, UploadState::Finished(Some((id.clone(), state.desc.clone(), track.key.clone()))));
 
                         return Some(track.clone());
                     }
@@ -178,13 +170,13 @@ impl UploadState {
             UploadState::Finished(_) => 1.0
         }
     }
-    pub fn key(&self) -> String {
+    pub fn id(&self) -> PacketId {
         match *self {
-            UploadState::YoutubeDownload { ref key, .. } => key.clone(),
-            UploadState::ConvertingFFMPEG { ref key, .. } => key.clone(),
-            UploadState::ConvertingOpus { ref key, .. } => key.clone(),
-            UploadState::Finished(Some((ref key, _, _))) => key.clone(),
-            _ => "".into()
+            UploadState::YoutubeDownload { ref id, .. } => id.clone(),
+            UploadState::ConvertingFFMPEG { ref id, .. } => id.clone(),
+            UploadState::ConvertingOpus { ref id, .. } => id.clone(),
+            UploadState::Finished(Some((ref id, _, _))) => id.clone(),
+            UploadState::Finished(None) => panic!("Blub")
         }
     }
 

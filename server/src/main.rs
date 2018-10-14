@@ -43,6 +43,7 @@ extern crate uuid;
 extern crate hex_database;
 extern crate hex_music_container;
 extern crate hex_sync;
+extern crate hex_server_protocol;
 
 mod error;
 mod conf;
@@ -50,7 +51,6 @@ mod webserver;
 mod acousticid;
 mod convert;
 mod server;
-mod proto;
 mod state;
 
 use std::env;
