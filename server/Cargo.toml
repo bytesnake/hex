@@ -16,7 +16,7 @@ toml = "0.4"
 hyper = "0.11"
 hyper-staticfile = "0.1.1"
 bytes = "0.4.5"
-curl = "0.4.8"
+curl = { version = "0.4", default-features = false }
 uuid = {version="0.4", features = ["v4"]}
 
 [dependencies.chromaprint]

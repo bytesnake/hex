@@ -38,7 +38,7 @@ module.exports = {
 		rules: [
             {
                 test: /\.wasm$/,
-                use: 'wasm-loader'
+                use: 'webassembly/experimental'
             },
 			{
 				test: /\.jsx?$/,

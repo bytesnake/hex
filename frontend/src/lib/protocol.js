@@ -1,15 +1,19 @@
 import { guid } from './uuid.js'
+import wasm from 'protocol.wasm'
 
 class Protocol {
     constructor() {
-        this.socket = new WebSocket('ws://' + location.hostname + ':2794', 'rust-websocket');
+        //console.log(wasm());
+        wasm().then(x => console.log(x));
+
+        /*this.socket = new WebSocket('ws://' + location.hostname + ':2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
 
         var self = this;
         this.promise = new Promise(function(resolve, reject) {
             self.socket.onopen = () => resolve(self);
             self.socket.onerr = () => reject();
-        });
+        });*/
 
         return this;
     }
@@ -219,7 +223,7 @@ class Protocol {
         var self = this;
         var promise = new Promise(function(resolv, reject) {
             //self.socket.onmessage = function(e) {
-            self.socket.addEventListener('message', function listener(e) {
+            /*self.socket.addEventListener('message', function listener(e) {
 
                 if(typeof e.data === "string") {
                     if(e.data.startsWith("Err(")) {
@@ -258,10 +262,7 @@ class Protocol {
                 self.socket.addEventListener('open', function() {
                     self.socket.send(proto_str);
                 }, {once: true});
-                /*
-                self.socket.onopen = function() {
-                    self.socket.send(proto_str);
-                }*/
+            */
         });
 
 
@@ -272,7 +273,7 @@ class Protocol {
         var self = this;
         var promise = new Promise(function(resolv, reject) {
             //self.socket.onmessage = function(e) {
-            self.socket.addEventListener('message', function(e) {
+            /*self.socket.addEventListener('message', function(e) {
 
                 var parsed = JSON.parse(e.data);
 
@@ -290,6 +291,7 @@ class Protocol {
                 self.socket.onopen = function() {
                     self.socket.send(binary);
                 }
+                */
         });
 
         return promise;
