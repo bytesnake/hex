@@ -20,7 +20,7 @@ module.exports = {
 	},
 
 	resolve: {
-		extensions: ['.jsx', '.js', '.json', '.less'],
+		extensions: ['.jsx', '.js', '.json', '.less', 'wasm'],
 		modules: [
 			path.resolve(__dirname, "src/lib"),
 			path.resolve(__dirname, "node_modules"),
@@ -37,8 +37,16 @@ module.exports = {
 	module: {
 		rules: [
             {
-                test: /\.wasm$/,
-                use: 'webassembly/experimental'
+               test: /\.wasm$/,
+                loaders: ['wasm-loader']
+            },
+            {
+                test: /hex_server_protocol_bg\.wasm$/,
+                //type: "javascript/auto", // ← !!
+                loader: "file-loader",
+                options: {
+                  publicPath: "build/"
+                }
             },
 			{
 				test: /\.jsx?$/,
@@ -107,10 +115,6 @@ module.exports = {
 						}
 					]
 				})
-			},
-			{
-				test: /\.json$/,
-				use: 'json-loader'
 			},
 			{
 				test: /\.(xml|html|txt|md)$/,
@@ -218,5 +222,5 @@ module.exports = {
 			//   pathRewrite: path => path.replace(/^\/[^\/]+\//, '')   // strip first path segment
 			// }
 		}
-	}
+	},
 };

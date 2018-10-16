@@ -79,7 +79,7 @@ impl State {
         }
     }
 
-    pub fn process_request(&mut self, origin: String, req: Request, gtoken: Arc<Mutex<isize>>) -> Result<Answer> {
+    pub fn process_request(&mut self, origin: String, req: Request, gtoken: Arc<Mutex<isize>>) -> Answer {
         let Request { id, msg } = req;
         let mut remove = false;
 
@@ -116,7 +116,7 @@ impl State {
                         // create a struct containing all results
                         AnswerAction::SearchResult {
                             query: query.clone(),
-                            answ: x,
+                            answ:,
                             more: more
                         }
                     })
@@ -404,7 +404,14 @@ impl State {
             }
         };
 
-        answ.map(|answ| Answer::new(id, answ))
+        // remove if no longer needed
+        if remove {
+            self.reqs.remove(&id);
+        }
+
+        println!("Outgoing: {:?}", answ);
+
+        Answer::new(id, answ.map_err(|err| format!("{:?}", err)))
     }
 
     /// Process a single packet
@@ -413,51 +420,11 @@ impl State {
     /// * `msg` - what is the content of the message
     /// * `gtoken` - globally shared token, used to change the token in frontend
     pub fn process(&mut self, origin: String, buf: Vec<u8>, gtoken: Arc<Mutex<isize>>) -> Option<Vec<u8>> {
+        println!("Process buf {}", buf.len());
         Request::try_from(&buf)
-        .map_err(|err| Error::Protocol(err))
-        .and_then(|packet| self.process_request(origin, packet, gtoken))
-        .and_then(|x| x.to_buf().map_err(|err| Error::Protocol(err)))
-        .ok()
-        
-            /*
-
-        println!("Got: {}", &msg);
-
-        let packet: RequestActionWrapper = serde_json::from_str(&msg)
-            .map_err(|_| Error::Parsing)?;
-    
-        let mut remove = false;
-        let mut binary_data: Option<Vec<u8>> = None;
-
-        let payload: (&str, Result<AnswerAction>) = match packet.msg {
-            RequestAction::GetTrack { key } => { 
-                ("get_track", self.collection.get_track(&key)
-                    .map(|x| AnswerAction::Track(x))
-                    .map_err(|err| Error::Database(err))
-                )
-            },
-        };
-
-        // remove if no longer needed
-        if remove {
-            self.reqs.remove(&id);
-        }
-
-        println!("Outgoing: {:?}", payload);
-
-        if let Some(data) = binary_data {
-            Ok(OwnedMessage::Binary(data))
-        } else {
-            // wrap the payload to a full packet and convert to a string
-            AnswerActionResult(payload.1.map_err(|err| format!("{:?}", err))).to_string(&id, payload.0).map(|x| OwnedMessage::Text(x))
-        }
-        */
-    }
-
-    /// Process a binary packet, just append it to he buffer
-    pub fn process_binary(&mut self, data: &[u8]) {
-        println!("Got binary with length: {}", data.len());
-
-        self.buffer.extend_from_slice(data);
+            .map(|req| self.process_request(origin, req, gtoken))
+            .and_then(|answer| answer.to_buf())
+            .map_err(|err| { println!("Parse error: {:?}", err); err})
+            .ok()
     }
 }

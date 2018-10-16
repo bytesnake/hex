@@ -1,0 +1,22 @@
+{
+  "scripts": {
+    "build": "webpack",
+    "serve": "webpack-dev-server"
+  },
+  "devDependencies": {
+    "html-webpack-plugin": "^3.2.0",
+    "webpack": "^4.11.1",
+    "webpack-cli": "^3.1.1",
+    "webpack-dev-server": "^3.1.0"
+  },
+  "dependencies": {
+    "preact": "^8.3.1",
+    "preact-mdl": "^2.2.2",
+    "preact-compat": "^3.18.4",
+    "preact-router": "^2.6.1",
+    "preact-token-input": "^0.3.0",
+    "preact-chartjs-2": "^1.0.3",
+    "react-calendar-heatmap": "^1.7.0",
+    "chart.js": "^2.7.2"
+  }
+}

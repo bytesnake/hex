@@ -73,7 +73,6 @@ pub fn start(conf: Conf) {
                             },
                             OwnedMessage::Close(_) => {
                                 state.collection.add_event(Action::Connect(now.elapsed().as_secs() as f32).with_origin(addr.to_string())).unwrap();
-                                println!("BLUB2");
 
                                 Some(OwnedMessage::Close(None))
                             },

@@ -35,3 +35,6 @@ path = "../sync/"
 [dependencies.hex-server-protocol]
 path = "protocol/"
 features = ["server"]
+
+[patch.crates-io]
+openssl-sys = "0.10"

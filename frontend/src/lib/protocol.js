@@ -1,26 +1,125 @@
 import { guid } from './uuid.js'
 const proto = import('./hex_server_protocol');
 
+const CALL = {
+    Search: 'Search',
+    GetTrack: 'GetTrack',
+    StreamNext: 'StreamNext',
+    StreamEnd: 'StreamEnd',
+    StreamSeek: 'StreamSeek',
+    UpdateTrack: 'UpdateTrack',
+    GetSuggestion: 'GetSuggestion',
+    AddPlaylist: 'AddPlaylist',
+    DeletePlaylist: 'DeletePlaylist',
+    SetPlaylistImage: 'SetPlaylistImage',
+    AddToPlaylist: 'AddToPlaylist',
+    UpdatePlaylist: 'UpdatePlaylist',
+    GetPlaylists: 'GetPlaylists',
+    GetPlaylist: 'GetPlaylist',
+    GetPlaylistsOfTrack: 'GetPlaylistsOfTrack',
+    DeleteTrack: 'DeleteTrack',
+    UploadTrack: 'UploadTrack',
+    VoteForTrack: 'VoteForTrack',
+    AskUploadProgress: 'AskUploadProgress',
+    GetToken: 'GetToken',
+    UpdateToken: 'UpdateToken',
+    CreateToken: 'CreateToken',
+    LastToken: 'LastToken',
+    GetSummarise: 'GetSummarise',
+    GetEvents: 'GetEvents',
+    Download: 'Download',
+    AskDownloadProgress: 'AskDownloadProgress'
+}
+
 class Protocol {
     constructor() {
-        console.log(proto);
-        proto().then(x => console.log(x))
-  //      console.log(proto.upload_track([0,0,0,0], "New Track", "mp3", [0]));
+        let self = this;
+        this.pending_requests = {};
+        proto.then(x => self.proto = x);
 
-        //wasm.then(x => console.log(x));
-
-        /*this.socket = new WebSocket('ws://' + location.hostname + ':2794', 'rust-websocket');
+        this.socket = new WebSocket('ws://' + location.hostname + ':2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
+        this.socket.onerror = function(err) {
+            console.error("Websocket error occured: " + err);
+        }
+        this.socket.onclose = function() {
+            console.error("Connection to " + self.socket.url + " closed!");
+        }
+        this.socket.onmessage = function(msg) {
+            const answ = new self.proto.Wrapper(new Uint8Array(msg.data));
 
-        var self = this;
-        this.promise = new Promise(function(resolve, reject) {
-            self.socket.onopen = () => resolve(self);
-            self.socket.onerr = () => reject();
-        });*/
+            if(!answ)
+                console.error("Could not parse answer!");
+
+            const id = answ.id();
+            if(self.pending_requests[id] == null) {
+                console.log("Got packets without request!");
+                return;
+            }
+
+            const [type, resolve, reject] = self.pending_requests[id];
+            const action = answ.action();
+                
+            if(typeof action === "string") {
+                reject(action);
+                return;
+            }
+
+            /*const pack_type = Object.keys(action)[0];
+            console.log(pack_type);
+            if(type != pack_type) {
+                reject("Got packet with invalid type!");
+                return;
+            }*/
+
+            resolve(action);
+        }
+
+        this.socket.onopen = function() {
+            proto.then(x => {
+                self.proto = x;
+
+                self.request(CALL.Search, {query: "Blue"})
+                    .then(x => console.log(x)).catch(err => console.error(err));
+            });
+        }
 
         return this;
     }
 
+    dice_id() {
+        return Array.from({length: 4}, () => Math.floor(Math.random() * (2 ** 32)));
+    }
+
+    request(type, param) {
+        let req = {};
+        req[type] = param;
+        const id = this.dice_id();
+        const buf = this.proto.request_to_buf(id, req);
+        
+        if(!buf)
+            console.error("Could not serialize packet: " + JSON.stringify(req));
+
+        return this.await_answer(id, type, buf);
+    }
+
+    await_answer(id, type, msg) {
+        let self = this;
+
+        return new Promise((resolve, reject) => {
+            this.pending_requests[id] = [type, resolve, reject];
+
+            if(self.socket.readyState === WebSocket.OPEN)
+                self.socket.send(msg.buffer);
+            else 
+                self.socket.addEventListener('open', function() {
+                    console.log("LVDSFD");
+                    self.socket.send(msg.buffer);
+                }, {once: true});
+        });
+    }
+
+    /*
     get_track(key) {
         var uuid = guid();
 
@@ -211,95 +310,7 @@ class Protocol {
         }
 
         return suggestions;
-    }
-
-    send_msg(uuid, fn, msg) {
-        msg['fn'] = fn;
-
-        var proto = {
-            'id': uuid,
-            'msg': msg
-        };
-
-        var proto_str = JSON.stringify(proto);
-
-        var self = this;
-        var promise = new Promise(function(resolv, reject) {
-            //self.socket.onmessage = function(e) {
-            /*self.socket.addEventListener('message', function listener(e) {
-
-                if(typeof e.data === "string") {
-                    if(e.data.startsWith("Err(")) {
-                        reject("Could not parse the message!");
-                        return;
-
-                    }
-
-                    var parsed = JSON.parse(e.data);
-
-                    if(parsed.id == uuid) {
-                        //console.log(parsed);
-                        // remove listener
-                        self.socket.removeEventListener('message', listener);
-                        if(parsed.fn != fn)
-                            reject("Wrong header!");
-                        else {
-                            if(parsed.payload && 'Ok' in parsed.payload)
-                                resolv(parsed.payload.Ok);
-                            else if(parsed.payload && 'Err' in parsed.payload)
-                                reject("Got error: " + parsed.payload.Err);
-                            else
-                                resolv(parsed.payload);
-                        }
-                     }
-                } else
-                    resolv(new Uint8Array(e.data));
-
-            });
-
-            //console.log("Send: " + proto_str);
-
-            if(self.socket.readyState === WebSocket.OPEN)
-                self.socket.send(proto_str);
-            else 
-                self.socket.addEventListener('open', function() {
-                    self.socket.send(proto_str);
-                }, {once: true});
-            */
-        });
-
-
-        return promise;
-    }
-
-    send_binary(binary) {
-        var self = this;
-        var promise = new Promise(function(resolv, reject) {
-            //self.socket.onmessage = function(e) {
-            /*self.socket.addEventListener('message', function(e) {
-
-                var parsed = JSON.parse(e.data);
-
-                //console.log("Got: " + e.data);
-
-                if(parsed.fn != 'upload')
-                    reject("Wrong header!");
-                else
-                    resolv();
-            }, {once: true});
-
-            if(self.socket.readyState === WebSocket.OPEN)
-                self.socket.send(binary);
-            else 
-                self.socket.onopen = function() {
-                    self.socket.send(binary);
-                }
-                */
-        });
-
-        return promise;
-        
-    }
+    }*/
 }
 
 export default new Protocol();
