@@ -25,7 +25,7 @@ class AudioBuffer {
         this._pos = 0;
         this.pos_loaded = 0;
 
-        this.worker.onmessage = this.on_packet.bind(this);
+        //this.worker.onmessage = this.on_packet.bind(this);
         this.finished = finished;
     }
 
