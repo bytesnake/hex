@@ -1,41 +1,48 @@
 import { guid } from './uuid.js'
 const proto = import('./hex_server_protocol');
 
-const CALL = {
-    Search: 'Search',
-    GetTrack: 'GetTrack',
-    StreamNext: 'StreamNext',
-    StreamEnd: 'StreamEnd',
-    StreamSeek: 'StreamSeek',
-    UpdateTrack: 'UpdateTrack',
-    GetSuggestion: 'GetSuggestion',
-    AddPlaylist: 'AddPlaylist',
-    DeletePlaylist: 'DeletePlaylist',
-    SetPlaylistImage: 'SetPlaylistImage',
-    AddToPlaylist: 'AddToPlaylist',
-    UpdatePlaylist: 'UpdatePlaylist',
-    GetPlaylists: 'GetPlaylists',
-    GetPlaylist: 'GetPlaylist',
-    GetPlaylistsOfTrack: 'GetPlaylistsOfTrack',
-    DeleteTrack: 'DeleteTrack',
-    UploadTrack: 'UploadTrack',
-    VoteForTrack: 'VoteForTrack',
-    AskUploadProgress: 'AskUploadProgress',
-    GetToken: 'GetToken',
-    UpdateToken: 'UpdateToken',
-    CreateToken: 'CreateToken',
-    LastToken: 'LastToken',
-    GetSummarise: 'GetSummarise',
-    GetEvents: 'GetEvents',
-    Download: 'Download',
-    AskDownloadProgress: 'AskDownloadProgress'
+const CALLS = {
+    Search: ["query"],
+    GetTrack: ["key"],
+    StreamNext: ["key"],
+    StreamEnd: [],
+    StreamSeek: ["sample"],
+    UpdateTrack: ["key", "title", "album", "interpret", "people", "composer"],
+    GetSuggestion: ["key"],
+    AddPlaylist: ["name"],
+    DeletePlaylist: ["key"],
+    SetPlaylistImage: ["key"],
+    AddToPlaylist: ["key", "playlist"],
+    UpdatePlaylist: ["key", "title", "desc"],
+    GetPlaylists: [],
+    GetPlaylist: ["key"],
+    GetPlaylistsOfTrack: ["key"],
+    DeleteTrack: ["key"],
+    UploadYoutube: ["path"],
+    UploadTrack: ["name", "format", "data"],
+    VoteForTrack: ["key"],
+    AskUploadProgress: [],
+    GetToken: ["GetToken"],
+    UpdateToken: ["token", "key", "played", "pos"],
+    CreateToken: [],
+    LastToken: [],
+    GetSummarise: [],
+    GetEvents: [],
+    Download: ["format", "tracks"],
+    AskDownloadProgress: []
 }
 
 class Protocol {
     constructor() {
         let self = this;
         this.pending_requests = {};
-        proto.then(x => self.proto = x);
+        //proto.then(x => self.proto = x);
+
+        for(const call in CALLS) {
+            // convert CamelCase to underscore_case for function calls
+            const under = call.split(/(?=[A-Z])/).join('_').toLowerCase();
+            this[under] = new Function(CALLS[call].join(", "), "return this.request('" + call + "', {" + CALLS[call].join(",") + "});");
+        }
 
         this.socket = new WebSocket('ws://' + location.hostname + ':2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
@@ -58,12 +65,14 @@ class Protocol {
             }
 
             const [type, resolve, reject] = self.pending_requests[id];
-            const action = answ.action();
+            let action = answ.action();
                 
             if(typeof action === "string") {
                 reject(action);
                 return;
             }
+
+            action["packet_id"] = id;
 
             /*const pack_type = Object.keys(action)[0];
             console.log(pack_type);
@@ -79,7 +88,8 @@ class Protocol {
             proto.then(x => {
                 self.proto = x;
 
-                self.request(CALL.Search, {query: "Blue"})
+                /*self.request(CALL.Search, {query: "Blue"})*/
+                self.search("Blue")
                     .then(x => console.log(x)).catch(err => console.error(err));
             });
         }
@@ -91,10 +101,13 @@ class Protocol {
         return Array.from({length: 4}, () => Math.floor(Math.random() * (2 ** 32)));
     }
 
-    request(type, param) {
+    request(type, param, id) {
+        console.log("Request: " + type);
         let req = {};
         req[type] = param;
-        const id = this.dice_id();
+        if(id == null)
+            id = this.dice_id();
+
         const buf = this.proto.request_to_buf(id, req);
         
         if(!buf)
@@ -119,142 +132,24 @@ class Protocol {
         });
     }
 
+    start_search(query) {
+        const id = this.dice_id();
+
+        return function() {
+            return this.request('Search', {'query': query}, id);
+        };
+    }
     /*
-    get_track(key) {
-        var uuid = guid();
-
-        return this.send_msg(uuid, 'get_track', {'key': key});
-    }
-
-    update_track(track) {
-        var uuid = guid();
-
-        return this.send_msg(uuid, 'update_track', track);
-    }
-
-    upvote_track(key) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'vote_for_track', {'key': key});
-    }
-
-    get_playlists() {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'get_playlists', {});
-    }
-
-    change_playlist_title(key, title) {
-        const uuid = guid();
-        
-        return this.send_msg(uuid, 'update_playlist', {'key': key, 'title': title});
-    }
-
-    change_playlist_desc(key, desc) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'update_playlist', {'key': key, 'desc': desc});
-    }
-
-    add_playlist(name) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'add_playlist', {'name': name});
-    }
-
-    delete_playlist(key) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'delete_playlist', {'key': key});
-    }
-
-    add_to_playlist(key, playlist) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'add_to_playlist', {'key': key, 'playlist': playlist});
-    }
-    get_playlist(key) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'get_playlist', {'key': key});
-    }
-
-    get_playlists_of_track(key) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'get_playlists_of_track', {'key': key});
-    }
-
-    delete_track(key) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'delete_track', {'key': key});
-    }
-
-    upload_youtube(path) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'upload_youtube', {'path': path});
-    }
-
-    ask_upload_progress() {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'ask_upload_progress', {});
-    }
-
-    get_events() {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'get_events', {});
-    }
-
-    get_summarise() {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'get_summarise', {});
-    }
-
-    update_token(token, key) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'update_token', {'token': token, 'key': key});
-    }
-
-    last_token() {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'last_token', {});
-    }
-
-    get_token(id) {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'get_token', {'token': id});
-    }
-
-    download(uuid, format, tracks) {
-        console.log("Downloading " + tracks + " in " + format);
-
-        return this.send_msg(uuid, 'download', {'format': format, 'tracks': tracks});
-    }
-
-    ask_download_progress() {
-        const uuid = guid();
-
-        return this.send_msg(uuid, 'ask_download_progress', {});
-    }
-
-    async *stream(uuid, track_key) {
+    async *stream(track_key) {
         var first = true;
         while(true) {
             try {
                 if(first) {
-                    yield await this.send_msg(uuid, 'stream_next', {'key': track_key});
+                    yield await this.request('stream_next', {'key': track_key});
                     first = false;
                 }
                 else
-                    yield await this.send_msg(uuid, 'stream_next', {});
+                    yield await this.request('stream_next', {});
             } catch(err) {
                 console.log(err);
                 break;
@@ -262,24 +157,10 @@ class Protocol {
         }
     }
 
-    stream_seek(uuid, pos) {
-        return this.send_msg(uuid, 'stream_seek', {'pos': pos});
+    stream_seek(pos) {
+        return this.request('stream_seek', {'pos': pos});
     }
 
-    async *search(query) {
-        var uuid = guid();
-
-        while(true) {
-            const answ = await this.send_msg(uuid, 'search', {'query': query});
-
-            for(const i of answ.answ)
-                yield i;
-
-            if(!answ.more)
-                break;
-
-        }
-    }
 
     async upload_files(files) {
         var keys = [];
@@ -289,9 +170,9 @@ class Protocol {
         //return Promise.all([].map.call(files, function(file) {
             let uuid = guid();
 
-            let res = await self.send_msg(uuid, 'clear_buffer', {})
+            let res = await self.send_msg('clear_buffer', {})
             .then(() => self.send_binary(file[2]))
-            .then(() => self.send_msg(uuid, 'upload_track', {'name': file[0], 'format': file[1]}));
+            .then(() => self.send_msg('upload_track', {'name': file[0], 'format': file[1]}));
 
             keys.push(res);
         }
@@ -305,7 +186,7 @@ class Protocol {
         for(const key of keys) {
             let uuid = guid();
 
-            let res = await this.send_msg(uuid, 'get_suggestion', {'key': key});
+            let res = await this.request('get_suggestion', {'key': key});
             suggestions.push(res);
         }
 

@@ -1,5 +1,5 @@
-import Worker from 'worker-loader!./worker.js';
-import Protocol from 'protocol.js';
+//import Worker from 'worker-loader!./worker.js';
+import Protocol from 'Lib/protocol';
 
 var createRingBuffer = function(length){
 
@@ -19,7 +19,8 @@ class AudioBuffer {
         this.channel = channel;
         this.sample_rate = sample_rate;
 
-        this.worker = new Worker();
+        this.worker = null;
+        //this.worker = new Worker();
 
         this._pos = 0;
         this.pos_loaded = 0;
