@@ -1,95 +1,118 @@
-//import Worker from 'worker-loader!./worker.js';
 import Protocol from 'Lib/protocol';
 
-var createRingBuffer = function(length){
-
-  var pointer = 0, buffer = [];
-
-  return {
-    get  : function(key){return buffer[key];},
-    push : function(item){
-      buffer[pointer] = item;
-      pointer = (length + pointer +1) % length;
+class RingBuffer {
+    constructor(channels, duration) {
+        this.buf = Array(channels).fill(Array(48000 * duration).fill(0));
+        this.ptr_end = 0;
+        this.ptr_start = 0;
+        this.channels = channels;
+        this.samples = 48000 * duration;
     }
-  };
-};
+
+    push(buf) {
+        let channel = 0;
+        for(sample of buf) {
+            this.buf[channel][pointer] = sample;
+
+            if(channel == this.channels - 1) {
+                channel = 0;
+                this.ptr_end = (this.ptr_end % this.samples);
+            } else
+                channel ++;
+        }
+
+        return this.length() >= buf.length / this.channels;
+    }
+
+    slice(length) {
+        const avail = this.length();
+        if(avail < length) return null;
+
+        if(this.ptr_start < this.ptr_end) {
+            this.ptr_start = (this.ptr_start + 1) % this.samples;
+
+            return this.buf.map(x => x.slice(this.ptr_start, this.ptr_start + length));
+        } else {
+            this.ptr_start = (this.ptr_start + 1) % this.samples;
+            return this.buf.map(x => {
+                let tmp = x.slice(this.ptr_start);
+                tmp.push.apply(tmp, x.slice(0, length - (this.ptr_end-this.ptr_start)));
+
+                return tmp;
+            });
+        }
+    }
+
+    clear() {
+        this.ptr_end = 0;
+        this.ptr_start = 0;
+    }
+
+    length() {
+        if(this.ptr_start < this.ptr_end)
+            return this.ptr_end - this.ptr_start;
+        else
+            return (this.samples - this.ptr_start) + this.ptr_end;
+    }
+
+    should_fill() {
+        return this.length() < 48000 * 2;
+    }
+}
 
 class AudioBuffer {
-    constructor(sample_rate, channel, samples, finished)  {
-        this.channel = channel;
+    constructor(sample_rate, channels, samples, finished)  {
+        this.channels = channels;
         this.sample_rate = sample_rate;
+        this.samples = samples;
 
-        this.worker = null;
-        //this.worker = new Worker();
+        this.buffer = new RingBuffer(channels, samples);
 
         this._pos = 0;
         this.pos_loaded = 0;
 
-        //this.worker.onmessage = this.on_packet.bind(this);
         this.finished = finished;
     }
 
     next(length) {
-        if(this.pos+length > this.buffer[0].length) {
-            length = this.buffer[0].length - this.pos;
+        if(this.pos+length > this.samples) {
+            length = this.samples - this.pos;
             this.finished();
         }
 
-        const slice1 = this.buffer[0].slice(this.pos, this.pos+length);
-        const slice2 = this.buffer[1].slice(this.pos, this.pos+length);
-        this._pos += length;
+        this.buffer.slice(length);
 
-        return [slice1,slice2];
+        if(this.buffer.should_fill())
+            this.fill_buf();
     }
 
-    next_track(track) {
-        const samples = track.duration * this.sample_rate;
-
-        this.buffer = [new Float32Array(samples), new Float32Array(samples)];
+    load_track(track) {
         this._pos = 0;
         this.pos_loaded = 0;
+        this.buffer.clear();
 
-        this.worker.postMessage({kind: 0, channel: this.channel, samples: samples, track: track, sample_rate: this.sample_rate});
+        let [stream_next, stream_seek, stream_end] = Protocol.stream_start(track);
+        this.stream_next = stream_next;
+        this.stream_seek = stream_seek;
+        this.stream_end = stream_end;
+    }
+
+    fill_buf() {
+        if(this.track == null)
+            return;
+
+        this.stream_next().then(x => {
+            if(this.buffer.push(x)) this.fill_buf();
+        });
     }
 
     set pos(new_pos) {
-        this.worker.postMessage({kind: 1, pos: new_pos});
+        this.stream_seek(new_pos);
         this._pos = new_pos;
     }
 
     get pos() {
         return this._pos;
-    }
-
-    bitmap() {
-        let self = this;
-        return new Promise(function(resolve, reject) {
-            self.worker.addEventListener('message', function fnc(e){
-                if(e.data && e.data.kind == 1) {
-                    self.worker.removeEventListener('message', fnc);
-                    resolve(e.data.bitmap);
-                }
-            });
-        });
-    }
-
-    on_packet(e) {
-        if(e.data.kind == 0) {
-
-            //console.log(e.data.offset + e.data.data[0].length);
-            //console.log(this.buffer[0].length);
-            if(this.buffer[0].length < e.data.offset + e.data.data[0].length) {
-                this.pos_loaded = this.buffer[0].length;
-
-                this.buffer[0].set(e.data.data[0].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
-                this.buffer[1].set(e.data.data[1].slice(0, this.buffer[0].length - e.data.offset), e.data.offset);
-            } else {
-                this.pos_loaded += e.data.data[0].length;
-
-                this.buffer[0].set(e.data.data[0], e.data.offset);
-                this.buffer[1].set(e.data.data[1], e.data.offset);
-            }
-        }
     }
 }
 

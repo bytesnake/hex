@@ -85,14 +85,6 @@ class Protocol {
                 const buf = proto.request_to_buf(id, req);
                 self.socket.send(buf.buffer);
             }
-
-            /*proto.then(x => {
-                self.proto = x;
-
-                self.search("Blue")
-                    .then(x => console.log(x)).catch(err => console.error(err));
-            });*/
-
         }
     }
 
@@ -179,59 +171,46 @@ class Protocol {
             return self.request('Search', {'query': query}, id);
         };
     }
-    /*
-    async *stream(track_key) {
-        var first = true;
-        while(true) {
-            try {
+
+    start_stream(key) {
+        const id = this.dice_id();
+
+        let self = this;
+        let first = true;
+        return [
+            function() {
                 if(first) {
-                    yield await this.request('stream_next', {'key': track_key});
                     first = false;
-                }
-                else
-                    yield await this.request('stream_next', {});
-            } catch(err) {
-                console.log(err);
-                break;
+                    return self.request("NextStream", {"key": key}, id);
+                } else 
+                    return self.request("NextStream", null, id);
+            },
+            function(sample) {
+                return self.request("SeekStream", {"sample": sample}, id);
+            },
+            function() {
+                return self.request("EndStream", null, id);
             }
-        }
+        ];
     }
 
-    stream_seek(pos) {
-        return this.request('stream_seek', {'pos': pos});
-    }
-
-
-    async upload_files(files) {
-        var keys = [];
-        var self = this;
-        for(const file of files) {
-            console.log(file);
-        //return Promise.all([].map.call(files, function(file) {
-            let uuid = guid();
-
-            let res = await self.send_msg('clear_buffer', {})
-            .then(() => self.send_binary(file[2]))
-            .then(() => self.send_msg('upload_track', {'name': file[0], 'format': file[1]}));
-
-            keys.push(res);
-        }
-
-        return keys;
-        //}));
-    }
-
-    async get_suggestions(keys) {
-        var suggestions = [];
+    get_suggestions(keys) {
+        var promises = [];
         for(const key of keys) {
-            let uuid = guid();
-
-            let res = await this.request('get_suggestion', {'key': key});
-            suggestions.push(res);
+            promises.push(this.GetSuggestion(key));
         }
 
-        return suggestions;
-    }*/
+        return Promise.all(promises);
+    }
+
+    upload_tracks(tracks) {
+        let promises = [];
+        for(const track of tracks) {
+            promises.push(this.UploadTracks(file[0], file[1], file[2]));
+        }
+
+        return Promise.all(promises);
+    }
 }
 
 export default new Protocol();
