@@ -116,7 +116,7 @@ impl State {
                         // create a struct containing all results
                         AnswerAction::SearchResult {
                             query: query.clone(),
-                            answ:,
+                            answ: x,
                             more: more
                         }
                     })
@@ -210,9 +210,6 @@ impl State {
                 remove = true;
 
                 Ok(AnswerAction::StreamEnd)
-            },
-            RequestAction::ClearBuffer => {
-                Ok(AnswerAction::ClearBuffer)
             },
 
             RequestAction::UpdateTrack { key, title, album, interpret, people, composer } => {
@@ -409,7 +406,7 @@ impl State {
             self.reqs.remove(&id);
         }
 
-        println!("Outgoing: {:?}", answ);
+        //println!("Outgoing: {:?}", answ);
 
         Answer::new(id, answ.map_err(|err| format!("{:?}", err)))
     }
@@ -420,7 +417,7 @@ impl State {
     /// * `msg` - what is the content of the message
     /// * `gtoken` - globally shared token, used to change the token in frontend
     pub fn process(&mut self, origin: String, buf: Vec<u8>, gtoken: Arc<Mutex<isize>>) -> Option<Vec<u8>> {
-        println!("Process buf {}", buf.len());
+        //println!("Process buf {}", buf.len());
         Request::try_from(&buf)
             .map(|req| self.process_request(origin, req, gtoken))
             .and_then(|answer| answer.to_buf())

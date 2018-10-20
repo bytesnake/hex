@@ -4,8 +4,8 @@ host = "127.0.0.1"
 port = 2794
 
 [music]
-data_path = "/tmp/music/data/"
-db_path  = "/tmp/music/music.db"
+data_path = "/opt/music/data/"
+db_path  = "/opt/music/music.db"
 
 [webserver]
 path = "../frontend/build/"

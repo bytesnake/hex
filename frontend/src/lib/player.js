@@ -1,62 +1,101 @@
 import Protocol from 'Lib/protocol';
+import Resampler from './resampler.js';
 
 class RingBuffer {
-    constructor(channels, duration) {
-        this.buf = Array(channels).fill(Array(48000 * duration).fill(0));
+    constructor(channels, duration, sampling_rate) {
+        this.buf = Array(channels).fill(new Int16Array(sampling_rate * duration));
+
         this.ptr_end = 0;
         this.ptr_start = 0;
+        this.length = 0;
+        this.max_length = sampling_rate * duration;
+
         this.channels = channels;
-        this.samples = 48000 * duration;
+        this.sampling_rate = sampling_rate;
     }
 
     push(buf) {
+        buf = new Uint8Array(buf);
+        buf = new Int16Array(buf.buffer);
+
+        const num_samples = buf.length / this.channels;
+
+        if(this.resampler == null) {
+            this.resampler = new Resampler(48000, this.sampling_rate, this.channels, buf.length);
+        }
+
+        //if(this.sampling_rate != 48000)
+        //    buf = resampler.resampler(buf);
+
+        if(this.length + num_samples > this.max_length) {
+            console.error("Ringbuffer overflow!");
+            return false;
+        }
+        
         let channel = 0;
-        for(sample of buf) {
-            this.buf[channel][pointer] = sample;
+        for(var i = 0; i < buf.length; i++) {
+            this.buf[channel][this.ptr_end] = buf[i];
 
             if(channel == this.channels - 1) {
                 channel = 0;
-                this.ptr_end = (this.ptr_end % this.samples);
+                this.ptr_end = (this.ptr_end + 1) % this.max_length;
             } else
                 channel ++;
         }
 
-        return this.length() >= buf.length / this.channels;
+        this.length += num_samples;
+        return this.length <= this.max_length - num_samples;
     }
 
-    slice(length) {
-        const avail = this.length();
-        if(avail < length) return null;
+    slice(num_samples) {
+        if(this.length < num_samples) return null;
+
+        this.length -= num_samples;
 
         if(this.ptr_start < this.ptr_end) {
-            this.ptr_start = (this.ptr_start + 1) % this.samples;
+            let buf = this.buf.map(x => {
+                let tmp = new Float32Array(num_samples);
 
-            return this.buf.map(x => x.slice(this.ptr_start, this.ptr_start + length));
+                for(var i = 0; i < num_samples; i ++)
+                    tmp[i] = x[this.ptr_start + i] / (x[this.ptr_start+i] >= 0 ? 32767 :32768);
+            
+                return tmp;
+            })
+
+
+            this.ptr_start = (this.ptr_start + num_samples) % this.max_length;
+
+            return buf;
         } else {
-            this.ptr_start = (this.ptr_start + 1) % this.samples;
-            return this.buf.map(x => {
-                let tmp = x.slice(this.ptr_start);
-                tmp.push.apply(tmp, x.slice(0, length - (this.ptr_end-this.ptr_start)));
+            const first = Math.min(num_samples, this.max_length - this.ptr_start);
+            const last = num_samples - first;
+
+            const buf = this.buf.map(x => {
+                let tmp = new Float32Array(num_samples);
+
+                for(var i = 0; i < first; i ++)
+                    tmp[i] = x[this.ptr_start+i] / (x[this.ptr_start+i] >= 0 ? 32767 : 32768);
+
+                for(var i = 0; i < last; i ++)
+                    tmp[first + i] = x[i] / (x[i] >= 0 ? 32767 :32768);
 
                 return tmp;
             });
+
+            this.ptr_start = (this.ptr_start + num_samples) % this.max_length;
+
+            return buf;
         }
     }
 
     clear() {
         this.ptr_end = 0;
         this.ptr_start = 0;
-    }
-
-    length() {
-        if(this.ptr_start < this.ptr_end)
-            return this.ptr_end - this.ptr_start;
-        else
-            return (this.samples - this.ptr_start) + this.ptr_end;
+        this.length = 0;
     }
 
     should_fill() {
-        return this.length() < 48000 * 2;
+        return this.length < this.sampling_rate * 10;
     }
 }
 
@@ -66,7 +105,7 @@ class AudioBuffer {
         this.sample_rate = sample_rate;
         this.samples = samples;
 
-        this.buffer = new RingBuffer(channels, samples);
+        this.buffer = new RingBuffer(channels, 40, sample_rate);
 
         this._pos = 0;
         this.pos_loaded = 0;
@@ -80,21 +119,29 @@ class AudioBuffer {
             this.finished();
         }
 
-        this.buffer.slice(length);
-
         if(this.buffer.should_fill())
             this.fill_buf();
+
+        const buf = this.buffer.slice(length);
+        if(buf)
+            this._pos += length;
+
+        return buf;
     }
 
     load_track(track) {
+        this.samples = Math.round(track.duration * this.sample_rate);
         this._pos = 0;
         this.pos_loaded = 0;
         this.buffer.clear();
+        this.track = track;
 
-        let [stream_next, stream_seek, stream_end] = Protocol.stream_start(track);
+        let [stream_next, stream_seek, stream_end] = Protocol.start_stream(track.key);
         this.stream_next = stream_next;
         this.stream_seek = stream_seek;
         this.stream_end = stream_end;
+
+        this.fill_buf();
     }
 
     fill_buf() {
@@ -102,13 +149,26 @@ class AudioBuffer {
             return;
 
         this.stream_next().then(x => {
-            if(this.buffer.push(x)) this.fill_buf();
+            this.pos_loaded += x.length / this.channels / 2;
+
+            if(this.buffer.push(x)) {
+                this.fill_buf();
+            } else {
+            }
         });
     }
 
     set pos(new_pos) {
-        this.stream_seek(new_pos);
-        this._pos = new_pos;
+        this.stream_seek(new_pos).then(x => {
+            console.log("SEEK TO ");
+            console.log(x);
+            this._pos = new_pos;
+            this.pos_loaded = new_pos;
+            this.buffer.clear();
+
+            console.log("Loaded: " + this.pos_loaded);
+            this.fill_buf();
+        });
     }
 
     get pos() {
@@ -129,7 +189,7 @@ export default class Player {
             throw new Error("Web Audio API is not supported: " + e);
         }
 
-        this.buffer = new AudioBuffer(this.audioContext.sampleRate, 0, numChannel, this.next.bind(this));
+        this.buffer = new AudioBuffer(this.audioContext.sampleRate, numChannel, 0, this.next.bind(this));
         this.playing = false;
         this.numChannel = numChannel;
         this.queue = [];
@@ -148,7 +208,6 @@ export default class Player {
         if(this.playing) {
             // get the oldest element in the buffer
             const buf = this.buffer.next(PLAY_BUFFER_SIZE);
-
             for(let channel = 0; channel < ouBuf.numberOfChannels; channel++) {
                 ouBuf.copyToChannel(buf[channel], channel);
             }
@@ -158,8 +217,6 @@ export default class Player {
 
     // clear the queue
     clear() {
-        console.log("CLEAR");
-
         this.stop();
 
         this.queue = [];
@@ -183,8 +240,9 @@ export default class Player {
                 this.set_queue_cb(queue);
 
                 if(queue.length == 1) {
+
                     this.new_track_cb(x);
-                    buffer.next_track(x);
+                    buffer.load_track(x);
                 }
             });
         } else {
@@ -196,14 +254,13 @@ export default class Player {
             tmp = Promise.all(vecs);
 
             tmp.then(x => {
-                console.log(x);
                 queue.push.apply(queue, x);
 
                 this.set_queue_cb(queue);
 
                 if(queue.length == x.length) {
                     this.new_track_cb(x[0]);
-                    buffer.next_track(x[0]);
+                    buffer.load_track(x[0]);
                 }
             });
         }
@@ -254,7 +311,7 @@ export default class Player {
             this.buffer.pos = 0;
         else {
             this.new_track_cb(this.queue[this.queue_pos]);
-            this.buffer.next_track(this.queue[this.queue_pos]);
+            this.buffer.load_track(this.queue[this.queue_pos]);
         }
 
         return true;
@@ -270,7 +327,7 @@ export default class Player {
             this.set_queue_pos_cb(this.queue_pos);
 
             this.new_track_cb(this.queue[this.queue_pos]);
-            this.buffer.next_track(this.queue[this.queue_pos]);
+            this.buffer.load_track(this.queue[this.queue_pos]);
         } else
             this.buffer.pos = 0;
 
@@ -295,7 +352,7 @@ export default class Player {
         this.set_queue_pos_cb(this.queue_pos);
 
         this.new_track_cb(this.queue[this.queue_pos]);
-        this.buffer.next_track(this.queue[this.queue_pos]);
+        this.buffer.load_track(this.queue[this.queue_pos]);
     }
 
     remove_track = (pos) => {
@@ -328,7 +385,7 @@ export default class Player {
             return 0.0;
 
         const tmp = this.buffer.pos_loaded / this.audioContext.sampleRate / this.queue[this.queue_pos].duration;
-        //console.log(this.buffer.pos_loaded);
+        console.log(tmp);
 
         return tmp;
 

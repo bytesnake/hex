@@ -114,11 +114,11 @@ class Protocol {
             return;
         }
         
+        console.log("Answer");
+        console.log(action);
 
-        if(type == "Search")
-            action = action["SearchResult"];
-        else
-            action = action[type];
+        const key = Object.keys(action)[0];
+        action = action[key];
         //action["packet_id"] = id;
         
         /*const pack_type = Object.keys(action)[0];
@@ -145,6 +145,7 @@ class Protocol {
         const promise = new Promise((resolve, reject) => this.pending_requests[id] = [type, resolve, reject]);
 
         console.log("Request " + type);
+        console.log(req);
         if(!proto || this.socket.readyState != WebSocket.OPEN) {
             this.buffered_requests.push([id, req]);
         
@@ -181,15 +182,15 @@ class Protocol {
             function() {
                 if(first) {
                     first = false;
-                    return self.request("NextStream", {"key": key}, id);
+                    return self.request("StreamNext", {"key": key}, id);
                 } else 
-                    return self.request("NextStream", null, id);
+                    return self.request("StreamNext", {"key": null}, id);
             },
             function(sample) {
-                return self.request("SeekStream", {"sample": sample}, id);
+                return self.request("StreamSeek", {"sample": sample}, id);
             },
             function() {
-                return self.request("EndStream", null, id);
+                return self.request("StreamEnd", null, id);
             }
         ];
     }

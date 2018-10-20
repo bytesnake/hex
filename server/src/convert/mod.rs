@@ -106,16 +106,16 @@ impl UploadState {
     pub fn tick(&mut self, id: PacketId, data_path: String) -> Option<Track> {
         let item = mem::replace(self, UploadState::Finished(None));
 
-        match item {
+        let (next, ret): (Option<UploadState>, Option<Track>) = match &item {
             UploadState::YoutubeDownload { ref state, id: _, ref downloader } => {
                 let state = state.borrow();
                 if state.progress >= 1.0 {
                     //TODO
-                    mem::replace(self,
-                        UploadState::converting_ffmpeg(downloader.handle.clone(), state.file.clone(), id.clone(), &state.get_content().unwrap(), state.format()));
+                    (Some(UploadState::converting_ffmpeg(downloader.handle.clone(), state.file.clone(), id.clone(), &state.get_content().unwrap(), state.format())), None)
+                } else {
+                    (None, None)
                 }
 
-                None
             },
             UploadState::ConvertingFFMPEG { id: _, ref state, ref converter } => {
                 let state = state.borrow();
@@ -123,28 +123,34 @@ impl UploadState {
                 if state.progress >= 0.999 {
                     let (data, num_channel, duration) = state.read();
 
-                    mem::replace(self,
-                        UploadState::converting_opus(converter.handle.clone(), id.clone(), state.desc.clone(), &data, duration as f32, num_channel, data_path));
+                    (Some(UploadState::converting_opus(converter.handle.clone(), id.clone(), state.desc.clone(), &data, duration as f32, num_channel, data_path)), None)
+                } else {
+                    (None, None)
                 }
-
-                None
             },
             UploadState::ConvertingOpus { state, id, .. } => {
                 let state = state.borrow();
 
                 if state.progress >= 1.0 {
                     if let Some(ref track) = state.data {
-                        mem::replace(self, UploadState::Finished(Some((id.clone(), state.desc.clone(), track.key.clone()))));
-
-                        return Some(track.clone());
+                        (Some(UploadState::Finished(Some((id.clone(), state.desc.clone(), track.key.clone())))), Some(track.clone()))
+                    } else {
+                        (None, None)
                     }
+                } else {
+                    (None, None)
                 }
-
-                None
             },
-            UploadState::Finished(Some(_)) => { mem::replace(self, UploadState::Finished(None)); None},
-            _ => None
+            UploadState::Finished(Some(_)) => { (Some(UploadState::Finished(None)), None)},
+            _ => (None, None)
+        };
+
+        match next {
+            Some(x) => {mem::replace(self, x);},
+            None => {mem::replace(self, item);}
         }
+
+        ret
     }
 
     pub fn should_retain(&self) -> bool {

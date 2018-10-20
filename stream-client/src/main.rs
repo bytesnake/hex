@@ -1,25 +1,20 @@
 extern crate mfrc522;
 extern crate sysfs_gpio;
 extern crate spidev;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
 extern crate cpal;
 extern crate rb;
 extern crate websocket;
-extern crate uuid;
 extern crate rand;
+
+extern crate hex_database;
+extern crate hex_server_protocol;
 
 mod audio;
 mod events;
 mod client;
 mod token;
 
-use std::slice;
-use std::thread;
-use std::time::Duration;
-use client::{Client, Outgoing, Token, Incoming};
+use client::Client;
 use events::Event;        
 
 fn main() {

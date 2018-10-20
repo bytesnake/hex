@@ -1,10 +1,8 @@
 use cpal;
 use std::thread;
 use rb::{SpscRb, RB, RbProducer, RbConsumer, Producer, Consumer};
-use rb::RbInspector;
 
 pub struct AudioDevice {
-    format: cpal::Format,
     rb: SpscRb<i16>,
     producer: Producer<i16>,
     thread_handle: thread::JoinHandle<()>
@@ -27,11 +25,9 @@ impl AudioDevice {
             data_type: cpal::SampleFormat::I16
         };
 
-        let format2 = format.clone();
-        let thread = thread::spawn(move || Self::run(cons, device, format2));
+        let thread = thread::spawn(move || Self::run(cons, device, format));
 
         AudioDevice {
-            format: format,
             rb: rb,
             producer: prod,
             thread_handle: thread
@@ -54,9 +50,9 @@ impl AudioDevice {
         self.rb.clear();
     }
 
-    pub fn format(&self) -> cpal::Format {
+    /*pub fn format(&self) -> cpal::Format {
         self.format.clone()
-    }
+    }*/
 
     pub fn run(consumer: Consumer<i16>, device: cpal::Device, format: cpal::Format) {
         let event_loop = cpal::EventLoop::new();
@@ -70,7 +66,7 @@ impl AudioDevice {
             match data {
                 cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer) } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {
-                        let cnt = consumer.read_blocking(&mut buf);
+                        let _ = consumer.read_blocking(&mut buf);
 
                         let mut i = 0;
                         for out in sample.iter_mut() {

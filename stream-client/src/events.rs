@@ -1,10 +1,9 @@
-use std::mem;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use spidev::{self, Spidev, SpidevOptions};
 use sysfs_gpio::{Pin, Direction};
 
-use mfrc522::{picc, MFRC522, pcd::Reg, picc::UID, picc::mifare};
+use mfrc522::{MFRC522, pcd::Reg, picc::UID};
 
 use std::thread;
 use std::time::Duration;

@@ -1,28 +1,33 @@
 use std::slice;
-use uuid::Uuid;
 use rand::{thread_rng, Rng};
-use client::{Client, Track, Incoming, Outgoing};
+use client::{Client, gen_id};
+
+use hex_database::Track;
+use hex_server_protocol::{PacketId, RequestAction, AnswerAction, Answer};
 
 pub struct Token {
     token: u32,
     pos: usize,
     sample: u64,
     tracks: Vec<Track>,
-    id: Uuid
+    id: PacketId
 }
 
 impl Token {
     pub fn new(client: &mut Client, token: u32) -> Option<Token> {
-        client.send_once(Outgoing::GetToken { token });
-        match client.recv() {
-            Ok(Incoming::GetToken((token, Some((playlist, tracks))))) => {
+        // ask for the new token
+        client.send_once(RequestAction::GetToken { token });
+        let Answer {msg, ..} = client.recv();
+
+        match msg {
+            Ok(AnswerAction::GetToken((token, Some((_playlist, tracks))))) => {
                 if token.played.is_empty() {
                     return Some(Token {
                         token: token.token,
                         pos: 0,
                         sample: 0,
                         tracks: tracks,
-                        id: Uuid::new_v4()
+                        id: gen_id()
                     });
                 }
 
@@ -50,10 +55,10 @@ impl Token {
                     }
                 };
 
-                let id = Uuid::new_v4();
-                client.send(id, Outgoing::StreamNext { key: Some(tracks[pos].key.clone()) });
+                let id = gen_id();
+                client.send(id, RequestAction::StreamNext { key: Some(tracks[pos].key.clone()) });
                 client.recv();
-                //client.send(id, Outgoing::StreamSeek { sample: (token.pos * 48000.0) as u32 });
+                //client.send(id, RequestAction::StreamSeek { sample: (token.pos * 48000.0) as u32 });
                 //client.recv();
 
                 Some(Token {
@@ -64,13 +69,13 @@ impl Token {
                     sample: (token.pos * 48000.0) as u64
                 })
             },
-            Ok(Incoming::GetToken((token, None))) => {
+            Ok(AnswerAction::GetToken((token, None))) => {
                 return Some(Token {
                     token: token.token,
                     pos: 0,
                     sample: 0,
                     tracks: Vec::new(),
-                    id: Uuid::new_v4()
+                    id: gen_id()
                 });
             },
             _ => None
@@ -78,11 +83,12 @@ impl Token {
     }
 
     pub fn create(client: &mut Client) -> u32 {
-        client.send_once(Outgoing::CreateToken);
-        if let Ok(Incoming::CreateToken(id)) = client.recv() {
-            id
-        } else {
-            panic!("Got wrong return!");
+        client.send_once(RequestAction::CreateToken);
+        let Answer {msg, ..} = client.recv();
+
+        match msg {
+            Ok(AnswerAction::CreateToken(id)) => id,
+            _ => panic!("Could not create a new token")
         }
     }
 
@@ -95,10 +101,11 @@ impl Token {
         let played: Vec<String> = self.tracks.iter().map(|x| x.key.clone()).collect();
         let pos = (self.sample as f64) / 48000.0;
 
-        client.send(self.id, Outgoing::UpdateToken { 
+        client.send(self.id, RequestAction::UpdateToken { 
             token: self.token,
-            played: played.join(","), 
-            pos: pos 
+            key: None,
+            played: Some(played.join(",")),
+            pos: Some(pos)
         });
         client.recv();
     }
@@ -109,9 +116,11 @@ impl Token {
 
     pub fn next_packet(&mut self, client: &mut Client) -> Option<&[i16]> {
         let key = self.tracks[self.pos].key.clone();
-        client.send(self.id.clone(), Outgoing::StreamNext { key: Some(key) });
-        match client.recv() {
-            Ok(Incoming::Buffer(buf)) => {
+        client.send(self.id.clone(), RequestAction::StreamNext { key: Some(key) });
+        let Answer {msg, ..} = client.recv();
+
+        match msg {
+            Ok(AnswerAction::StreamNext(buf)) => {
                 let buf = unsafe { 
                     slice::from_raw_parts(
                         buf.as_ptr() as *const i16, 
@@ -123,11 +132,11 @@ impl Token {
                 println!("Acquired new buffer {}", buf.len());
                 return Some(buf);
             },
-            Err(EndOfStream) => {
+            Err(_) => {
                 if self.pos < self.tracks.len() - 1 {
                     println!("End of song!");
                     self.pos += 1;
-                    self.id = Uuid::new_v4();
+                    self.id = gen_id();
                 } else {
                     println!("End of playlist!");
                     self.pos = 0;
@@ -142,25 +151,25 @@ impl Token {
     pub fn next_track(&mut self) {
         if self.pos < self.tracks.len() - 1 {
             self.pos += 1;
-            self.id = Uuid::new_v4();
+            self.id = gen_id();
         }
     }
 
     pub fn prev_track(&mut self) {
         if self.pos > 0 {
             self.pos -= 1;
-            self.id = Uuid::new_v4();
+            self.id = gen_id();
         }
     }
 
     pub fn shuffle(&mut self) {
-        let mut tracks = self.tracks.split_off(self.pos + 1);
+        let mut tracks: Vec<Track> = self.tracks.split_off(self.pos + 1);
         thread_rng().shuffle(&mut tracks);
         self.tracks.append(&mut tracks);
     }
 
     pub fn upvote(&mut self, client: &mut Client) {
-        client.send_once(Outgoing::VoteForTrack {
+        client.send_once(RequestAction::VoteForTrack {
             key: self.tracks[self.pos].key.clone()
         });
         client.recv();

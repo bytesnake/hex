@@ -3,7 +3,7 @@
 /// A single track with metadata
 ///
 /// In case of no interpret and an original composition the interpret is the same as the composer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Track {
     /// The title of the track
