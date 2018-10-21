@@ -20,28 +20,16 @@ export default class Search extends Component {
     }
 
     more() {
-        if(this.state.updating || this.state.finished)
+        if(this.state.finished || this.state.updating)
             return;
 
         this.setState({ updating: true });
 
-        //let tracks = await Promise.all(Array(20).fill(0).map(_ => this.state.stream.next()));
-        let tracks = this.state.stream();
+        this.state.stream().then(res => {
+            let tmp = this.state.tracks.slice();
+            tmp.push.apply(tmp, res.answ);
 
-        tracks.then(res => {
-            console.log(res);
-            /*
-        const length = tracks.filter(x => !x.done).length;
-        tracks = tracks.slice(0, length);
-        tracks = tracks.map(x => x.value);
-*/
-        const tmp = this.state.tracks.slice();
-        tmp.push.apply(tmp, res.answ);
-
-        //if(length < 20) 
-            this.setState({ tracks: tmp, finished: true, updating: false });
-        //else
-        //    this.setState({ tracks: tmp, updating: false});
+            this.setState({ tracks: tmp, finished: !res.more, updating: false });
         });
     }
 
