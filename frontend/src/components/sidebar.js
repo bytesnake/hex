@@ -28,6 +28,9 @@ export default class Sidebar extends Component {
     }
 
     add_playlist(e) {
+        if(e.keyCode && e.keyCode != 13)
+            return;
+
         const name = this.elm_name.value;
 
         let self = this;
@@ -40,6 +43,7 @@ export default class Sidebar extends Component {
 
         e.stopPropagation();
     }
+
 
 	render({},{playlists, create}) {
 		return (
@@ -55,7 +59,7 @@ export default class Sidebar extends Component {
                         )}
                     </div>
                     { create && (
-                        <div class={style.link}><input placeholder="Name" onClick={e => e.stopPropagation()} ref={x => this.elm_name = x} /><Icon icon="add" onClick={this.add_playlist.bind(this)} /> </div>
+                        <div class={style.add_playlist}><input placeholder="Name" onClick={e => e.stopPropagation()} ref={x => this.elm_name = x} onKeyup={this.add_playlist.bind(this)}/><Icon icon="add" onClick={this.add_playlist.bind(this)} /> </div>
                     )}
                     { playlists && playlists.map( x => (
                         <Navigation.Link href={"/playlist/" + x.key} class={style.link}><Icon icon="queue music" /><b>{x.title}</b><span>{x.count}</span></Navigation.Link>
