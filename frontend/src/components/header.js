@@ -12,7 +12,7 @@ export default class Header extends Component {
 	render(props, {tags}) {
         return (
             <Layout.Header class={style.header}>
-            <Layout.HeaderRow>
+            <Layout.HeaderRow class={style.header_row}>
 			<Layout.Title>
                 <Icon icon="hearing" />
 				<a href="/">Musik</a>
@@ -30,7 +30,7 @@ export default class Header extends Component {
                     <Icon icon="search" />
                 </div>
             </div>
-            <div class={style.upload}>
+            <div class={style.actions}>
                 <Zyklop />
                 <Upload />
                 <Icon icon="info outline" />

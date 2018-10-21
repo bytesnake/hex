@@ -2,7 +2,7 @@
 	left: 0;
 	top: 0;
 	width: 100%;
-	height: 56px;
+	//height: 56px !important;
 	padding: 0;
 	background: #145c9e;
 	box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
@@ -47,6 +47,9 @@
 	}
 }
 
+.header_row {
+    padding: 0 0 0 80px !important;
+}
 .search{
     margin-left: 40px;
     width: 50%;
@@ -97,20 +100,21 @@
     }
 
 }
-.upload {
+.actions {
     font-size: 40px;
     color: #DDD;
 
     display: flex;
     flex-direction: row;
+    margin-right: 20px !important;
 }
 
-.upload i {
+.actions i {
     font-size: 40px;
-    margin: 6px;
+    margin: 2px;
 }
 
-.upload i:hover {
+.actions i:hover {
     cursor: pointer;
     color: #FFF;
 }
