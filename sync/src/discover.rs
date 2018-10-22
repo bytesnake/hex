@@ -89,9 +89,8 @@ impl Future for Beacon {
 
     fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
         if let Some(time) = self.timer {
-            print!(".");
-            io::stdout().flush().unwrap();
 
+            // abort search after two seconds
             if Instant::now().duration_since(time).as_secs() >= 2 {
                 return Ok(Async::Ready(None));
             }
@@ -101,7 +100,8 @@ impl Future for Beacon {
 
         match self.interval.poll() {
             Ok(Async::Ready(_)) => { 
-                //println!("Send!");
+                print!(".");
+                io::stdout().flush().unwrap();
                 try_ready!(self.socket.poll_send_to(
                         &[self.version, 0x00, 0x00, 0x01], 
                         &(SocketAddrV4::new(Ipv4Addr::BROADCAST, 8004).into())));
@@ -109,6 +109,7 @@ impl Future for Beacon {
             _ => {}
         }
 
+        futures::task::current().notify();
         let (nread, addr) = try_ready!(self.socket.poll_recv_from(&mut self.buf));
 
         if nread == 4 && self.buf[0..4] == [self.version, 0x00, 0x00, 0x01] {

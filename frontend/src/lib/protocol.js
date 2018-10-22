@@ -89,7 +89,7 @@ class Protocol {
     }
 
     message(msg) {
-        const answ = new proto.Wrapper(new Uint8Array(msg.data));
+        let answ = new proto.Wrapper(new Uint8Array(msg.data));
         
         if(!answ)
             console.error("Could not parse answer!");
@@ -114,12 +114,11 @@ class Protocol {
             return;
         }
         
-        console.log("Answer");
-        console.log(action);
+        //console.log("Answer");
+        //console.log(action);
 
         const key = Object.keys(action)[0];
         action = action[key];
-        //action["packet_id"] = id;
         
         /*const pack_type = Object.keys(action)[0];
         console.log(pack_type);
@@ -128,6 +127,10 @@ class Protocol {
             return;
         }*/
         
+        answ = null;
+        msg = null;
+        delete this.pending_requests[id];
+
         resolve(action);
     }
 
@@ -144,8 +147,8 @@ class Protocol {
 
         const promise = new Promise((resolve, reject) => this.pending_requests[id] = [type, resolve, reject]);
 
-        console.log("Request " + type);
-        console.log(req);
+        //console.log("Request " + type);
+        //console.log(req);
         if(!proto || this.socket.readyState != WebSocket.OPEN) {
             this.buffered_requests.push([id, req]);
         

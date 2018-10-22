@@ -14,9 +14,9 @@ class RingBuffer {
         this.sampling_rate = sampling_rate;
     }
 
-    push(buf) {
-        buf = new Uint8Array(buf);
-        buf = new Int16Array(buf.buffer);
+    push(buf_arr) {
+        let buf_u8 = new Uint8Array(buf_arr);
+        let buf = new Int16Array(buf_u8.buffer);
 
         const num_samples = buf.length / this.channels;
 
@@ -32,23 +32,23 @@ class RingBuffer {
             return false;
         }
         
-        let channel = 0;
         for(var i = 0; i < buf.length; i++) {
-            this.buf[channel][this.ptr_end] = buf[i];
-
-            if(channel == this.channels - 1) {
-                channel = 0;
-                this.ptr_end = (this.ptr_end + 1) % this.max_length;
-            } else
-                channel ++;
+            const val = buf.slice(i, i+1);
+            this.buf[i % 2][this.ptr_end + Math.floor(i/2)] = val[0];
         }
 
+        buf = null;
+        buf_u8 = null;
+        buf_arr = null;
+
+        this.ptr_end = (this.ptr_end + num_samples) % this.max_length;
         this.length += num_samples;
+
         return this.length <= this.max_length - num_samples;
     }
 
     slice(num_samples) {
-        if(this.length < num_samples) return null;
+        if(this.length < num_samples * 10) return null;
 
         this.length -= num_samples;
 
@@ -111,6 +111,7 @@ class AudioBuffer {
         this.pos_loaded = 0;
 
         this.finished = finished;
+        this.filling = false;
     }
 
     next(length) {
@@ -119,8 +120,10 @@ class AudioBuffer {
             this.finished();
         }
 
-        if(this.buffer.should_fill())
+        if(this.buffer.should_fill() && !this.filling) {
+            console.log("FILLING UP!");
             this.fill_buf();
+        }
 
         const buf = this.buffer.slice(length);
         if(buf)
@@ -148,13 +151,19 @@ class AudioBuffer {
         if(this.track == null)
             return;
 
+        this.filling = true;
+
         this.stream_next().then(x => {
             this.pos_loaded += x.length / this.channels / 2;
 
             if(this.buffer.push(x)) {
-                this.fill_buf();
+                setImmediate(this.fill_buf.bind(this));
             } else {
+                this.filling = false;
             }
+
+            x.length = 0;
+            x = null;
         });
     }
 
@@ -176,7 +185,7 @@ class AudioBuffer {
     }
 }
 
-const PLAY_BUFFER_SIZE = 2*8192;
+const PLAY_BUFFER_SIZE = 8192 * 2;
 
 export default class Player {
     constructor(numChannel, new_track_cb, set_playing_cb, set_queue_cb, set_queue_pos_cb) {
@@ -207,10 +216,17 @@ export default class Player {
         // if there is no buffer, then we can just write an empty result
         if(this.playing) {
             // get the oldest element in the buffer
-            const buf = this.buffer.next(PLAY_BUFFER_SIZE);
+            let buf = this.buffer.next(PLAY_BUFFER_SIZE);
             for(let channel = 0; channel < ouBuf.numberOfChannels; channel++) {
-                ouBuf.copyToChannel(buf[channel], channel);
+                if(buf)
+                    ouBuf.copyToChannel(buf[channel], channel);
+                else
+                    ouBuf.copyToChannel(new Float32Array(new Array(PLAY_BUFFER_SIZE).fill(0)), channel);
             }
+
+            //buf[0] = null;
+            //buf[1] = null;
+            buf = null;
         }
     }
 
@@ -385,7 +401,6 @@ export default class Player {
             return 0.0;
 
         const tmp = this.buffer.pos_loaded / this.audioContext.sampleRate / this.queue[this.queue_pos].duration;
-        console.log(tmp);
 
         return tmp;
 
