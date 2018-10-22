@@ -70,6 +70,11 @@ pub enum RequestAction {
         key: String,
         playlist: String
     },
+    /// Delete a track from a playlist
+    DeleteFromPlaylist {
+        key: String,
+        playlist: String
+    },
     /// Update metadata of a playlist
     UpdatePlaylist {
         key: String,
@@ -195,6 +200,7 @@ pub enum AnswerAction {
     UpdatePlaylist,
     SetPlaylistImage,
     AddToPlaylist(Playlist),
+    DeleteFromPlaylist,
     GetPlaylists(Vec<Playlist>),
     GetPlaylist((Playlist,Vec<Track>)),
     GetPlaylistsOfTrack(Vec<Playlist>),

@@ -13,6 +13,7 @@ const CALLS = {
     DeletePlaylist: ["key"],
     SetPlaylistImage: ["key"],
     AddToPlaylist: ["key", "playlist"],
+    DeleteFromPlaylist: ["key", "playlist"],
     UpdatePlaylist: ["key", "title", "desc"],
     GetPlaylists: [],
     GetPlaylist: ["key"],
@@ -109,13 +110,13 @@ class Protocol {
         const [type, resolve, reject] = this.pending_requests[id];
         let action = answ.action();
             
-        if(typeof action === "string") {
+        if(typeof action === "string" && action != type) {
             reject(action);
             return;
         }
         
         //console.log("Answer");
-        //console.log(action);
+        console.log(action);
 
         const key = Object.keys(action)[0];
         action = action[key];

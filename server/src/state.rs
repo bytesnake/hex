@@ -257,6 +257,12 @@ impl State {
                     .map_err(|err| Error::Database(err))
             },
 
+            RequestAction::DeleteFromPlaylist { key, playlist } => {
+                self.collection.delete_from_playlist(&key, &playlist);
+
+                Ok(AnswerAction::DeleteFromPlaylist)
+            },
+
             RequestAction::GetPlaylists => {
                 Ok(AnswerAction::GetPlaylists(self.collection.get_playlists()))
             },

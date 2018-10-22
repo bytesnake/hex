@@ -168,6 +168,26 @@ export default class Track extends Component {
         }
     }
 
+    deleteFromPlaylist = (e) => {
+        e.stopPropagation();
+
+        const name = e.target.parentNode.firstChild.data;
+        const key = this.state.playlists.filter(x => x.title == name).map(x => x.key);
+
+        if(key.length == 0) {
+            console.error("Could not find playlist in playlists!");
+            return;
+        }
+
+        console.log("DON!");
+        Protocol.delete_from_playlist(this.props.track_key, key[0])
+        .then(x => {
+            const playlists = this.state.playlists.filter(x => x.key != key[0]);
+
+            this.setState({ playlists });
+        });
+    }
+
     render({size, track_key, title, album, interpret, people, composer}, {minimal, hide, playlists, suggestions, downloading}) {
         if(hide)
             return;
@@ -217,7 +237,7 @@ export default class Track extends Component {
                             </div>
                             <div class={style.playlists}><b>Playlists</b><div class={style.playlist_inner}>
                                 { playlists && playlists.length > 0 && playlists.map(x => (
-                                    <span onClick={e => {e.stopPropagation(); route("/playlist/" + x.key);}} >{x.title}</span>
+                                    <span onClick={e => {e.stopPropagation(); route("/playlist/" + x.key);}} >{x.title}<Icon icon="close" onClick={this.deleteFromPlaylist} /></span>
                                 ))}
                             </div>
                             <div class={style.playlist_add}>

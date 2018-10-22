@@ -236,6 +236,39 @@ impl Collection {
         Ok(_playlist)
     }
 
+    /// Remove a track to a certain playlist
+    pub fn delete_from_playlist(&self, key: &str, playlist_key: &str) -> Result<()> {
+        let mut stmt = self.socket.prepare(
+            "SELECT Key, Title, Desc, Tracks, Count, Origin
+                FROM Playlists WHERE Key=?;")?;
+        
+        let mut query = stmt.query(&[&playlist_key])?;
+        let row = query.next().ok_or(Error::QueryReturnedNoRows)??;
+
+        let mut _playlist = Playlist {
+            key: row.get(0),
+            title: row.get(1),
+            desc: row.get(2),
+            tracks: row.get(3),
+            count: row.get(4),
+            origin: row.get(5)
+        };
+
+        _playlist.count -= 1;
+
+        let keys: Option<String> = row.get(3);
+        //let keys: String = keys.map(|x| format!("{},{}", x, key)).unwrap_or(key.into());
+        let keys = keys.map(|x| { 
+            let mut x = x.split(",").collect::<Vec<&str>>(); 
+            x.retain(|x| x != &key);
+            x.join(",")
+        }).unwrap_or("".into());
+
+        self.socket.execute("UPDATE playlists SET Count = ?1, tracks = ?2 WHERE Key = ?3", &[&_playlist.count, &keys, &_playlist.key])?;
+
+        Ok(())
+    }
+
     /// Insert a new track into the database
     pub fn insert_track(&self, track: Track) -> Result<()> {
         self.socket.execute("INSERT INTO music

@@ -39,7 +39,7 @@ export default class PlaylistForTrack {
            </div>
            <div class={style.add_to}>
                 <input placeholder="Add to playlist" ref={x => this.add_input} />
-                <Icon icon="add />
+                <Icon icon="add" />
            </div>
         );
 
