@@ -6,7 +6,10 @@ const MAX_LOADED = 30; // secs
 
 class RingBuffer {
     constructor(channels, duration, sampling_rate) {
-        this.buf = Array(channels).fill(new Int16Array(sampling_rate * duration));
+        //this.buf = Array(channels).fill(new Int16Array(sampling_rate * duration));
+        this.buf = [];
+        for(let i = 0; i < channels; i++)
+            this.buf.push(new Int16Array(sampling_rate * duration));
 
         this.ptr_end = 0;
         this.ptr_start = 0;
@@ -221,8 +224,9 @@ export default class Player {
             // get the oldest element in the buffer
             let buf = this.buffer.next(PLAY_BUFFER_SIZE);
             for(let channel = 0; channel < ouBuf.numberOfChannels; channel++) {
-                if(buf)
+                if(buf) {
                     ouBuf.copyToChannel(buf[channel], channel);
+                }
                 else
                     ouBuf.copyToChannel(new Float32Array(new Array(PLAY_BUFFER_SIZE).fill(0)), channel);
             }
