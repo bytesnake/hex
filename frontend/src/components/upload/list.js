@@ -144,13 +144,21 @@ export class List extends Component {
 
         this.interval = setInterval(function() {
             Protocol.ask_upload_progress().then(progress => {
-                console.log(progress);
-                self.setState({tracks: progress});
+                let tracks = progress;
+                for(const track of self.state.tracks) {
+                    console.log(tracks.map(x => x.id));
+                    console.log(track.id);
+                    console.log(tracks.filter(x => JSON.stringify(x.id) == JSON.stringify(track.id)));
+                    if(tracks.filter(x => JSON.stringify(x.id) == JSON.stringify(track.id)).length == 0)
+                        tracks.push(track);
+                }
+                self.setState({ tracks });
             });
         }, 1000);
     }
 
     componentWillUnmount() {
+        this.setState({tracks: []});
         clearInterval(this.interval);
     }
 

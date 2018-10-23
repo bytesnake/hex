@@ -308,20 +308,23 @@ impl State {
                 // tick each item
                 for item in &mut self.uploads {
                     if let Some(track) = item.tick(id.clone(), self.data_path.clone()) {
+                        println!("Finished yay");
                         self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
                         self.collection.insert_track(track).unwrap();
                     }
                 }
 
                 // collect update informations
-                let infos = self.uploads.iter().map(|item| {
-                    UploadProgress {
+                let infos = self.uploads.iter().filter_map(|item| {
+                    let id = item.id()?;
+
+                    Some(UploadProgress {
                         desc: item.desc().clone(),
                         kind: item.kind().into(),
                         progress: item.progress(),
-                        id: item.id(),
+                        id: id,
                         key: item.track_key()
-                    }
+                    })
                 }).collect();
 
                 // delete finished uploads

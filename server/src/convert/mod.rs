@@ -176,13 +176,13 @@ impl UploadState {
             UploadState::Finished(_) => 1.0
         }
     }
-    pub fn id(&self) -> PacketId {
+    pub fn id(&self) -> Option<PacketId> {
         match *self {
-            UploadState::YoutubeDownload { ref id, .. } => id.clone(),
-            UploadState::ConvertingFFMPEG { ref id, .. } => id.clone(),
-            UploadState::ConvertingOpus { ref id, .. } => id.clone(),
-            UploadState::Finished(Some((ref id, _, _))) => id.clone(),
-            UploadState::Finished(None) => panic!("Blub")
+            UploadState::YoutubeDownload { ref id, .. } => Some(id.clone()),
+            UploadState::ConvertingFFMPEG { ref id, .. } => Some(id.clone()),
+            UploadState::ConvertingOpus { ref id, .. } => Some(id.clone()),
+            UploadState::Finished(Some((ref id, _, _))) => Some(id.clone()),
+            UploadState::Finished(None) => None
         }
     }
 
