@@ -116,7 +116,7 @@ class Protocol {
         }
         
         //console.log("Answer");
-        console.log(action);
+        //console.log(action);
 
         const key = Object.keys(action)[0];
         action = action[key];

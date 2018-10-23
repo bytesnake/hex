@@ -4,10 +4,12 @@ version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
 [dependencies]
-
+clap = "*"
 
 [dependencies.hex-music-container]
 path = "../music-container/"
 
 [dependencies.hex-database]
 path = "../database/"
+default_features = false
+features = ["rusqlite"]

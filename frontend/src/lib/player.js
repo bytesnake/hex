@@ -1,6 +1,9 @@
 import Protocol from 'Lib/protocol';
 import Resampler from './resampler.js';
 
+const MIN_LOADED = 20; //secs
+const MAX_LOADED = 30; // secs
+
 class RingBuffer {
     constructor(channels, duration, sampling_rate) {
         this.buf = Array(channels).fill(new Int16Array(sampling_rate * duration));
@@ -48,7 +51,7 @@ class RingBuffer {
     }
 
     slice(num_samples) {
-        if(this.length < num_samples * 10) return null;
+        //if(this.length < 48000 * MIN_LOADED / 2 && ) return null;
 
         this.length -= num_samples;
 
@@ -95,7 +98,7 @@ class RingBuffer {
     }
 
     should_fill() {
-        return this.length < this.sampling_rate * 10;
+        return this.length < this.sampling_rate * MIN_LOADED;
     }
 }
 
@@ -105,7 +108,7 @@ class AudioBuffer {
         this.sample_rate = sample_rate;
         this.samples = samples;
 
-        this.buffer = new RingBuffer(channels, 40, sample_rate);
+        this.buffer = new RingBuffer(channels, MAX_LOADED, sample_rate);
 
         this._pos = 0;
         this.pos_loaded = 0;
@@ -122,7 +125,7 @@ class AudioBuffer {
 
         if(this.buffer.should_fill() && !this.filling) {
             console.log("FILLING UP!");
-            this.fill_buf();
+            setTimeout(this.fill_buf.bind(this), 20);
         }
 
         const buf = this.buffer.slice(length);

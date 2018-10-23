@@ -13,7 +13,8 @@ module.exports = {
     entry: './index.js',
     output: {
         path: path.resolve(__dirname, 'build'),
-        filename: 'index.js'
+        filename: 'index.js',
+        publicPath: '/'
     },
     resolve: {
         extensions: ['.jsx', '.js', '.json', '.less', 'wasm'],
@@ -134,5 +135,8 @@ module.exports = {
             { from: './favicon.ico', to: './' }
         ])
     ],
+    devServer: {
+        historyApiFallback: true,
+    },
     mode: 'development'
 };
