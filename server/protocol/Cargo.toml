@@ -27,7 +27,7 @@ console_error_panic_hook = { version = "0.1.1", optional = true }
 wee_alloc = { version = "0.4.2", optional = true }
 
 [dependencies.hex-database]
-path = "/home/lorenz/Documents/projects/hex/database/"
+path = "../../database/"
 features = ["serde"]
 default_features = false
 
