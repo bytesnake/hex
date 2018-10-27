@@ -10,7 +10,7 @@ use std::time::{Instant, Duration};
 
 use tokio::net::UdpSocket;
 use tokio::timer::Interval;
-use futures::{Async, Future, Stream};
+use futures::{self, Async, Future, Stream};
 use std::net::{SocketAddrV4, Ipv4Addr, SocketAddr, IpAddr};
 
 use local_ip;

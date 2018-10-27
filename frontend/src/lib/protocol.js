@@ -1,5 +1,20 @@
 import { guid } from './uuid.js'
-const _proto = import('./hex_server_protocol');
+//const _proto = import('./hex_server_protocol');
+const _proto = import(/* webpackChunkName: "hex_server_protocol" */ './hex_server_protocol');
+//import _proto from './hex_server_protocol.js';
+
+// Since webpack will change the name and potentially the path of the
+// `.wasm` file, we have to provide a `locateFile()` hook to redirect
+// to the appropriate URL.
+// More details: https://kripken.github.io/emscripten-site/docs/api_reference/module.html
+/*const module = fibonacci({
+  locateFile(path) {
+    if(path.endsWith('.wasm')) {
+      return fibonacciModule;
+    }
+    return path;
+  }
+});*/
 
 const CALLS = {
     Search: ["query"],
@@ -52,6 +67,7 @@ class Protocol {
         }
 
         _proto.then(x => {
+            alert("LOADED");
             proto = x;
             self.try_connect('ws://' + location.hostname + ':2794');
         });
@@ -60,7 +76,6 @@ class Protocol {
     }
 
     try_connect(addr) {
-        //console.log("CONNECT");
         this.socket = new WebSocket('ws://' + location.hostname + ':2794', 'rust-websocket');
         this.socket.binaryType = 'arraybuffer';
 

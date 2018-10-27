@@ -9,6 +9,7 @@ import Search from './search';
 import Upload from './upload';
 import MusicPlayer from './music_player';
 import Playlist from './playlist';
+import Protocol from 'Lib/protocol';
 
 export default class App extends Component {
 	/** Gets fired when the route changes.

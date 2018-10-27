@@ -1,4 +1,4 @@
-use rusqlite::{Result, Statement, Error};
+use rusqlite::{self, Result, Statement, Error};
 use search::SearchQuery;
 use uuid::Uuid;
 use std::path::Path;

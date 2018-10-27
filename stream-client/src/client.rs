@@ -14,7 +14,7 @@ pub fn gen_id() -> PacketId {
 
 impl Client {
     pub fn new() -> Client {
-        let client = ClientBuilder::new("ws://127.0.0.1:2794")
+        let client = ClientBuilder::new("ws://192.168.1.2:2794")
             .unwrap()
             .add_protocol("rust-websocket")
             .connect_insecure()
