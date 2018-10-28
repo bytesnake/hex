@@ -8,14 +8,12 @@ import InputSuggest from 'Component/input_suggest';
 
 export default class Upload extends Component {
     state = {
-        show: false,
         token: null,
         playlists: null
     };
 
-    open = () => {
-        this.setState({ show: !this.state.show });
-
+    componentWillMount() {
+        console.log("mount");
         let token = Protocol.last_token()
             .then(token_id => {
                 if(token_id == null) this.setState({token: null})
@@ -54,16 +52,10 @@ export default class Upload extends Component {
 
     render(props, {show, token}) {
         return (
-            <div>
-                <Icon icon="nfc" onClick={this.open} />
-
-                {show && (
-                <div class={style.upload}>
-                    {token == null && (<span>No token found!</span>)}
-                    {token != null && (
-                            <InputSuggest onEnter={this.enter} suggest={this.suggest} value={token[1] ? token[1][0].title:""} />
-                    )}
-                </div>
+            <div class={style.upload}>
+                {token == null && (<span>No token found!</span>)}
+                {token != null && (
+                        <InputSuggest onEnter={this.enter} suggest={this.suggest} value={token[1] ? token[1][0].title:""} />
                 )}
             </div>
         );

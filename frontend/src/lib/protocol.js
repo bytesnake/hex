@@ -74,7 +74,6 @@ class Protocol {
         }
 
         _proto.then(x => {
-            alert("LOADED");
             proto = x;
             self.try_connect('ws://' + location.hostname + ':2794');
         });

@@ -4,6 +4,7 @@ import {Layout, TextField, Icon} from 'preact-mdl';
 import TokenInput from 'preact-token-input';
 
 import style from 'Style/header';
+import HeaderAction from 'Component/header_action';
 import Protocol from 'Lib/protocol';
 import Upload from 'Component/upload';
 import Zyklop from 'Component/zyklop';
@@ -29,11 +30,11 @@ export default class Header extends Component {
                     <Icon icon="search" />
                 </div>
             </div>
-            <div class={style.actions}>
+            <HeaderAction icons={["nfc", "file_upload", "info_outline"]}>
                 <Zyklop />
                 <Upload />
-                <Icon icon="info outline" />
-            </div>
+                <div />
+            </HeaderAction>
             </Layout.HeaderRow>
             </Layout.Header>
         );

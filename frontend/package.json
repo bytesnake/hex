@@ -64,6 +64,7 @@
     "preact-chartjs-2": "^1.0.3",
     "preact-compat": "^3.18.4",
     "preact-mdl": "^2.2.2",
+    "preact-portal": "^1.1.3",
     "preact-router": "^2.6.1",
     "preact-token-input": "^0.3.0",
     "react-calendar-heatmap": "^1.7.0"
