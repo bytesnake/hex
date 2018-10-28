@@ -2,7 +2,7 @@ import {h, Component} from 'preact';
 import {Icon} from 'preact-mdl';
 import { route } from 'preact-router';
 
-import style from './style.less';
+import style from './style.css';
 import {List} from './list.js';
 import Protocol from 'Lib/protocol';
 

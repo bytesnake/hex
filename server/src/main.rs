@@ -24,6 +24,7 @@
 //! and can then be passed as an argument. (e.g. `./target/release/hex_server conf.toml`)
 
 extern crate websocket;
+#[macro_use]
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_io;
@@ -31,6 +32,7 @@ extern crate tokio_process;
 extern crate bytes;
 extern crate hyper;
 extern crate hyper_staticfile;
+extern crate http;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -77,7 +79,7 @@ fn main() {
         let data_path = conf.music.data_path.clone();
         let addr = SocketAddr::new(conf.host.clone(), webserver.port);
         thread::spawn(move || {
-            webserver::create_webserver(addr, &webserver.path, &data_path);
+            webserver::create_webserver(addr, webserver.path.clone(), data_path.clone());
         });
     }
 

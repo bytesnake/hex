@@ -2,7 +2,7 @@ import {Component, h} from 'preact';
 import Autocomplete from 'accessible-autocomplete/preact'
 import {Button} from 'preact-mdl';
 
-import style from './style.less';
+import style from './style.css';
 import Protocol from 'Lib/protocol';
 import suggestion_flatten from 'Lib/suggestions';
 

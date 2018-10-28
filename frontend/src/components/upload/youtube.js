@@ -1,6 +1,6 @@
 import {Component, h} from 'preact';
 
-import style from './style.less';
+import style from './style.css';
 import {guid} from 'Lib/uuid';
 import Protocol from 'Lib/protocol';
 import TrackView from './track';

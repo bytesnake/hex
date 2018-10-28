@@ -2,7 +2,7 @@ import {h, Component} from 'preact';
 import {Icon, Button} from 'preact-mdl';
 import Player from '../../lib/player.js';
 import get_album_cover from '../../lib/get_cover.js';
-import sbottom from './style_bottom.less';
+import sbottom from './style_bottom.css';
 import ProgressBar from './progress.js';
 import MusicQueue from './music_queue.js';
 

@@ -1,6 +1,13 @@
 import { guid } from './uuid.js'
-//const _proto = import('./hex_server_protocol');
-const _proto = import(/* webpackChunkName: "hex_server_protocol" */ './hex_server_protocol');
+//const _proto2 = import('./hex_server_protocol.js');
+
+//const _proto = import('./hex_server_protocol_bg.wasm').then(_ => {
+    const _proto = import(/* webpackChunkName: "hex_server_protocol" */ './hex_server_protocol');
+
+//    return _proto;
+//});
+
+_proto.catch(x => console.log("REJECT: " + x));
 //import _proto from './hex_server_protocol.js';
 
 // Since webpack will change the name and potentially the path of the

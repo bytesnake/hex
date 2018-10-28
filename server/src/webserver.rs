@@ -1,15 +1,49 @@
 //! The HTTP implementation serves the frontend
-use futures::{Future, Stream, future};
-use hyper;
-use hyper::Error;
-use hyper::server::{Http, Request, Response, Service};
-use hyper_staticfile::Static;
-use std::path::Path;
-use tokio_core::reactor::{Core, Handle};
-use tokio_core::net::TcpListener;
-use std::net::SocketAddr;
 
-type ResponseFuture = Box<Future<Item=Response, Error=Error>>;
+use futures::{Async::*, Future, Poll, future};
+use http::response::Builder as ResponseBuilder;
+use http::{Request, Response, StatusCode, header};
+use hyper::{Body, service::Service, header::{HeaderValue, CONTENT_TYPE}};
+use hyper_staticfile::{Static, StaticFuture};
+use std::path::Path;
+use std::io::Error;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
+/// Future returned from `MainService`.
+enum MainFuture {
+    Root,
+    Static((StaticFuture<Body>, PathBuf)),
+}
+
+impl Future for MainFuture {
+    type Item = Response<Body>;
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        match *self {
+            MainFuture::Root => {
+                let res = ResponseBuilder::new()
+                    .status(StatusCode::MOVED_PERMANENTLY)
+                    .header(header::LOCATION, "/index.html")
+                    .body(Body::empty())
+                    .expect("unable to build response");
+                Ok(Ready(res))
+            },
+            MainFuture::Static((ref mut future, ref path)) => {
+                let mut x = try_ready!(future.poll());
+
+                if let Some(ext) = path.extension() {
+                    if let Some("wasm") = ext.to_str() {
+                        x.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/wasm"));
+                    }
+                }
+
+                Ok(Ready(x))
+            }
+        }
+    }
+}
 
 /// The service should just offer all fields in a single directory
 struct MainService {
@@ -19,29 +53,29 @@ struct MainService {
 
 impl MainService {
     /// Create a new service
-    fn new(handle: &Handle, path: &Path, data_path: &Path) -> MainService {
+    fn new(path: &Path, data_path: &Path) -> MainService {
         MainService {
-            static_: Static::new(&handle.clone(), path),
-            download: Static::new(&handle, data_path.parent().unwrap())
+            static_: Static::new(path),
+            download: Static::new(data_path.parent().unwrap())
         }
     }
 }
 
 impl Service for MainService {
-    type Request = Request;
-    type Response = Response;
+    type ReqBody = Body;
+    type ResBody = Body;
     type Error = Error;
-    type Future = ResponseFuture;
+    type Future = MainFuture;
 
-    fn call(&self, req: Request) -> Self::Future {
-        println!("Path: {}", req.path());
-        /*if req.path().starts_with("/data/") {
-            println!("Starts with!");
+    fn call(&mut self, req: Request<Body>) -> MainFuture {
+        let path = PathBuf::from(req.uri().path());
+        //println!("Path: {:?}", path);
 
-            self.download.call(req)
-        } else {*/
-            self.static_.call(req)
-        //}
+        if req.uri().path() == "/" {
+            MainFuture::Root
+        } else {
+            MainFuture::Static((self.static_.serve(req), path))
+        }
     }
 }
 
@@ -50,20 +84,11 @@ impl Service for MainService {
 /// * `addr` - Listen to this address
 /// * `path` - Serve this directory
 /// * `data_path` - Serve the data from this directory
-pub fn create_webserver(addr: SocketAddr, path: &Path, data_path: &Path) {
-    let mut core = Core::new().unwrap();
-    let handle = core.handle();
-
-    //let addr = (host, port).parse().unwrap();
-    let listener = TcpListener::bind(&addr, &handle).unwrap();
-
-    let http = Http::new();
-    let server = listener.incoming().for_each(|(sock, addr)| {
-        let s = MainService::new(&handle, path, data_path);
-        http.bind_connection(&handle, sock, addr, s);
-        Ok(())
-    });
+pub fn create_webserver(addr: SocketAddr, path: PathBuf, data_path: PathBuf) {
+    let server = hyper::Server::bind(&addr)
+        .serve(move || future::ok::<_, Error>(MainService::new(&path, &data_path)))
+        .map_err(|e| eprintln!("server error: {}", e));
 
     println!("Web server running on http://{}", addr);
-    core.run(server).unwrap();
+    hyper::rt::run(server);
 }

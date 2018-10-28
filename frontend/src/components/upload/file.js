@@ -1,5 +1,5 @@
 import { h, Component } from 'preact';
-import style from './style.less';
+import style from './style.css';
 import { Button, Icon } from 'preact-mdl';
 import MozillaFolder from 'Lib/upload';
 import Protocol from 'Lib/protocol';

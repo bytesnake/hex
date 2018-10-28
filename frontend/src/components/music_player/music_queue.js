@@ -1,6 +1,6 @@
 import {h, Component} from 'preact';
 import {Icon} from 'preact-mdl';
-import style from './music_queue_style.less';
+import style from './music_queue_style.css';
 
 class QueueItem extends Component {
     remove_track = (e) => {

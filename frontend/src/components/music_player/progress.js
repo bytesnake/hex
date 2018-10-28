@@ -1,5 +1,5 @@
 import {h, Component} from 'preact';
-import style from './progress.less';
+import style from './progress.css';
 
 export default class ProgressBar extends Component {
     componentDidMount() {

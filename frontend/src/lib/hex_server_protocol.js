@@ -1,8 +1,5 @@
-alert("BLUBBB");
 /* tslint:disable */
 import * as wasm from './hex_server_protocol_bg.wasm';
-
-console.log(wasm);
 
 let cachegetUint32Memory = null;
 function getUint32Memory() {

@@ -2,7 +2,7 @@ import {h, Component} from 'preact';
 import {Button, Icon} from 'preact-mdl';
 import {route} from 'preact-router';
 
-import style from './style.less';
+import style from './style.css';
 import {PlayButton, AddToQueueButton} from 'Component/play_button';
 import Protocol from 'Lib/protocol';
 import InputSuggest from 'Component/input_suggest';

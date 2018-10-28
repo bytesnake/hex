@@ -1,6 +1,6 @@
 import {Component, h} from 'preact';
 import Track from './track.js';
-import style from './style.less';
+import style from './style.css';
 
 const Size = {
     FULL: 0,

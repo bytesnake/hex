@@ -1,9 +1,11 @@
 const path = require('path');
 const autoprefixer = require('autoprefixer');
+const CleanWebpackPlugin = require('clean-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const ExtractTextPlugin = require('extract-text-webpack-plugin');
 const OfflinePlugin = require('offline-plugin');
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const webpack = require('webpack');
 const ENV = process.env.NODE_ENV || 'development';
 
@@ -19,7 +21,7 @@ module.exports = {
         publicPath: '/'
     },
     resolve: {
-        extensions: ['.jsx', '.js', '.json', '.less', 'wasm'],
+        extensions: ['.js', 'wasm', '.css'],
         alias: {
             Lib: path.resolve(__dirname, 'src/lib/'),
             Component: path.resolve(__dirname, 'src/components/'),
@@ -50,63 +52,11 @@ module.exports = {
                 ]
             },
             {
-                // Transform our own .(less|css) files with PostCSS and CSS-modules
-                test: /\.(less|css)$/,
-                include: [
-                    path.resolve(__dirname, 'src/components'),
-                    path.resolve(__dirname, 'src/style')
-                ],
-                use: ExtractTextPlugin.extract({
-                    fallback: 'style-loader',
-                    use: [
-                        {
-                            loader: 'css-loader',
-                            options: { modules: true, sourceMap: CSS_MAPS, importLoaders: 1, minimize: true }
-                        },
-                        {
-                            loader: `postcss-loader`,
-                            options: {
-                                sourceMap: CSS_MAPS,
-                                plugins: () => {
-                                    autoprefixer({ browsers: [ 'last 2 versions' ] });
-                                }
-                            }
-                        },
-                        {
-                            loader: 'less-loader',
-                            options: { sourceMap: CSS_MAPS }
-                        }
-                    ]
-                })
-            },
-            {
-                test: /\.(less|css)$/,
-                exclude: [
-                    path.resolve(__dirname, 'src/components'),
-                    path.resolve(__dirname, 'src/style')
-                ],
-                use: ExtractTextPlugin.extract({
-                    fallback: 'style-loader',
-                    use: [
-                        {
-                            loader: 'css-loader',
-                            options: { sourceMap: CSS_MAPS, importLoaders: 1, minimize: true }
-                        },
-                        {
-                            loader: `postcss-loader`,
-                            options: {
-                                sourceMap: CSS_MAPS,
-                                plugins: () => {
-                                    autoprefixer({ browsers: [ 'last 2 versions' ] });
-                                }
-                            }
-                        },
-                        {
-                            loader: 'less-loader',
-                            options: { sourceMap: CSS_MAPS }
-                        }
-                    ]
-                })
+                test: /\.css$/,
+                use: [
+                  { loader: MiniCssExtractPlugin.loader },
+                  { loader: "css-loader", options: {modules: true} }
+                ]
             },
             // Emscripten JS files define a global. With `exports-loader` we can
             // load these files correctly (provided the global’s name is the same
@@ -128,20 +78,30 @@ module.exports = {
         ]
     },
     plugins: ([
-        new ExtractTextPlugin({
+        new CleanWebpackPlugin(['build']),
+        /*new ExtractTextPlugin({
             filename: 'style.css',
             allChunks: true
             //disable: ENV !== 'production'
-        }),
+        }),*/
 
         new HtmlWebpackPlugin({
             template: './index.ejs',
             minify: { collapseWhitespace: true }
-        }), 
+        }),
         new CopyWebpackPlugin([
             { from: './manifest.json', to: './' },
-            { from: './favicon.ico', to: './' }
-        ])
+            { from: './favicon.ico', to: './' },
+            { from: './lib/hex_server_protocol_bg.wasm', to: './protocol.module.wasm' },
+            { from: './assets/', to: 'assets/', toType: 'dir' }
+        ]),
+        new MiniCssExtractPlugin({
+          // Options similar to the same options in webpackOptions.output
+          // both options are optional
+          filename: "[name].css",
+          chunkFilename: "[id].css"
+        }),
+        new webpack.ContextReplacementPlugin(/moment[\/\\]locale$/, /de|fr|hu/)
     ]).concat(ENV==='production' ? [
 		new webpack.optimize.UglifyJsPlugin({
 			output: {
@@ -190,9 +150,9 @@ module.exports = {
 			publicPath: '/'
 		})
     ] : []),
-
+    stats: { children: false }, // Ok??
     devServer: {
         historyApiFallback: true,
     },
-    mode: 'production'
+    mode: 'development'
 };

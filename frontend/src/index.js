@@ -1,7 +1,7 @@
 // import 'promise-polyfill';
 // import 'isomorphic-fetch';
 import { h, render } from 'preact';
-//import './style';
+//import './style.css';
 import mdl from 'material-design-lite/material';
 
 let root;
