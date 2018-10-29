@@ -27,7 +27,7 @@ export default class App extends Component {
                     <Header ref={ x => this.header = x} />
                     <Sidebar />
 
-                    <Layout.Content>
+                    <Layout.Content style="overflow: scroll !important;">
                         <Router onChange={this.handleRoute}>
                             <Home path="/" />
                             <Home path="/index.html" />

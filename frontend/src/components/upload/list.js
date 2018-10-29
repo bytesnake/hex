@@ -13,23 +13,26 @@ export default class TrackMeta extends Component {
 
         const track_key = props.track_key;
 
-        console.log("Track key" + track_key);
+        let track = {
+            key: track_key,
+            title: null,
+            album: null,
+            interpret: null,
+            people: null,
+            composer: null
+        };
 
-        Protocol.get_suggestions([track_key])
+        Protocol.get_suggestion(track_key)
         .then(suggestions => {
+            console.log("Suggestion: " + suggestions);
             if(suggestions && suggestions[0] && suggestions[0].data)
                 var suggestion = suggestion_flatten(JSON.parse(suggestions[0].data));
 
-            let track = {
-                key: track_key,
-                title: null,
-                album: null,
-                artist: null,
-                people: null,
-                composer: null
-            };
-
             this.setState({ track, suggestion });
+        }).catch(e => {
+            console.error("Could not get suggestions: " + e);
+
+            this.setState({ track });
         });
     }
 
@@ -40,7 +43,6 @@ export default class TrackMeta extends Component {
         const filteredResults = this.state.suggestion[kind].filter(result => result.indexOf(query) !== -1);
 
         cb(filteredResults)
-
     }
 
 
@@ -48,7 +50,7 @@ export default class TrackMeta extends Component {
         const track = this.state.track;
 
         let self = this;
-        Protocol.update_track(track)
+        Protocol.update_track(track.key, track.title, track.album, track.interpret, track.people, track.composer)
         .then(function() {
             console.log("Updated");
         });
@@ -78,9 +80,6 @@ export default class TrackMeta extends Component {
                 <b>Interpret</b>
                 <Autocomplete id='autocomplete_interpret' source={(a,b) => this.suggest(a, b, "artist")} showAllValues={true}
                     onConfirm={() => this.update(document.getElementById("autocomplete_interpret").value, "interpret")} displayMenu='overlay' />
-                <b>People</b>
-                <Autocomplete id='autocomplete_people' source={(a,b) => this.suggest(a, b, "artist")} showAllValues={true}
-                    onConfirm={() => this.update(document.getElementById("autocomplete_people").value, "People")} displayMenu='overlay' />
                 <b>Composer</b>
                 <Autocomplete id='autocomplete_composer' source={(a,b) => this.suggest(a, b, "artist")} showAllValues={true}
                     onConfirm={() => this.update(document.getElementById("autocomplete_composer").value, "composer")} displayMenu='overlay' />
@@ -99,14 +98,13 @@ class TrackItem extends Component {
     format(kind, progress) {
         const p = Math.floor(progress*100);
         if(kind == "converting_opus")
-            if(progress == 1.0) 
-                return "Finished";
-            else
-                return p+"% (convert to opus)";
+            return p+"% (convert to opus)";
         if(kind == "converting_ffmpeg")
             return p +"% (convert to wav)";
         if(kind == "youtube_download")
             return p + "% (download from youtube)";
+        if(kind == "finished")
+            return "Finished";
     }
 
     render({idx, desc, kind, progress, track_key}, {show, track}) {
@@ -146,9 +144,6 @@ export class List extends Component {
             Protocol.ask_upload_progress().then(progress => {
                 let tracks = progress;
                 for(const track of self.state.tracks) {
-                    console.log(tracks.map(x => x.id));
-                    console.log(track.id);
-                    console.log(tracks.filter(x => JSON.stringify(x.id) == JSON.stringify(track.id)));
                     if(tracks.filter(x => JSON.stringify(x.id) == JSON.stringify(track.id)).length == 0)
                         tracks.push(track);
                 }
@@ -168,7 +163,7 @@ export class List extends Component {
         return (
             <div class={style.upload_list}>
                 {tracks.length > 0 && tracks.map(x => (
-                    <TrackItem idx={idx++} {...x} />
+                    <TrackItem idx={idx++} track_key={x.key} {...x} />
                 ))}
                 {tracks.length == 0 && (
                     <div class={style.upload_nothing}>Keine Uploads</div>

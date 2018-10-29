@@ -33,7 +33,7 @@ export default class Header extends Component {
             <HeaderAction icons={["nfc", "file_upload", "info_outline"]}>
                 <Zyklop />
                 <Upload />
-                <div />
+                <div class={style.about_hex}><img src="/assets/hex.png" /><span>Hey there,<br /><br />I´m Hex, to learn more about me, please visit <a href="http://github.com/bytesnake/hex">Github</a>.</span></div>
             </HeaderAction>
             </Layout.HeaderRow>
             </Layout.Header>

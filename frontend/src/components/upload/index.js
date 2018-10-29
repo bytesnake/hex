@@ -6,12 +6,6 @@ import style from './style.css';
 import {List} from './list.js';
 import Protocol from 'Lib/protocol';
 
-const Mode = {
-    Closed: 0,
-    Small: 1,
-    Full: 2,
-};
-
 function matchYoutubeUrl(url) {
     var p = /^(?:https?:\/\/)?(?:m\.|www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})(?:\S+)?$/;
     if(url.match(p)){
@@ -22,20 +16,8 @@ function matchYoutubeUrl(url) {
 
 export default class Upload extends Component {
     state = {
-        show: Mode.Closed,
         link_empty: true
     };
-
-    open = () => {
-        if(this.state.show == Mode.Closed)
-            this.setState({show: Mode.Small});
-        else
-            this.setState({show: Mode.Closed});
-    }
-
-    close = () => {
-        this.setState({show: Mode.Closed});
-    }
 
     upload_link = () => {
         let val = this.input.value;
@@ -65,7 +47,7 @@ export default class Upload extends Component {
             files.push([file.name, name, file.slice()]);
         }
 
-        Protocol.upload_files(files)
+        Protocol.upload_tracks(files)
     }
     input_changed = (e) => {
         let elm = e.target;
@@ -106,25 +88,19 @@ export default class Upload extends Component {
 
     render(props, {show, link_empty}) {
         return (
-            <div>
-                <Icon icon="file upload" onClick={this.open} />
-
-                {show != Mode.Closed && (
-                <div class={style.upload}>
-                    <List ref={x => this.list = x} />
-                    <div class={style.control}>
-                        <Icon icon="playlist add" onClick={this.create_playlist} class={style.link_button} />
-                        {!link_empty && (
-                            <Icon icon="add circle outline" class={style.link_button} onClick={this.upload_link} />
-                        )}
-                        {link_empty && (
-                            <Icon icon="note add" class={style.link_button} onClick={x => this.file_input.click()} />
-                        )}
-                        <input class={style.link_input} ref={x => this.input = x} onKeyUp={this.input_changed} />
-                        <input type="file" style="display: none" webkitdirectory allowdir mozdirectory onChange={this.filesDropped} ref={x => this.file_input = x}/>
-                    </div>
+            <div class={style.upload}>
+                <List ref={x => this.list = x} />
+                <div class={style.control}>
+                    <Icon icon="playlist add" onClick={this.create_playlist} class={style.link_button} />
+                    {!link_empty && (
+                        <Icon icon="add circle outline" class={style.link_button} onClick={this.upload_link} />
+                    )}
+                    {link_empty && (
+                        <Icon icon="note add" class={style.link_button} onClick={x => this.file_input.click()} />
+                    )}
+                    <input class={style.link_input} ref={x => this.input = x} onKeyUp={this.input_changed} />
+                    <input type="file" style="display: none" webkitdirectory allowdir mozdirectory onChange={this.filesDropped} ref={x => this.file_input = x}/>
                 </div>
-                )}
             </div>
         );
     }

@@ -103,11 +103,11 @@ impl UploadState {
         
     }
 
-    pub fn tick(&mut self, id: PacketId, data_path: String) -> Option<Track> {
+    pub fn tick(&mut self, data_path: String) -> Option<Track> {
         let item = mem::replace(self, UploadState::Finished(None));
 
         let (next, ret): (Option<UploadState>, Option<Track>) = match &item {
-            UploadState::YoutubeDownload { ref state, id: _, ref downloader } => {
+            UploadState::YoutubeDownload { ref state, ref id, ref downloader } => {
                 let state = state.borrow();
                 if state.progress >= 1.0 {
                     //TODO
@@ -117,7 +117,7 @@ impl UploadState {
                 }
 
             },
-            UploadState::ConvertingFFMPEG { id: _, ref state, ref converter } => {
+            UploadState::ConvertingFFMPEG { ref id, ref state, ref converter } => {
                 let state = state.borrow();
 
                 if state.progress >= 0.999 {

@@ -295,6 +295,7 @@ impl State {
             },
 
             RequestAction::UploadTrack { name, format, data } => {
+                println!("Got track buffer with: {}", data.len());
                 let handle = self.handle.clone();
 
                 self.uploads.push(UploadState::converting_ffmpeg(handle, name, id.clone(), &data, &format));
@@ -307,7 +308,7 @@ impl State {
 
                 // tick each item
                 for item in &mut self.uploads {
-                    if let Some(track) = item.tick(id.clone(), self.data_path.clone()) {
+                    if let Some(track) = item.tick(self.data_path.clone()) {
                         println!("Finished yay");
                         self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
                         self.collection.insert_track(track).unwrap();

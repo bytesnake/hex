@@ -42,7 +42,6 @@ const CALLS = {
     GetPlaylistsOfTrack: ["key"],
     DeleteTrack: ["key"],
     UploadYoutube: ["path"],
-    UploadTrack: ["name", "format", "data"],
     VoteForTrack: ["key"],
     AskUploadProgress: [],
     GetToken: ["GetToken"],
@@ -198,6 +197,30 @@ class Protocol {
         };
     }
 
+    upload_track(name, format, data) {
+        const id = this.dice_id();
+        const promise = new Promise((resolve, reject) => this.pending_requests[id] = ["UploadTrack", resolve, reject]);
+
+        let self = this;
+        var arrayBuffer;
+        var fileReader = new FileReader();
+        fileReader.onload = function(event) {
+            arrayBuffer = new Uint8Array(event.target.result);
+            const buf = proto.upload_track(id, name, format, arrayBuffer);
+
+            if(!buf) {
+                console.error("Could not serialize packet: " + JSON.stringify(req));
+                promise.reject(JSON.stringify(req));
+            }
+
+            self.socket.send(buf.buffer);
+
+        };
+        fileReader.readAsArrayBuffer(data);
+
+        return promise;
+    }
+
     start_stream(key) {
         const id = this.dice_id();
 
@@ -223,7 +246,7 @@ class Protocol {
     get_suggestions(keys) {
         var promises = [];
         for(const key of keys) {
-            promises.push(this.GetSuggestion(key));
+            promises.push(this.get_suggestion(key));
         }
 
         return Promise.all(promises);
@@ -232,7 +255,7 @@ class Protocol {
     upload_tracks(tracks) {
         let promises = [];
         for(const track of tracks) {
-            promises.push(this.UploadTracks(file[0], file[1], file[2]));
+            promises.push(this.upload_track(track[0], track[1], track[2]));
         }
 
         return Promise.all(promises);
