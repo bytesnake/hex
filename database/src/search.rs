@@ -103,7 +103,7 @@ impl SearchQuery {
 
     /// Converts the search query to SQL
     pub fn to_sql_query(self) -> String {
-        let mut tmp: String = "SELECT Title, Album, Interpret, Fingerprint, People, Composer, Key, Duration, FavsCount, Channels FROM music".into();
+        let mut tmp: String = "SELECT * FROM Tracks".into();
         
         if !self.tags.is_empty() {
             tmp.push_str(" WHERE ");

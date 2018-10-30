@@ -72,7 +72,7 @@ impl Track {
 pub type PlaylistKey = i64;
 
 /// A single playlist containing many tracks
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Playlist {
     /// A unique key used to access the playlist
@@ -104,7 +104,7 @@ impl Playlist {
 pub type TokenId = i64;
 
 /// A single token connecting a token to a playlist
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Token {
     /// Token number saved on the cardridge
@@ -114,7 +114,7 @@ pub struct Token {
     /// All played song (ignored by shuffle)
     pub played: Vec<TrackKey>,
     /// Position of the actual song
-    pub pos: f64,
+    pub pos: Option<f64>,
     /// Change counter (shared between all peers)
     pub counter: u32,
     /// Last time the token was updates (local version)

@@ -6,10 +6,17 @@
 //! have to alter the database in a stable way.
 //!
 //! ## Example:
-//! ```rust
-//! let collection = Collection::new(Path::new("/opt/music/music.db"));
-//! for playlist in collection.get_playlists() {
-//!     println!("{:#?}", playlist);
+//! ```rust,no_run
+//! extern crate hex_database;
+//!
+//! use std::path::Path;
+//! use hex_database::Collection;
+//!
+//! pub fn main() {
+//!     let collection = Collection::from_file(Path::new("/opt/music/music.db"));
+//!     for playlist in collection.get_playlists() {
+//!         println!("{:#?}", playlist);
+//!     }
 //! }
 //! ```
 
