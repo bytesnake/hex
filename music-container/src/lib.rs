@@ -20,6 +20,7 @@ extern crate futures;
 pub mod error;
 pub mod configuration;
 
+use std::path::Path;
 use std::io::{Seek, SeekFrom};
 use std::fs::File;
 
@@ -108,8 +109,8 @@ impl<T> Container<T>
     }
 
     /// Open a audio file from a certain path
-    pub fn with_key(path: &str, key: &str) -> Result<Container<File>> {
-        let file = File::open(format!("{}{}", path, key)).map_err(|err| Error::File(err))?;
+    pub fn with_key(path: &Path, key: &str) -> Result<Container<File>> {
+        let file = File::open(path.join(key)).map_err(|err| Error::File(err))?;
 
         Container::load(file)
     }

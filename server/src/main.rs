@@ -40,7 +40,9 @@ extern crate serde;
 extern crate toml;
 extern crate curl;
 extern crate chromaprint;
-extern crate uuid;
+extern crate base64;
+extern crate tempfile;
+extern crate sha2;
 
 extern crate hex_database;
 extern crate hex_music_container;

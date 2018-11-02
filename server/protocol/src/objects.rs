@@ -8,7 +8,7 @@ use error::{Error, Result};
 
 use bincode::{serialize, deserialize};
 
-use hex_database::{Track, Playlist, Token, Event};
+use hex_database::{Track, Playlist, Token, Event, TrackKey, PlaylistKey, TokenId};
 
 /// Identification of a packet
 ///
@@ -28,11 +28,11 @@ pub enum RequestAction {
     },
     /// Get a single track with a key
     GetTrack {
-        key: String
+        key: TrackKey
     },
     /// Get the next packet in a stream (`key` has to be available in first call)
     StreamNext {
-        key: Option<String>
+        key: Option<TrackKey>
     },
     /// End a stream
     StreamEnd,
@@ -42,7 +42,7 @@ pub enum RequestAction {
     },
     /// Update possible fields in a track
     UpdateTrack {
-        key: String,
+        key: TrackKey,
         title: Option<String>,
         album: Option<String>,
         interpret: Option<String>,
@@ -51,7 +51,7 @@ pub enum RequestAction {
     },
     /// Get suggestions for a track from acousticid
     GetSuggestion {
-        key: String
+        key: TrackKey
     },
     /// Create a new playlist
     AddPlaylist {
@@ -59,25 +59,26 @@ pub enum RequestAction {
     },
     /// Delete a playlist
     DeletePlaylist {
-        key: String
+        key: PlaylistKey
     },
     /// Set a playlist image
     SetPlaylistImage {
-        key: String
+        key: PlaylistKey,
+        image: Vec<u8>
     },
     /// Add a track to a playlist
     AddToPlaylist {
-        key: String,
-        playlist: String
+        key: TrackKey,
+        playlist: PlaylistKey
     },
     /// Delete a track from a playlist
     DeleteFromPlaylist {
-        key: String,
-        playlist: String
+        key: TrackKey,
+        playlist: PlaylistKey
     },
     /// Update metadata of a playlist
     UpdatePlaylist {
-        key: String,
+        key: PlaylistKey,
         title: Option<String>,
         desc: Option<String>
     },
@@ -85,15 +86,15 @@ pub enum RequestAction {
     GetPlaylists,
     /// Get a single playlist with key
     GetPlaylist {
-        key: String
+        key: PlaylistKey
     },
     /// Get all playlists of a track
     GetPlaylistsOfTrack {
-        key: String
+        key: TrackKey
     },
     /// Delete a track
     DeleteTrack {
-        key: String
+        key: TrackKey
     },
     /// Start upload from a youtube music video
     UploadYoutube {
@@ -107,19 +108,19 @@ pub enum RequestAction {
     },
     /// Vote for a track
     VoteForTrack {
-        key: String
+        key: TrackKey
     },
     /// Ask the upload progress
     AskUploadProgress,
     /// Get a token
     GetToken {
-        token: u32
+        token: TokenId
     },
     /// Update the metadata of a token
     UpdateToken {
-        token: u32,
-        key: Option<String>,
-        played: Option<String>,
+        token: TokenId,
+        key: Option<PlaylistKey>,
+        played: Option<Vec<TrackKey>>,
         pos: Option<f64>
     },
     /// Create a new token
@@ -133,7 +134,7 @@ pub enum RequestAction {
     /// Start download a bunch of tracks
     Download {
         format: String,
-        tracks: Vec<String>
+        tracks: Vec<TrackKey>
     },
     /// Ask for the download progress
     AskDownloadProgress
@@ -190,16 +191,16 @@ pub enum AnswerAction {
         sample: u32
     },
     StreamEnd,
-    UpdateTrack(String),
+    UpdateTrack(TrackKey),
     GetSuggestion {
-        key: String,
+        key: TrackKey,
         data: String
     },
     AddPlaylist(Playlist),
     DeletePlaylist,
     UpdatePlaylist,
     SetPlaylistImage,
-    AddToPlaylist(Playlist),
+    AddToPlaylist,
     DeleteFromPlaylist,
     GetPlaylists(Vec<Playlist>),
     GetPlaylist((Playlist,Vec<Track>)),
@@ -211,8 +212,8 @@ pub enum AnswerAction {
     AskUploadProgress(Vec<UploadProgress>),
     GetToken((Token, Option<(Playlist, Vec<Track>)>)),
     UpdateToken,
-    CreateToken(u32),
-    LastToken(Option<u32>),
+    CreateToken(TokenId),
+    LastToken(Option<TokenId>),
     GetSummarise(Vec<(String, u32, u32, u32, u32)>),
     GetEvents(Vec<(String, Event)>),
     Download,
@@ -254,7 +255,7 @@ pub struct UploadProgress {
     pub kind: String,
     pub progress: f32,
     pub id: PacketId,
-    pub key: Option<String>
+    pub key: Option<TrackKey>
 }
 
 #[derive(Debug, Clone)]

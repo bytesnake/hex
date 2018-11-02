@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::thread;
 use std::fs::File;
 
@@ -10,9 +11,8 @@ use error::{Result, Error};
 use hex_music_container::{Container, Configuration};
 
 use acousticid;
+use sha2::Sha256;
 use hex_database::Track;
-
-use uuid::Uuid;
 
 pub struct State {
     pub progress: f32,
@@ -30,12 +30,13 @@ impl State {
     }
 }
 
-fn worker(mut sender: Sender<State>, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32, data_path: String) -> Result<Track> {
-    // calculate the acousticid of the file
-    let fingerprint = acousticid::get_hash(num_channel as u16, &samples)?;
-    let key = Uuid::new_v4();
+fn worker(mut sender: Sender<State>, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32, data_path: PathBuf) -> Result<Track> {
+    //loop {
+        // calculate the acousticid of the file
+    let fingerprint = acousticid::get_fingerprint(num_channel as u16, &samples)?;
+    let track = Track::empty(fingerprint, duration.into());
 
-    let file = File::create(format!("{}{}", data_path, key.simple().to_string())).unwrap();
+    let file = File::create(data_path.join(track.key.to_path())).unwrap();
 
     sender.try_send(State { progress: 0.0, desc: desc, data: None })
         .map_err(|_| Error::ChannelFailed)?;
@@ -44,7 +45,7 @@ fn worker(mut sender: Sender<State>, desc: String, samples: Vec<i16>, duration: 
     Container::save_pcm(Configuration::Stereo, &samples, file, None)
         .map_err(|err| Error::MusicContainer(err))?;
 
-    Ok(Track::empty(fingerprint, key.simple().to_string(), duration.into(), 2))
+    Ok(track)
 }
 
 pub struct Converter {
@@ -54,7 +55,7 @@ pub struct Converter {
 }
 
 impl Converter {
-    pub fn new(handle: Handle, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32, data_path: String) -> Converter {
+    pub fn new(handle: Handle, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32, data_path: PathBuf) -> Converter {
         let (sender, recv) = channel(10);
 
         let thread = thread::spawn(move || {

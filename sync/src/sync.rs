@@ -7,16 +7,16 @@ use std::net::SocketAddr;
 use futures::{Future, Stream, sync::{mpsc, oneshot}};
 use super::{Beacon, Discover, Gossip};
 use bincode::{deserialize, serialize};
-use hex_database::{Collection, Track, Playlist};
+use hex_database::{Collection, Track, Playlist, TrackKey, PlaylistKey};
 
 #[derive(Serialize, Deserialize, Debug)]
 enum Protocol {
     Syncing(Option<(Vec<Track>, Vec<Playlist>)>),
-    GetTrack(String, Option<Vec<u8>>)
+    GetTrack(TrackKey, Option<Vec<u8>>)
 }
 
 pub struct Peer {
-    sender: mpsc::Sender<(String, oneshot::Sender<String>)>
+    sender: mpsc::Sender<(TrackKey, oneshot::Sender<TrackKey>)>
 }
 
 impl Peer {
@@ -35,7 +35,7 @@ impl Peer {
             let writer = gossip.writer();
             let receiver = receiver
                 .map_err(|_| Error::new(ErrorKind::BrokenPipe, "Receiver broken"))
-                .for_each(move |(x, y): (String, oneshot::Sender<String>)| {
+                .for_each(move |(x, y): (TrackKey, oneshot::Sender<TrackKey>)| {
                     serialize(&Protocol::GetTrack(x.clone(), None))
                         .map_err(|x| Error::new(ErrorKind::InvalidData, x))
                         .and_then(|x| writer.push(x))?;
@@ -85,7 +85,7 @@ impl Peer {
         })
     }
 
-    fn process_packet(name: String, collection: &Collection, data_path: &PathBuf, buf: Vec<u8>, wait_map: &Arc<RwLock<HashMap<String, oneshot::Sender<String>>>>, sync_all: bool) -> Result<Vec<Protocol>, io::Error> {
+    fn process_packet(name: String, collection: &Collection, data_path: &PathBuf, buf: Vec<u8>, wait_map: &Arc<RwLock<HashMap<TrackKey, oneshot::Sender<TrackKey>>>>, sync_all: bool) -> Result<Vec<Protocol>, io::Error> {
         match deserialize::<Protocol>(&buf) {
             Ok(Protocol::Syncing(Some((tracks, playlists)))) => {
                 let ntracks = Self::update_tracks(collection, tracks.clone());
@@ -124,8 +124,8 @@ impl Peer {
                 Ok(vec![Protocol::Syncing(Some((tracks, playlists)))])
             },
             Ok(Protocol::GetTrack(key, None)) => {
-                if collection.get_track(&key).is_ok() {
-                    if let Ok(mut f) = File::open(data_path.join(&key)) {
+                if collection.get_track(key).is_ok() {
+                    if let Ok(mut f) = File::open(data_path.join(key.to_path())) {
                         let mut buf = Vec::new();
                         f.read_to_end(&mut buf).unwrap();
         
@@ -136,16 +136,16 @@ impl Peer {
                 Ok(Vec::new())
             },
             Ok(Protocol::GetTrack(key, Some(buf))) => {
-                let path = data_path.join(&key);
+                let path = data_path.join(key.to_path());
         
-                if !path.exists() && collection.get_track(&key).is_ok() {
+                if !path.exists() && collection.get_track(key).is_ok() {
                     let mut f = File::create(path).unwrap();
                     f.write(&buf).unwrap();
                 }
         
                 if let Some(shot) = wait_map.write().unwrap().remove(&key) {
                     shot.send(key.clone())
-                        .map_err(|x| Error::new(ErrorKind::BrokenPipe, x))?;
+                        .map_err(|x| Error::new(ErrorKind::BrokenPipe, format!("Could not get track: {}", x)))?;
                 }
 
                 Ok(Vec::new())
@@ -160,9 +160,9 @@ impl Peer {
     }
 
     fn update_tracks(collection: &Collection, tracks: Vec<Track>) -> usize {
-        let map: HashSet<String> = collection.get_tracks()
+        let map: HashSet<TrackKey> = collection.get_tracks()
             .into_iter()
-            .map(|x| x.key.clone())
+            .map(|x| x.key)
             .collect();
 
         let mut i = 0;
@@ -178,7 +178,7 @@ impl Peer {
 
     fn update_playlists(name: String, collection: &Collection, playlists: Vec<Playlist>) -> usize {
         // get all playlists which are from this peer
-        let (map_update, map_other): (HashMap<String, Option<String>>, HashMap<String, Option<String>>) = collection.get_playlists().into_iter().map(|x| (x.key, x.origin)).partition(|(_, origin)| {
+        let (map_update, map_other): (HashMap<PlaylistKey, Option<String>>, HashMap<PlaylistKey, Option<String>>) = collection.get_playlists().into_iter().map(|x| (x.key, x.origin)).partition(|(_, origin)| {
             if let Some(origin) = origin {
                 origin == &name
             } else {
@@ -189,9 +189,9 @@ impl Peer {
         let mut i = 0;
         for mut playlist in playlists {
             if map_update.contains_key(&playlist.key) {
-                let Playlist { key, title, desc, tracks, count, .. } = playlist;
+                let Playlist { key, title, desc, tracks, .. } = playlist;
 
-                collection.update_playlist(&key, Some(title), desc, tracks, Some(count), None).unwrap();
+                collection.update_playlist(key, Some(title), desc, None).unwrap();
 
                 i += 1;
             } else if !map_other.contains_key(&playlist.key) {
@@ -206,14 +206,15 @@ impl Peer {
         i
     }
 
-    fn existing_tracks(data_path: &PathBuf) -> Result<HashMap<String, ()>, io::Error> {
+    fn existing_tracks(data_path: &PathBuf) -> Result<HashMap<TrackKey, ()>, io::Error> {
         let res = fs::read_dir(data_path)?
             .filter_map(|entry| {
                 let entry = entry.ok()?;
                 let path = entry.path();
 
                 if path.is_file() {
-                    Some((path.file_name().unwrap().to_str().unwrap().into(), ()))
+                    let key = TrackKey::from_str(path.file_name().unwrap().to_str().unwrap());
+                    Some((key, ()))
                 } else {
                     None
                 }
@@ -222,7 +223,7 @@ impl Peer {
         Ok(res)
     }
 
-    pub fn ask_for_track(&mut self, key: String) -> oneshot::Receiver<String> {
+    pub fn ask_for_track(&mut self, key: TrackKey) -> oneshot::Receiver<TrackKey> {
         let (p, c) = oneshot::channel();
 
         self.sender.try_send((key, p)).unwrap();

@@ -4,6 +4,7 @@
 //! requests and the database connection. The state exists as long as the connection and for
 //! example allows the client to create an iterator of search results.
 
+use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::collections::HashMap;
 use std::slice;
@@ -53,7 +54,7 @@ pub struct State {
     /// Open connection to the database
     pub collection: hex_database::Collection,
     /// Path to the data section
-    data_path: String,
+    data_path: PathBuf,
     /// Buffer for incoming buffering requests
     buffer: Vec<u8>,
     /// All uploads
@@ -71,7 +72,7 @@ impl State {
             handle: handle,
             reqs: HashMap::new(),
             collection: hex_database::Collection::from_file(&conf.db_path),
-            data_path: conf.data_path.to_str().unwrap().into(),
+            data_path: conf.data_path.clone(),
             buffer: Vec::new(),
             uploads: Vec::new(),
             downloads: Vec::new(),
@@ -79,18 +80,24 @@ impl State {
         }
     }
 
-    pub fn process_request(&mut self, origin: String, req: Request, gtoken: Arc<Mutex<isize>>) -> Answer {
+    pub fn process_request(&mut self, origin: String, req: Request, gtoken: Arc<Mutex<i64>>) -> Answer {
         let Request { id, msg } = req;
         let mut remove = false;
 
         let answ = match msg {
             RequestAction::GetTrack { key } => {
-                self.collection.get_track(&key)
+                self.collection.get_track(key)
                     .map(|x| AnswerAction::Track(x))
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::UpdateTrack { key, title, album, interpret, people, composer } => {
-                self.collection.update_track(&key, title, album, interpret, people, composer)
+                self.collection.update_track(key, 
+                    title.as_ref().map(String::as_str), 
+                    album.as_ref().map(String::as_str), 
+                    interpret.as_ref().map(String::as_str), 
+                    people.as_ref().map(String::as_str), 
+                    composer.as_ref().map(String::as_str)
+                )
                     .map(|x| AnswerAction::UpdateTrack(x))
                     .map_err(|err| Error::Database(err))
             },
@@ -134,11 +141,12 @@ impl State {
 
                 let prior_state = entry
                     .or_insert_with(|| {
-                        collection.add_event(Action::PlaySong(key.clone().unwrap()).with_origin(origin)).unwrap();
+                        collection.add_event(Action::PlaySong(key.unwrap()).with_origin(origin)).unwrap();
+                        let mut file = File::open(data_path.join(key.unwrap().to_path())).unwrap();
 
                         RequestState::Stream {
-                            container: Container::<File>::with_key(&data_path, &key.clone().unwrap()).unwrap(),
-                            track: collection.get_track(&key.unwrap()).unwrap()
+                            container: Container::<File>::load(file).unwrap(),
+                            track: collection.get_track(key.unwrap()).unwrap()
                         }
                     });
                 
@@ -212,14 +220,8 @@ impl State {
                 Ok(AnswerAction::StreamEnd)
             },
 
-            RequestAction::UpdateTrack { key, title, album, interpret, people, composer } => {
-                self.collection.update_track(&key, title, album, interpret, people, composer)
-                    .map(|x| AnswerAction::UpdateTrack(x))
-                    .map_err(|err| Error::Database(err))
-            },
-
             RequestAction::GetSuggestion { key } => {
-                let suggestion = self.collection.get_track(&key)
+                let suggestion = self.collection.get_track(key)
                     .map_err(|x| Error::Database(x))
                     .and_then(|x| acousticid::get_metadata(&x.fingerprint, x.duration as u32));
 
@@ -236,29 +238,29 @@ impl State {
             },
 
             RequestAction::DeletePlaylist { key } => {
-                self.collection.delete_playlist(&key)
+                self.collection.delete_playlist(key)
                     .map(|_| AnswerAction::DeletePlaylist)
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::UpdatePlaylist { key, title, desc } => {
-                self.collection.update_playlist(&key, title, desc, None, None, None)
+                self.collection.update_playlist(key, title, desc, None, )
                     .map(|_| AnswerAction::UpdatePlaylist)
                     .map_err(|err| Error::Database(err))
             },
 
-            RequestAction::SetPlaylistImage { key } => {
+            RequestAction::SetPlaylistImage { key, image } => {
                 Ok(AnswerAction::SetPlaylistImage)
             },
 
             RequestAction::AddToPlaylist { key, playlist } => {
-                self.collection.add_to_playlist(&key, &playlist)
-                    .map(|x| AnswerAction::AddToPlaylist(x))
+                self.collection.add_to_playlist(key, playlist)
+                    .map(|x| AnswerAction::AddToPlaylist)
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::DeleteFromPlaylist { key, playlist } => {
-                self.collection.delete_from_playlist(&key, &playlist);
+                self.collection.delete_from_playlist(key, playlist);
 
                 Ok(AnswerAction::DeleteFromPlaylist)
             },
@@ -268,20 +270,21 @@ impl State {
             },
 
             RequestAction::GetPlaylist { key }=> {
-                self.collection.get_playlist(&key)
+                self.collection.get_playlist(key)
                     .map(|x| AnswerAction::GetPlaylist(x))
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::GetPlaylistsOfTrack { key } => {
-                self.collection.get_playlists_of_track(&key)
+                self.collection.get_playlists_of_track(key)
                     .map(|x| AnswerAction::GetPlaylistsOfTrack(x))
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::DeleteTrack { key } => {
+                println!("Delete track with key: {}", key);
                 self.collection.add_event(Action::DeleteSong(key.clone()).with_origin(origin.clone())).unwrap();
 
-                self.collection.delete_track(&key)
+                self.collection.delete_track(key)
                     .map(|x| AnswerAction::DeleteTrack(x))
                     .map_err(|err| Error::Database(err))
             },
@@ -335,13 +338,13 @@ impl State {
             },
 
             RequestAction::VoteForTrack { key } => {
-                self.collection.vote_for_track(&key)
+                self.collection.vote_for_track(key)
                     .map(|_| AnswerAction::VoteForTrack)
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::GetToken { token } => {
                 self.token_avail = true;
-                *gtoken.lock().unwrap() = token as isize;
+                *gtoken.lock().unwrap() = token as i64;
 
                 self.collection.get_token(token)
                     .map(|(token, x)| {
@@ -378,7 +381,7 @@ impl State {
             RequestAction::LastToken => {
                 let val = match *gtoken.lock().unwrap() {
                     -1 => None,
-                    x => Some(x as u32)
+                    x => Some(x as i64)
                 };
                 
                 Ok(AnswerAction::LastToken(val))
@@ -392,7 +395,7 @@ impl State {
             RequestAction::Download { format, tracks } => {
                 let id = id.clone();
                 tracks.into_iter()
-                    .map(|x| self.collection.get_track(&x)
+                    .map(|x| self.collection.get_track(x)
                         .map_err(|err| Error::Database(err))
                     )
                     .collect::<Result<Vec<Track>>>()
@@ -426,7 +429,7 @@ impl State {
     /// * `origin` - where does the request originates from
     /// * `msg` - what is the content of the message
     /// * `gtoken` - globally shared token, used to change the token in frontend
-    pub fn process(&mut self, origin: String, buf: Vec<u8>, gtoken: Arc<Mutex<isize>>) -> Option<Vec<u8>> {
+    pub fn process(&mut self, origin: String, buf: Vec<u8>, gtoken: Arc<Mutex<i64>>) -> Option<Vec<u8>> {
         //println!("Process buf {}", buf.len());
         Request::try_from(&buf)
             .map(|req| self.process_request(origin, req, gtoken))

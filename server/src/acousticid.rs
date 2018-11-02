@@ -7,6 +7,7 @@ use serde_json::Value;
 use curl::easy::{Form,Easy};
 
 use error::{Error, Result};
+use sha2::{Digest, Sha256};
 
 /// Calculate a fingerprint to lookup music
 ///
@@ -15,14 +16,30 @@ use error::{Error, Result};
 ///
 ///  * `num_channel`- Number of channel in `data`
 ///  * `data` - Raw audio data with succeeding channels
-pub fn get_hash(num_channel: u16, data: &[i16]) -> Result<String> {
+pub fn get_fingerprint(num_channel: u16, data: &[i16]) -> Result<Vec<i32>> {
     let mut ctx = Chromaprint::new();
     ctx.start(48000, num_channel as i32);
 
     ctx.feed(data);
     ctx.finish();
 
-    ctx.fingerprint().ok_or(Error::AcousticID)
+    ctx.raw_fingerprint().ok_or(Error::AcousticID)
+}
+
+pub fn get_hash(fingerprint: &[i32]) -> i64 {
+    let mut hasher = Sha256::new();
+
+    let v_bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(
+            fingerprint.as_ptr() as *const u8,
+            fingerprint.len() * std::mem::size_of::<i32>(),
+        )
+    };
+
+    hasher.input(v_bytes);
+    let a = hasher.result();
+    (a[7] as i64) << 56 | (a[6] as i64) << 48 | (a[5] as i64) << 40 | (a[4] as i64) << 32 | 
+        (a[3] as i64) << 24 | (a[2] as i64) << 16 | (a[1] as i64) << 8 | (a[0] as i64)
 }
 
 /// Fetch metadata from acousticid.org
@@ -32,7 +49,16 @@ pub fn get_hash(num_channel: u16, data: &[i16]) -> Result<String> {
 ///
 ///  * `hash` - Fingerprint of the audio file
 ///  * `duration` - Duration of the audio in millis
-pub fn get_metadata(hash: &str, duration: u32) -> Result<String> {
+pub fn get_metadata(fingerprint: &[i32], duration: u32) -> Result<String> {
+    let v_bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(
+            fingerprint.as_ptr() as *const u8,
+            fingerprint.len() * std::mem::size_of::<i32>(),
+        )
+    };
+
+    let fingerprint = base64::encode(v_bytes);
+
     let mut dst = Vec::new();
     let mut easy = Easy::new();
     easy.url("https://api.acoustid.org/v2/lookup")
@@ -42,10 +68,10 @@ pub fn get_metadata(hash: &str, duration: u32) -> Result<String> {
     form.part("client").contents(b"sepmArwuV3").add()
         .map_err(|_| Error::AcousticIDMetadata)?;
 
-    form.part("fingerprint").contents(hash.as_bytes()).add()
+    form.part("fingerprint").contents(fingerprint.as_bytes()).add()
         .map_err(|_| Error::AcousticIDMetadata)?;
 
-    form.part("duration").contents(format!("{}", duration).as_bytes()).add()
+    form.part("duration").contents(duration.to_string().as_bytes()).add()
         .map_err(|_| Error::AcousticIDMetadata)?;
 
     form.part("meta").contents(b"recordings releasegroups").add()

@@ -130,6 +130,7 @@ class Protocol {
         const [type, resolve, reject] = this.pending_requests[id];
         let action = answ.action();
             
+        console.log(action);
         if(typeof action === "string" && action != type) {
             reject(action);
             return;

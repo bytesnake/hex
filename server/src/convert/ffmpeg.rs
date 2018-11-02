@@ -1,4 +1,5 @@
 use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::fs::{File, self};
 use std::process::Command;
 use std::process::Stdio;
@@ -12,7 +13,7 @@ use futures::{Future, Stream, IntoFuture};
 use bytes::BytesMut;
 
 use error::{Result, Error};
-use uuid::Uuid;
+use tempfile::NamedTempFile;
 
 struct LineCodec;
 
@@ -23,7 +24,6 @@ impl codec::Decoder for LineCodec {
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> result::Result<Option<String>, io::Error> {
-        println!("{}", buf.len());
         if let Some(n) = buf.as_ref().iter().position(|b| (*b == b'\n' || *b == b'\r')) {
             let line = buf.split_to(n);
             buf.split_to(1);
@@ -62,18 +62,18 @@ pub enum StateError {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct State {
-    file: String,
-    file_wav: String,
+    file_in: PathBuf,
+    file_raw: PathBuf,
     duration: Option<u64>,
     pub desc: String,
     pub progress: f32
 }
 
 impl State {
-    pub fn empty(desc: String, file: &str, file_wav: &str) -> State {
+    pub fn empty(desc: String, file_in: PathBuf, file_raw: PathBuf) -> State {
         State {
-            file: file.into(),
-            file_wav: file_wav.into(),
+            file_in: file_in,
+            file_raw: file_raw,
             duration: None,
             desc: desc,
             progress: 0.0
@@ -81,14 +81,14 @@ impl State {
     }
 
     pub fn read(&self) -> (Vec<i16>, u32, f64) {
-        let mut file = File::open(&self.file).unwrap();
+        let mut file = File::open(&self.file_raw).unwrap();
 
         let mut pcm = vec![];
 
         file.read_to_end(&mut pcm).unwrap();
 
-        fs::remove_file(&self.file);
-        fs::remove_file(&self.file_wav);
+        fs::remove_file(&self.file_raw);
+        fs::remove_file(&self.file_in);
 
         let pcm: &[i16] = unsafe {
             slice::from_raw_parts(
@@ -103,8 +103,8 @@ impl State {
 
 pub struct Converter {
     pub handle: Handle,
-    file: String,
-    file_wav: String,
+    file_in: NamedTempFile,
+    file_raw: NamedTempFile,
     desc: String,
     child: Option<Child>,
     stdout: Option<ToLine<ChildStdout>>,
@@ -129,28 +129,25 @@ fn duration_to_time(inp: &str) -> Option<u64> {
 impl Converter {
     pub fn new(handle: Handle, desc: String, data: &[u8], format: &str) -> Result<Converter> {
         // Generate a new filename for our temporary conversion
-        let id = Uuid::new_v4();
-        let filename = format!("/tmp/{}.{}", id, format);
-        let filename_out = format!("/tmp/{}_out.raw", id);
-
-        // convert to wave file
-        let mut file = File::create(&filename)
+        let mut file_in = NamedTempFile::new()
+            .map_err(|_| Error::ConvertFFMPEG)?;
+        let mut file_raw = NamedTempFile::new()
             .map_err(|_| Error::ConvertFFMPEG)?;
 
-        file.write_all(data)
+        file_in.write_all(data)
             .map_err(|_| Error::ConvertFFMPEG)?;
 
-        file.sync_all()
-            .map_err(|_| Error::ConvertFFMPEG)?;
+        //file_in.sync_all()
+        //    .map_err(|_| Error::ConvertFFMPEG)?;
 
         let mut cmd = Command::new("unbuffer")
             .arg("ffmpeg")
             .arg("-y")
-            .arg("-i").arg(&filename)
+            .arg("-i").arg(file_in.path())
             .arg("-ar").arg("48000")
             .arg("-ac").arg("2")
             .arg("-f").arg("s16le")
-            .arg(&filename_out)
+            .arg(&file_raw.path())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn_async(&handle)
@@ -161,8 +158,8 @@ impl Converter {
         Ok(Converter {
             handle: handle,
             desc: desc,
-            file: filename_out,
-            file_wav: filename,
+            file_in: file_in,
+            file_raw: file_raw,
             child: Some(cmd),
             stdout: Some(ToLine::new(stdout)),
             stderr: Some(ToLine::new(stderr))
@@ -171,7 +168,7 @@ impl Converter {
 
     pub fn state(&mut self) -> impl Stream<Item=State, Error=StateError> {
         if let (Some(out), Some(err)) = (self.stdout.take(), self.stderr.take()) {
-            let mut state = State::empty(self.desc.clone(), &self.file, &self.file_wav);
+            let mut state = State::empty(self.desc.clone(), PathBuf::from(self.file_in.path()), PathBuf::from(self.file_raw.path()));
 
             out.0.chain(err.0).map(move |msg| {
                 println!("Msg: {}", msg);

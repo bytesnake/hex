@@ -67,9 +67,6 @@ pub fn start(conf: Conf) {
                             OwnedMessage::Text(msg) => Some(OwnedMessage::Text("Text not supported".into())),
                             OwnedMessage::Binary(data) => {
                                 state.process(addr.to_string(), data, token.clone()).map(|x| OwnedMessage::Binary(x))
-                                //state.process_binary(&data);
-
-                                //Some(OwnedMessage::Text("{\"fn\": \"upload\"}".into()))
                             },
                             OwnedMessage::Close(_) => {
                                 state.collection.add_event(Action::Connect(now.elapsed().as_secs() as f32).with_origin(addr.to_string())).unwrap();

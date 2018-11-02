@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::Path;
+use std::path::PathBuf;
 use std::slice;
 use std::thread;
 use std::fs::{self, File};
@@ -19,9 +19,9 @@ use hex_database::Track;
 use hex_server_protocol::objects::DownloadProgress;
 use hex_server_protocol::PacketId;
 
-fn worker(mut sender: Sender<DownloadProgress>, id: PacketId, format: String, tracks: Vec<Track>, num_channel: u32, data_path: String) -> Result<()> {
+fn worker(mut sender: Sender<DownloadProgress>, id: PacketId, format: String, tracks: Vec<Track>, num_channel: u32, data_path: PathBuf) -> Result<()> {
     let mut out_files = Vec::new();
-    let download_path = Path::new(&data_path).join("download");
+    let download_path = data_path.join("download");
     println!("start working!");
 
     for i in 0..tracks.len() {
@@ -33,7 +33,7 @@ fn worker(mut sender: Sender<DownloadProgress>, id: PacketId, format: String, tr
             download: None
         }).map_err(|_| Error::ChannelFailed)?;
 
-        let file_path = Path::new(&data_path).join(&tracks[i].key);
+        let file_path = data_path.join(&tracks[i].key.to_string());
 
         let file_path_out = download_path
             .join(&tracks[i].interpret.clone().unwrap_or("unknown".into()))
@@ -41,7 +41,7 @@ fn worker(mut sender: Sender<DownloadProgress>, id: PacketId, format: String, tr
 
         fs::create_dir_all(&file_path_out).unwrap();
 
-        let file_path_out = file_path_out.join(tracks[i].title.clone().unwrap_or(tracks[i].key.clone()));
+        let file_path_out = file_path_out.join(tracks[i].title.clone().unwrap_or(tracks[i].key.to_string()));
 
         let file = File::open(&file_path)
             .map_err(|err| Error::Io(err))?;
@@ -110,7 +110,7 @@ pub struct DownloadState {
 }
 
 impl DownloadState {
-    pub fn new(handle: Handle, id: PacketId, format: String, tracks: Vec<Track>, num_channel: u32, data_path: String) -> DownloadState {
+    pub fn new(handle: Handle, id: PacketId, format: String, tracks: Vec<Track>, num_channel: u32, data_path: PathBuf) -> DownloadState {
         let (sender, recv) = channel(10);
 
         let thread = thread::spawn(move || {

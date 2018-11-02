@@ -8,6 +8,8 @@
 #[cfg(feature="rusqlite")]
 use rusqlite::{Error, Result};
 
+use objects::TrackKey;
+
 /// An Event occurs from an origin and contains an action. The origin is most of the time an IP
 /// address.
 #[derive(Debug)]
@@ -22,9 +24,9 @@ pub struct Event {
 #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub enum Action {
     Connect(f32),
-    PlaySong(String),
-    AddSong(String),
-    DeleteSong(String)
+    PlaySong(TrackKey),
+    AddSong(TrackKey),
+    DeleteSong(TrackKey)
 }
 
 impl Action {
@@ -62,9 +64,9 @@ impl Event {
     pub fn data_to_string(&self) -> String {
         match &self.action {
             Action::Connect(ref x) => x.to_string(),
-            Action::PlaySong(ref x) => x.clone(),
-            Action::AddSong(ref x) => x.clone(),
-            Action::DeleteSong(ref x) => x.clone()
+            Action::PlaySong(ref x) => x.to_string(),
+            Action::AddSong(ref x) => x.to_string(),
+            Action::DeleteSong(ref x) => x.to_string()
         }
     }
 
@@ -73,9 +75,9 @@ impl Event {
     pub fn from(origin: String, tag: String, data: String) -> Result<Event> {
         let action = match tag.as_ref() {
             "connect" => Action::Connect(data.parse::<f32>().map_err(|_| Error::InvalidQuery)?),
-            "playsong" => Action::PlaySong(data),
-            "addsong" => Action::AddSong(data),
-            "deletesong" => Action::DeleteSong(data),
+            "playsong" => Action::PlaySong(TrackKey::from_str(&data)),
+            "addsong" => Action::AddSong(TrackKey::from_str(&data)),
+            "deletesong" => Action::DeleteSong(TrackKey::from_str(&data)),
             _ => return Err(Error::InvalidQuery)
         };
 

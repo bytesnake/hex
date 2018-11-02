@@ -15,7 +15,7 @@ pub enum Tag {
 
 /// Order by certain field
 pub enum Order {
-    ByID,
+    ByDate,
     ByTitle,
     ByFavs
 }
@@ -27,7 +27,7 @@ impl Order {
 
         if elms.len() == 2 && elms[0] == "order" {
             return match elms[1] {
-                "id" => Some(Order::ByID),
+                "date" => Some(Order::ByDate),
                 "title" => Some(Order::ByTitle),
                 "favs" => Some(Order::ByFavs),
                 _ => None
@@ -40,7 +40,7 @@ impl Order {
     /// Stringify the enum
     pub fn name(&self) -> String {
         let tmp = match *self {
-            Order::ByID => "Title",
+            Order::ByDate => "Created",
             Order::ByTitle => "Title",
             Order::ByFavs => "FavsCount"
         };
@@ -91,7 +91,7 @@ impl SearchQuery {
     /// Create a new search query
     pub fn new(input: &str) -> Option<SearchQuery> {
         let tags = input.split(',').filter_map(Tag::from_search_query).collect();
-        let order = input.split(',').filter_map(Order::from_search_query).next().unwrap_or(Order::ByID);
+        let order = input.split(',').filter_map(Order::from_search_query).next().unwrap_or(Order::ByDate);
 
         Some(SearchQuery { tags: tags, order: order })
     }
@@ -110,14 +110,9 @@ impl SearchQuery {
             tmp.push_str(&self.tags.into_iter().map(|x| x.to_sql_query()).collect::<Vec<String>>().join(" AND "));
         }
 
-        match self.order {
-            Order::ByTitle | Order::ByFavs => {
-                tmp.push_str(" ORDER BY ");
-                tmp.push_str(&self.order.name());
-                tmp.push_str(" DESC");
-            }
-            _ => {}
-        }
+        tmp.push_str(" ORDER BY ");
+        tmp.push_str(&self.order.name());
+        tmp.push_str(" DESC");
 
         tmp
     }

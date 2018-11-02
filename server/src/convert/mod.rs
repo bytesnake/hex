@@ -4,14 +4,14 @@ pub mod opus;
 pub mod download;
 
 use std::mem;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::cell::RefCell;
 
 use tokio_core::reactor::Handle;
 use futures::{Stream, Future, IntoFuture};
 
-use hex_database::Track;
+use hex_database::{Track, TrackKey};
 use hex_server_protocol::PacketId;
 
 pub use self::download::DownloadState;
@@ -32,7 +32,7 @@ pub enum UploadState {
         state: Rc<RefCell<opus::State>>,
         id: PacketId
     },
-    Finished(Option<(PacketId, String, String)>)
+    Finished(Option<(PacketId, String, TrackKey)>)
 }
 
 impl UploadState {
@@ -61,7 +61,7 @@ impl UploadState {
     pub fn converting_ffmpeg(handle: Handle, desc: String, id: PacketId, data: &[u8], format: &str) -> UploadState {
         let mut dwnd = ffmpeg::Converter::new(handle.clone(), desc.clone(), data, format).unwrap();
 
-        let state = Rc::new(RefCell::new(ffmpeg::State::empty(desc, "", "")));
+        let state = Rc::new(RefCell::new(ffmpeg::State::empty(desc, PathBuf::new(), PathBuf::new())));
         let state2 = state.clone();
 
         let hnd = dwnd.state().map(move |x| {
@@ -80,7 +80,7 @@ impl UploadState {
         }
     }
 
-    pub fn converting_opus(handle: Handle, id: PacketId, desc: String, samples: &[i16], duration: f32, num_channel: u32, data_path: String) -> UploadState {
+    pub fn converting_opus(handle: Handle, id: PacketId, desc: String, samples: &[i16], duration: f32, num_channel: u32, data_path: PathBuf) -> UploadState {
         let mut dwnd = opus::Converter::new(handle.clone(), desc.clone(), Vec::from(samples), duration, num_channel, data_path);
 
         let state = Rc::new(RefCell::new(opus::State::empty(desc)));
@@ -103,7 +103,7 @@ impl UploadState {
         
     }
 
-    pub fn tick(&mut self, data_path: String) -> Option<Track> {
+    pub fn tick(&mut self, data_path: PathBuf) -> Option<Track> {
         let item = mem::replace(self, UploadState::Finished(None));
 
         let (next, ret): (Option<UploadState>, Option<Track>) = match &item {
@@ -186,7 +186,7 @@ impl UploadState {
         }
     }
 
-    pub fn track_key(&self) -> Option<String> {
+    pub fn track_key(&self) -> Option<TrackKey> {
         match self {
             UploadState::YoutubeDownload { .. } => None,
             UploadState::ConvertingFFMPEG { .. } => None,

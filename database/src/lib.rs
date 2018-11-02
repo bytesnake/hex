@@ -25,6 +25,7 @@ extern crate rusqlite;
 #[cfg(feature="serde")]
 #[macro_use]
 extern crate serde;
+extern crate sha2;
 
 pub mod objects;
 pub mod search;
@@ -33,7 +34,7 @@ pub mod events;
 mod database;
 
 pub use events::{Action, Event};
-pub use objects::{Track, Playlist, Token};
+pub use objects::{Track, Playlist, Token, TrackKey, PlaylistKey, TokenId};
 #[cfg(feature="rusqlite")]
 pub use rusqlite::{Result, Statement, Error};
 #[cfg(feature="rusqlite")]
