@@ -1,0 +1,16 @@
+.upload {
+    display: flex;
+    flex-direction: column;
+
+    margin: 10px;
+    max-width: 250px;
+    font-size: 15px !important;
+    white-space: nowrap;
+    background-color: white;
+    color: black;
+}
+
+.uploader span {
+    margin: 10px;
+    font-size: 20px;
+}

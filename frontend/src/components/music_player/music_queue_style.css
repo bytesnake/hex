@@ -1,0 +1,161 @@
+.music_queue {
+}
+
+.inner {
+    min-height: 100px;
+    width: 294px;
+
+    position: absolute;
+    bottom: 100px;
+    transform: translateX(-260px);
+
+    visibility: visible;
+
+    border-radius: 10px;
+    border: #145c9e solid 3px;
+    background-color: white;
+}
+
+.inner_wrapper {
+    max-height: 58vh;
+    min-height: 100px;
+    width: 300px;
+    visibility: hidden;
+    overflow: auto;
+    border-radius: 10px;
+}
+
+.inner_wrapper:hover {
+    visibility: visible;
+}
+
+.inner_wrapper:focus {
+    visibility: visible;
+}
+
+.inner_actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    background-color: #145c9e;
+    color: white;
+    width: 100%;
+    height: 35px;
+    visibility: visible;
+    padding-right: 5px;
+}
+
+.inner_action b {
+    margin-left: 10px;
+}
+
+.inner_actions_icons {
+    flex-grow: 1;
+
+    display: flex;
+    align-items: center;
+
+    border-right: 1px solid #FFF;
+}
+
+.inner_actions_icons i {
+    font-size: 30px;
+    height: 30px;
+    margin-right: 5px;
+}
+
+.inner_actions_icons i:hover {
+    color: white;
+    animation: wiggle 0.8s ease-in-out 1;
+}
+
+.inner_content {
+    visibility: visible;
+
+    display: flex;
+
+    flex-direction: column;
+
+    border-radius: 10px;
+}
+
+.inner_content b {
+    margin-top: auto;
+    margin-bottom: auto;
+    text-align: center;
+}
+
+.item {
+    display: flex;
+
+    border-bottom: 1px solid black;
+    padding-bottom: 10px;
+    padding-top: 10px;
+    padding-left: 5px;
+}
+
+.item div {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+
+    width: 30px;
+}
+
+.item span {
+    color: grey;
+    font-size: 15px;
+}
+
+.item i {
+    font-size: 25px;
+}
+
+.item:hover {
+    color: #145c9e;
+    cursor: pointer;
+}
+
+.desc {
+    flex-grow: 1;
+}
+
+.remove_track {
+    width: 30px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+
+}
+
+.arrow_down {
+    position: absolute;
+    right: 0;
+
+  width: 0;
+  height: 0;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+
+  border-top: 13px solid #145c9e;
+}
+
+@keyframes fadeInOpacity {
+	0% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes wiggle {
+  0% {transform: rotate(10deg);}
+  25% {transform: rotate(-10deg);}
+  50% {transform: rotate(20deg);}
+  75% {transform: rotate(-5deg);}
+  100% {transform: rotate(0deg);}
+}
+
+

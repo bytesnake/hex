@@ -1,0 +1,43 @@
+.action {
+    font-size: 40px;
+    color: #DDD;
+
+    display: flex;
+    flex-direction: row;
+    margin-right: 20px !important;
+}
+
+.action i {
+    font-size: 40px;
+    margin: 2px;
+}
+
+.action i:hover {
+    cursor: pointer;
+    color: #FFF;
+}
+
+.inner {
+    position: absolute;
+}
+
+.inner_arrow {
+  position: absolute;
+  right: 10px;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+
+  border-bottom: 15px solid #145c9e;
+}
+
+.inner_elm {
+    position: relative;
+    top: 15px;
+    border: #145c9e solid 2px;
+    border-radius: 10px;
+    background-color: white;
+    min-height: 10px;
+    min-width: 100px;
+}

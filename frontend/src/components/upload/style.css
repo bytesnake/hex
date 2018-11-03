@@ -1,0 +1,243 @@
+.upload {
+    display: flex;
+    flex-direction: column;
+}
+    
+.control {
+    background-color: #145c9e;
+    height: 30px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.upload_list {
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    padding-right: 15px;
+}
+
+.upload_list b {
+    flex: 1;
+    font-size: 20px;
+    color: black;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.track_item {
+    border-bottom: 1px solid #000;
+    font-size: 20px;
+    color: black;
+    padding-left: 10px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding-right: 10px;
+}
+
+.track_header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 60px;
+}
+
+.track_header span, b {
+    margin-right: 5px;
+}
+
+.track_meta {
+    flex: 1;
+    margin-right: 10px;
+    margin-left: 15px;
+    padding-left: 15px;
+    margin-bottom: 10px;
+    border-left: 2px dotted #CCC;
+}
+
+.upload_nothing {
+    width: 100%;
+    height: 150px;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.link_button {
+    font-size: 25px !important;
+    margin: 0px !important;
+    padding-left: 5px;
+}
+
+.link_input {
+    flex: 1;
+    margin-left: 5px;
+    margin-right: 2px;
+    border: 1px solid #000;
+    height: 25px;
+    border-bottom-right-radius: 10px;
+    width: 70%;
+    color: black;
+    font-size: 20px;
+    padding: 0px;
+}
+
+.upload_status {
+    b {
+        font-size: 20px;
+        color: black
+    }
+
+    font-size: 20px;
+    color: grey;
+}
+
+.menu {
+    display: flex;
+    flex-direction: column;
+
+    position: absolute;
+    top: 70px;
+    right: 10px;
+    width: 150px;
+    background-color: white;
+    border-radius: 10px;
+    border: #145c9e solid 2px;
+    
+    span {
+        color: black;
+        background-color: #EEE;
+        padding: 10px;
+        font-size: 25px;
+        cursor: pointer;
+    }
+
+    span:first-of-type {
+        border-radius: 10px 10px 0 0;
+    }
+
+    span:last-child {
+        border-radius: 0 0 10px 10px;
+    }
+
+
+    span:hover {
+        background-color: white;
+    }
+}
+
+.arrow_up {
+  width: 0; 
+  height: 0; 
+
+  position: absolute;
+  top: -20px;
+  right: 60px;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  
+  border-bottom: 20px solid #145c9e;
+}
+
+.overlay {
+    width: 100%;
+    height: 100%;
+
+    background: rgba(0, 0, 0, 0.5);
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.youtube_inner {
+    max-width: 400px;
+    height: 100px;
+    background-color: white;
+    padding: 10px;
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    b {
+        
+    }
+
+    input {
+    }
+
+}
+
+.green_border {
+    border: green 1px solid;
+}
+
+.red_border {
+    border: red 1px solid;
+}
+
+.files_inner {
+    width: 400px;
+    height: 220px;
+    margin: auto;
+}
+
+.files_data {
+    margin: auto;
+}
+
+.files_data p {
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-right: -50%;
+    transform: translate(-50%, -50%)
+}
+
+.files_data div {
+    margin-bottom: 5px;
+}
+
+.drop {
+    border: dotted 7px olive;
+    border-radius: 10px;
+    height: 150px;
+    margin: 10px;
+}
+
+.drop b {
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-right: -50%;
+    transform: translate(-50%, -50%)
+}
+.drag {
+    background-color: yellow;
+    border: 5px dotted green;
+}
+
+.files Button {
+    float: left;
+}
+
+.selected {
+    position: absolute;
+    right: 40px;
+    margin-top: 10px;
+}

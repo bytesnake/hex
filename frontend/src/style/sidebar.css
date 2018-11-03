@@ -1,0 +1,56 @@
+.link {
+    height: 40px;
+    opacity: 1;
+    padding: 0 0 !important;
+
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.link i {
+    margin-left: 20px;
+}
+.link b {
+   flex-grow: 1; 
+   margin-left: 20px;
+}
+
+.link span {
+    color: #BBB;
+    font-weight: bold;
+    margin-right: 20px;
+}
+
+.add_playlist {
+    height: 40px;
+    padding: 0 0 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.add_playlist i {
+    cursor: pointer;
+}
+
+.line {
+    border-bottom: 1px solid #DDD;
+    margin-left: 20px;
+    width: 200px;
+    margin-bottom: 10px;
+    height: 0px;
+}
+
+.header {
+    color: #444;
+    font-size: 20px;
+    margin-left: 20px;
+}
+
+.header i {
+    position: absolute;
+    right: 10px;
+    cursor: pointer;
+}
