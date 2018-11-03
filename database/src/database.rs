@@ -103,7 +103,7 @@ impl Collection {
     /// The `origin` field is only used when the playlist originates from a different server and
     /// should therefore be updated after a new version appears.
     pub fn add_playlist(&self, title: &str, origin: Option<String>) -> Result<Playlist> {
-        self.socket.execute("INSERT INTO playlists (title, origin) VALUES (?1, ?2, ?3)", &[&title, &origin])?;
+        self.socket.execute("INSERT INTO playlists (title, origin, tracks) VALUES (?1, ?2, ?3)", &[&title, &origin, &Vec::new()])?;
         let rowid = self.socket.last_insert_rowid();
 
         Ok(Playlist {
@@ -183,7 +183,7 @@ impl Collection {
 
     /// Insert a new track into the database
     pub fn insert_track(&self, track: Track) -> Result<()> {
-        let buf = objects::i32_into_u8(track.fingerprint.clone());
+        let buf = objects::u32_into_u8(track.fingerprint.clone());
 
         self.socket.execute("INSERT INTO Tracks
                                     (Key, Fingerprint, Title, Album, Interpret, People, Composer, Duration, FavsCount, Created)

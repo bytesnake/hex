@@ -271,7 +271,13 @@ impl State {
 
             RequestAction::GetPlaylist { key }=> {
                 self.collection.get_playlist(key)
-                    .map(|x| AnswerAction::GetPlaylist(x))
+                    .map(|mut x| {
+                        for track in &mut x.1 {
+                            track.fingerprint = vec![];
+                        }
+
+                        AnswerAction::GetPlaylist(x)
+                    })
                     .map_err(|err| Error::Database(err))
             },
 
@@ -312,7 +318,6 @@ impl State {
                 // tick each item
                 for item in &mut self.uploads {
                     if let Some(track) = item.tick(self.data_path.clone()) {
-                        println!("Finished yay");
                         self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
                         self.collection.insert_track(track).unwrap();
                     }

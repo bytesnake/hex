@@ -12,7 +12,7 @@ export default class Playlist extends Component {
         if(this.state.pl_key != props.pl_key) {
             this.setState({pl_key: props.pl_key, updating: true});
 
-            Protocol.get_playlist(props.pl_key).then(x => {
+            Protocol.get_playlist(parseInt(props.pl_key)).then(x => {
                 this.setState({playlist: x, updating: false});
             });
         }

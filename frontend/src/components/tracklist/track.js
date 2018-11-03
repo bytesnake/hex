@@ -33,7 +33,7 @@ class Element extends Component {
             vals[this.props.kind] = this.input.value;
             vals['key'] = this.props.track_key;
 
-            Protocol.update_track(vals);
+            Protocol.request("UpdateTrack", vals);
         }
 
         this.setState({edit: false, value: this.input.value});
@@ -87,7 +87,7 @@ export default class Track extends Component {
         let all_playlists = Protocol.get_playlists();
         
         Promise.all([pl_of_track, all_playlists]).then(values => {
-            this.setState({ playlists: values[0], suggestions: values[1].map(x => x.title) });
+            this.setState({ playlists: values[0], suggestions: values[1] });
         });
     }
 
@@ -143,17 +143,22 @@ export default class Track extends Component {
         if(!this.state.suggestions)
             return [];
 
-        const suggestions = this.state.suggestions.filter(x => x.indexOf(query) === 0).filter(x => !this.state.playlists.some(y => y.title === x));
+        const suggestions = this.state.suggestions
+            .map(x => x.title)
+            .filter(x => x.indexOf(query) === 0)
+            .filter(x => !this.state.playlists.some(y => y.title === x));
 
         return suggestions;
     }
 
     addToPlaylist = (playlist) => {
         if(playlist && !this.state.playlists.map(x => x.title).includes(playlist)) {
-            if(this.state.suggestions.includes(playlist))
-                Protocol.add_to_playlist(this.props.track_key, playlist).then(x => {
+            const idx = this.state.suggestions.map(x => x.title).indexOf(playlist);
+
+            if(idx !== -1)
+                Protocol.add_to_playlist(this.props.track_key, this.state.suggestions[idx].key).then(x => {
                     let playlists = this.state.playlists;
-                    playlists.push(x);
+                    playlists.push(this.state.suggestions[idx]);
 
                     this.setState({ playlists: playlists });
                 });

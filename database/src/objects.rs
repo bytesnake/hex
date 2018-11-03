@@ -60,7 +60,7 @@ impl fmt::Display for TrackKey {
     }
 }
 
-pub type Fingerprint = Vec<i32>;
+pub type Fingerprint = Vec<u32>;
 
 
 /// A single track with metadata
@@ -124,7 +124,7 @@ impl Track {
 
         Ok(Track {
             key:        TrackKey::from_vec(&key),
-            fingerprint:u8_into_i32(row.get_checked(1)?),
+            fingerprint:u8_into_u32(row.get_checked(1)?),
             title:      row.get_checked(2)?,
             album:      row.get_checked(3)?,
             interpret:  row.get_checked(4)?,
@@ -210,7 +210,7 @@ impl Token {
         })
     }
 }
-pub fn i32_into_u8(mut buf: Vec<i32>) -> Vec<u8> {
+pub fn u32_into_u8(mut buf: Vec<u32>) -> Vec<u8> {
     unsafe {
         let ratio = 4;
 
@@ -225,13 +225,13 @@ pub fn i32_into_u8(mut buf: Vec<i32>) -> Vec<u8> {
         Vec::from_raw_parts(ptr, length, capacity)
     }
 }
-pub fn u8_into_i32(mut buf: Vec<u8>) -> Vec<i32> {
+pub fn u8_into_u32(mut buf: Vec<u8>) -> Vec<u32> {
     unsafe {
         let ratio = 4;
 
         let length = buf.len() / ratio;
         let capacity = buf.capacity() / ratio;
-        let ptr = buf.as_mut_ptr() as *mut i32;
+        let ptr = buf.as_mut_ptr() as *mut u32;
 
         // Don't run the destructor for vec32
         mem::forget(buf);
@@ -240,6 +240,7 @@ pub fn u8_into_i32(mut buf: Vec<u8>) -> Vec<i32> {
         Vec::from_raw_parts(ptr, length, capacity)
     }
 }
+/*
 pub fn i64_into_u8(mut buf: Vec<i64>) -> Vec<u8> {
     unsafe {
         let ratio = 8;
@@ -270,4 +271,4 @@ pub fn u8_into_i64(mut buf: Vec<u8>) -> Vec<i64> {
         Vec::from_raw_parts(ptr, length, capacity)
     }
 }
-
+*/

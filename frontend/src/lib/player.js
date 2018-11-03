@@ -255,7 +255,7 @@ export default class Player {
         let buffer = this.buffer;
 
         let tmp;
-        if(typeof key == "string") {
+        if(typeof key[0] == "number") {
             tmp = Protocol.get_track(key);
             tmp.then(x => {
                 queue.push(x);

@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 ///
 ///  * `num_channel`- Number of channel in `data`
 ///  * `data` - Raw audio data with succeeding channels
-pub fn get_fingerprint(num_channel: u16, data: &[i16]) -> Result<Vec<i32>> {
+pub fn get_fingerprint(num_channel: u16, data: &[i16]) -> Result<Vec<u32>> {
     let mut ctx = Chromaprint::new();
     ctx.start(48000, num_channel as i32);
 
@@ -24,6 +24,7 @@ pub fn get_fingerprint(num_channel: u16, data: &[i16]) -> Result<Vec<i32>> {
     ctx.finish();
 
     ctx.raw_fingerprint().ok_or(Error::AcousticID)
+        .map(|x| x.into_iter().map(|x| x as u32).collect())
 }
 
 pub fn get_hash(fingerprint: &[i32]) -> i64 {
@@ -49,7 +50,7 @@ pub fn get_hash(fingerprint: &[i32]) -> i64 {
 ///
 ///  * `hash` - Fingerprint of the audio file
 ///  * `duration` - Duration of the audio in millis
-pub fn get_metadata(fingerprint: &[i32], duration: u32) -> Result<String> {
+pub fn get_metadata(fingerprint: &[u32], duration: u32) -> Result<String> {
     let v_bytes: &[u8] = unsafe {
         std::slice::from_raw_parts(
             fingerprint.as_ptr() as *const u8,
