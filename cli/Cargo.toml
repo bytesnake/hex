@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
 [dependencies]
-clap = "*"
+getopts = "0.2"
 
 [dependencies.hex-music-container]
 path = "../music-container/"
