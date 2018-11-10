@@ -97,7 +97,7 @@ impl Peer {
                     let map = Self::existing_tracks(data_path).unwrap();
 
                     Ok(tracks.into_iter().filter_map(|x| {
-                        if !map.contains_key(&x.key) {
+                        if !map.contains(&x.key.to_string()) {
                             Some(Protocol::GetTrack(x.key, None))
                         } else {
                             None
@@ -114,7 +114,7 @@ impl Peer {
                 let existing_tracks = Self::existing_tracks(data_path)?;
 
                 let tracks = collection.get_tracks().into_iter().filter_map(|x| {
-                    if existing_tracks.contains_key(&x.key) {
+                    if existing_tracks.contains(&x.key.to_string()) {
                         Some(x)
                     } else {
                         None
@@ -124,6 +124,7 @@ impl Peer {
                 Ok(vec![Protocol::Syncing(Some((tracks, playlists)))])
             },
             Ok(Protocol::GetTrack(key, None)) => {
+                println!("Get track: {}", key);
                 if collection.get_track(key).is_ok() {
                     if let Ok(mut f) = File::open(data_path.join(key.to_path())) {
                         let mut buf = Vec::new();
@@ -206,7 +207,7 @@ impl Peer {
         i
     }
 
-    fn existing_tracks(data_path: &PathBuf) -> Result<HashMap<TrackKey, ()>, io::Error> {
+    fn existing_tracks(data_path: &PathBuf) -> Result<HashSet<String>, io::Error> {
         let res = fs::read_dir(data_path)?
             .filter_map(|entry| {
                 let entry = entry.ok()?;
@@ -214,7 +215,7 @@ impl Peer {
 
                 if path.is_file() {
                     let key = TrackKey::from_str(path.file_name().unwrap().to_str().unwrap());
-                    Some((key, ()))
+                    Some(key.to_string())
                 } else {
                     None
                 }

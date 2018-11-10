@@ -1,5 +1,5 @@
 [package]
-name = "local-client"
+name = "hex-cli"
 version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 

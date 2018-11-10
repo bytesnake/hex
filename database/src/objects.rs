@@ -29,8 +29,8 @@ impl TrackKey {
 
         let mut key = TrackKey([0u8; 16]);
 
-        for i in 0..16 {
-            key.0[i] = u8::from_str_radix(&buf[i*2..i*2+1], 16).unwrap();
+    for i in 0..16 {
+            key.0[i] = u8::from_str_radix(&buf[i*2..i*2+2], 16).unwrap();
         }
 
         key

@@ -1,5 +1,5 @@
 [package]
-name = "hex-stream-client"
+name = "hex-zyklop"
 version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
@@ -7,13 +7,11 @@ authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 spidev = "0.2.1"
 sysfs_gpio = "0.5"
 rb = "0.3"
-websocket = "0.20"
 cpal = "*"
 rand = "0.5"
 
-[dependencies.hex-server-protocol]
-path = "../server/protocol/"
-features = ["client"]
+hex-music-container = { path = "../music-container" }
+hex-sync = { path = "../sync" }
 
 [dependencies.hex-database]
 path = "../database/"
@@ -23,6 +21,3 @@ default_features = false
 [dependencies.mfrc522]
 git = "https://github.com/emkw/rust-MFRC522.git"
 features = ["spidev"]
-
-#[dependencies.cpal]
-#path = "/home/lorenz/Downloads/cpal/"

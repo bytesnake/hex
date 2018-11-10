@@ -34,6 +34,6 @@ fn main() {
     println!(" => Found {} playlists:", playlists.len());
 
     for pl in playlists {
-        println!("\t{} with {} tracks", pl.title, pl.count);
+        println!("\t{} with {} tracks", pl.title, pl.tracks.len());
     }
 }

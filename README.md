@@ -18,8 +18,8 @@ Hex is a collection of crates which can store, manage, tokenise and play music. 
  * [sync](sync/) library - replicate database between peers (e.g. server and end device)
  * [server](server) binary - a HTTP and websocket server providing all the necessary calls
  * [frontend](frontend) website - nice GUI for music management
- * [local-client](local-client) binary - local management of the music collection without any server
- * [stream-client](stream-client) binary - music playing system with support for tokens in conjunction with a server
+ * [cli](cli) binary - local management of the music collection without any server
+ * [zyklop](zyklop) binary - music playing system with support for tokens in conjunction with a server
  * [nightly-worker](nightly-worker) binary - summarize each day and perform some kind of cleanup
 
 *Can you give me a rough overview?*

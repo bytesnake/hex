@@ -5,8 +5,8 @@ members = [
     "music-container",
     "server",
     "server/protocol",
-    "stream-client",
-    "local-client",
+    "zyklop",
+    "cli",
     "nightly-worker",
     "sync"
 ]
