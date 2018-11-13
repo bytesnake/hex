@@ -5,6 +5,13 @@ authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
 [dependencies]
 getopts = "0.2"
+tokio = "0.1"
+futures = "0.1"
+hex-sync = { path = "../sync/" }
+rb = "0.3"
+cpal = "*"
+nix = "0.11.0"
+terminal_size = "0.1"
 
 [dependencies.hex-music-container]
 path = "../music-container/"

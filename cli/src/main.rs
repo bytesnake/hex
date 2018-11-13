@@ -1,15 +1,30 @@
+extern crate futures;
+extern crate tokio;
+extern crate getopts;
+extern crate cpal;
+extern crate rb;
+extern crate nix;
+extern crate terminal_size;
+
 extern crate hex_database;
 extern crate hex_music_container;
-extern crate getopts;
+extern crate hex_sync;
 
+mod audio;
+mod sync;
+mod play;
+mod modify;
+
+use std::io::{self, Write};
 use std::env;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use hex_database::{Collection, search::SearchQuery, Track};
 
 use getopts::Options;
 
 fn main() {
-    let (path_data, path_db) = env::vars()
+    let (data_path, path_db) = env::vars()
         .filter(|(key, _)| key == "HEX_PATH").map(|(_, a)| a).next()
         .map(|x| (PathBuf::from(&x).join("data"), PathBuf::from(&x).join("music.db")))
         .unwrap();
@@ -31,7 +46,7 @@ fn main() {
     // now build the option pattern
     let mut opts = Options::new();
     opts.optopt("s", "search", "search for tracks", "QUERY");
-    opts.optopt("a", "action", "execute a certain action", "delete|modify|show|play");
+    opts.optopt("a", "action", "execute a certain action", "delete|modify|show|play|sync");
     opts.optflag("h", "help", "hex command line");
     let matches = opts.parse(&args[1..]).unwrap();
 
@@ -51,6 +66,18 @@ fn main() {
     match action.as_ref() {
         "show" => {
             show_tracks(&search_pattern, tracks);
+        },
+        "delete" => {
+            delete_tracks(&db, &data_path, tracks);
+        },
+        "sync" => {
+            sync::sync_tracks(tracks, &path_db, &data_path, ([0,0,0,0], 8000).into(), "Blub".to_string());
+        },
+        "play" => {
+            play::play_tracks(data_path.clone(), tracks);
+        },
+        "modify" => {
+            modify::modify_tracks(&db, tracks);
         },
         _ => {
             println!("Unsupported action!");
@@ -72,13 +99,39 @@ fn show_tracks(query: &str, tracks: Vec<Track>) {
 
 }
 
+fn delete_tracks(db: &Collection, data_path: &Path, tracks: Vec<Track>) {
+    print!("Do you really want to delete {} tracks [n]: ", tracks.len());
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(_) => {
+            if input != "y\n" {
+                return;
+            }
+        },
+        Err(err) => {
+            eprintln!("Error: {}", err);
+            return;
+        }
+    }
+
+    for track in tracks {
+        db.delete_track(track.key).unwrap();
+
+       if fs::remove_file(data_path.join(track.key.to_path())).is_err() {
+           eprintln!("Error: Could not remove file of track {}", track.key.to_string());
+       }
+    }
+}
+
 fn print_overview(db: &Collection) {
     let mut tracks = db.get_tracks();
     tracks.sort_by(|a, b| a.favs_count.cmp(&b.favs_count).reverse());
 
     let duration = tracks.iter().fold(0.0, |y,x| y + x.duration);
 
-    println!(" => Found {} tracks with total length of {} min", tracks.len(), (duration / 60.0).floor());
+    println!(" => Found {} tracks in total length {} min", tracks.len(), (duration / 60.0).floor());
 
     for track in tracks.iter().take(10) {
         if let (Some(ref title), Some(ref interpret)) = (&track.title, &track.interpret) {
