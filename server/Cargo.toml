@@ -31,9 +31,6 @@ path = "../music-container/"
 [dependencies.hex-database]
 path = "../database/"
 
-[dependencies.hex-sync]
-path = "../sync/"
-
 [dependencies.hex-server-protocol]
 path = "protocol/"
 features = ["server"]

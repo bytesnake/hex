@@ -7,11 +7,12 @@ authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 getopts = "0.2"
 tokio = "0.1"
 futures = "0.1"
-hex-sync = { path = "../sync/" }
 rb = "0.3"
 cpal = "*"
 nix = "0.11.0"
 terminal_size = "0.1"
+toml = "0.4"
+serde = "1.0"
 
 [dependencies.hex-music-container]
 path = "../music-container/"
@@ -19,4 +20,4 @@ path = "../music-container/"
 [dependencies.hex-database]
 path = "../database/"
 default_features = false
-features = ["rusqlite"]
+features = ["rusqlite", "hex-gossip", "serde"]

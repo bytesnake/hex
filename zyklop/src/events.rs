@@ -105,8 +105,9 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
 
         if card_avail {
             let mut buffer = [0_u8; 18];
-            let (read_status, nread) = mfrc522.mifare_read(8, &mut buffer);
+            let (read_status, nread) = mfrc522.mifare_read(4, &mut buffer);
             if !read_status.is_ok() || nread == 0 {
+                println!("Lost: {:?}", read_status);
                 card_avail = false;
                 events.push(Event::CardLost);
             }
@@ -140,6 +141,6 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
             //println!("{:?}", events);
         }
 
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(400));
     }
 }

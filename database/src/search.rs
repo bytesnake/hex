@@ -89,11 +89,11 @@ pub struct SearchQuery {
 
 impl SearchQuery {
     /// Create a new search query
-    pub fn new(input: &str) -> Option<SearchQuery> {
+    pub fn new(input: &str) -> SearchQuery {
         let tags = input.split(',').filter_map(Tag::from_search_query).collect();
         let order = input.split(',').filter_map(Order::from_search_query).next().unwrap_or(Order::ByDate);
 
-        Some(SearchQuery { tags: tags, order: order })
+        SearchQuery { tags: tags, order: order }
     }
 
     /// Check for emptiness

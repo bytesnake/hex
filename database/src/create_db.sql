@@ -18,7 +18,7 @@ BEGIN;
         Title   TEXT NOT NULL, 
         Desc    TEXT, 
         Tracks  BLOB NOT NULL, 
-        Origin  TEXT
+        Author  BLOB NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS Tokens (
@@ -26,21 +26,21 @@ BEGIN;
         Key         INTEGER, 
         Played      BLOB NOT NULL, 
         Pos         NUMERIC, 
-        Counter     INTEGER NOT NULL,
-        LastUse  TEXT NOT NULL
+        LastUse     INTEGER NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS Events (
-        Date    Text, 
-        Origin  Text, 
-        Event   Text, 
-        Data    TEXT
+    CREATE TABLE IF NOT EXISTS Transitions (
+        Key         BLOB Primary KEY,
+        PublicKey   BLOB NOT NULL,
+        Signature   BLOB NOT NULL,
+        Refs        BLOB NOT NULL,
+        IsTip       INTEGER NOT NULL,
+        Data        BLOB,
+        Created     INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS Summarise (
         Day         TEXT, 
-        Connects    INTEGER, 
-        Plays       INTEGER, 
         Adds        INTEGER, 
         Removes     INTEGER
     );

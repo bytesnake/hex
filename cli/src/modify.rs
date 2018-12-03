@@ -1,9 +1,9 @@
 use std::io::{Write, BufRead, BufReader};
 use std::fs::{self, File};
 use std::process::Command;
-use hex_database::{Track, Collection, TrackKey};
+use hex_database::{Track, View, TrackKey};
 
-pub fn modify_tracks(db: &Collection, tracks: Vec<Track>) {
+pub fn modify_tracks(view: &View, tracks: Vec<Track>) {
     {
         let mut file = File::create("/tmp/cli_modify").unwrap();
 
@@ -37,7 +37,7 @@ pub fn modify_tracks(db: &Collection, tracks: Vec<Track>) {
                 continue;
             }
 
-            db.update_track(
+            view.update_track(
                 TrackKey::from_str(&params[0]),
                 if params[1] == "None" { None } else { Some(&params[1]) },
                 if params[2] == "None" { None } else { Some(&params[2]) },

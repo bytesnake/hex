@@ -39,25 +39,6 @@ impl Default for Server {
     }
 }
 
-/// Path to the music database and data section
-#[derive(Deserialize, Debug, Clone)]
-pub struct Music {
-    pub db_path: PathBuf,
-    pub data_path: PathBuf
-}
-
-impl Default for Music {
-    /// By default in the home folder
-    fn default() -> Self {
-        let home = env::home_dir().expect("Could not found a home directory!");
-
-        Music {
-            data_path: home.join(".music"),
-            db_path: home.join(".music.db")
-        }
-    }
-}
-
 /// Webserver configuration
 #[derive(Deserialize, Debug, Clone)]
 pub struct WebServer {
@@ -89,8 +70,6 @@ pub struct Conf {
     pub host: IpAddr,
     #[serde(default)]
     pub server: Server,
-    #[serde(default)]
-    pub music: Music,
     pub webserver: Option<WebServer>,
     pub sync: Option<Syncc>
 
@@ -101,7 +80,6 @@ impl Default for Conf {
         Conf {
             host: default_host(),
             server: Server::default(),
-            music: Music::default(),
             webserver: None,
             sync: None
         }

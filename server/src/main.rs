@@ -46,7 +46,6 @@ extern crate sha2;
 
 extern crate hex_database;
 extern crate hex_music_container;
-extern crate hex_sync;
 extern crate hex_server_protocol;
 
 mod error;
@@ -69,16 +68,23 @@ use tokio_core::reactor::Core;
 /// Main function spinning up all server
 fn main() {
     // check if we got the configuration, otherwise just load the default settings
-    let conf = match env::args().skip(1).next().map(|x| PathBuf::from(x)) {
-        Some(x) => conf::Conf::from_file(&x).unwrap(),
-        None => conf::Conf::default()
+    let path = env::vars()
+        .filter(|(key, _)| key == "HEX_PATH").map(|(_, a)| PathBuf::from(&a)).next()
+        .unwrap_or(PathBuf::from("/opt/music"));
+
+    let conf = match conf::Conf::from_file(&path.join("conf.toml")) {
+        Ok(x) => x,
+        Err(err) => {
+            eprintln!("Error: Could not load configuration {:?}", err);
+            conf::Conf::default()
+        }
     };
 
     println!("Configuration: {:#?}", conf);
 
     // start the webserver in a seperate thread if it is mentioned in the configuration
     if let Some(webserver) = conf.webserver.clone() {
-        let data_path = conf.music.data_path.clone();
+        let data_path = path.join("data");
         let addr = SocketAddr::new(conf.host.clone(), webserver.port);
         thread::spawn(move || {
             webserver::create_webserver(addr, webserver.path.clone(), data_path.clone());
@@ -86,10 +92,10 @@ fn main() {
     }
 
     // start the sync server in a seperate thread if it mentioned in the configuration
-    if let Some(sync) = conf.sync.clone() {
+    /*if let Some(sync) = conf.sync.clone() {
         let (peer, chain) = hex_sync::Peer::new(
-            conf.music.db_path.clone(),
-            conf.music.data_path.clone(), 
+            path.join("music.db"),
+            path.join("data"),
             SocketAddr::new(conf.host.clone(), sync.port),
             sync.name,
             sync.sync_all
@@ -101,8 +107,8 @@ fn main() {
             let mut core = Core::new().unwrap();
             core.run(chain);
         });
-    }
+    }*/
 
     // start the websocket server in the main thread
-    server::start(conf)
+    server::start(conf, path.to_path_buf())
 }

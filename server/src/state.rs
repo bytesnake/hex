@@ -21,7 +21,7 @@ use error::{Result, Error};
 
 use convert::{UploadState, download::{DownloadState}};
 
-use hex_database::{self, events::Action, Track, Token, Event};
+use hex_database::{self, Track, Token, View, Playlist};
 use hex_music_container::{self, Configuration, Container};
 use hex_server_protocol::{Request, Answer, RequestAction, AnswerAction, PacketId, objects::UploadProgress};
 
@@ -52,7 +52,7 @@ pub struct State {
     /// All pending requests
     reqs: HashMap<PacketId, RequestState>,
     /// Open connection to the database
-    pub collection: hex_database::Collection,
+    pub collection: View,
     /// Path to the data section
     data_path: PathBuf,
     /// Buffer for incoming buffering requests
@@ -67,12 +67,12 @@ pub struct State {
 
 impl State {
     /// Create a new `State` from a configuration
-    pub fn new(handle: Handle, conf: conf::Music) -> State {
+    pub fn new(handle: Handle, path: &Path, view: View) -> State {
         State {
             handle: handle,
             reqs: HashMap::new(),
-            collection: hex_database::Collection::from_file(&conf.db_path),
-            data_path: conf.data_path.clone(),
+            collection: view,
+            data_path: path.join("data"),
             buffer: Vec::new(),
             uploads: Vec::new(),
             downloads: Vec::new(),
@@ -80,7 +80,7 @@ impl State {
         }
     }
 
-    pub fn process_request(&mut self, origin: String, req: Request, gtoken: Arc<Mutex<i64>>) -> Answer {
+    pub fn process_request(&mut self, origin: String, req: Request) -> Answer {
         let Request { id, msg } = req;
         let mut remove = false;
 
@@ -141,7 +141,7 @@ impl State {
 
                 let prior_state = entry
                     .or_insert_with(|| {
-                        collection.add_event(Action::PlaySong(key.unwrap()).with_origin(origin)).unwrap();
+                        //collection.add_event(Action::PlaySong(key.unwrap()).with_origin(origin)).unwrap();
                         let mut file = File::open(data_path.join(key.unwrap().to_path())).unwrap();
 
                         RequestState::Stream {
@@ -232,8 +232,17 @@ impl State {
             },
 
             RequestAction::AddPlaylist { name } => {
-                self.collection.add_playlist(&name, None)
-                    .map(|x| AnswerAction::AddPlaylist(x))
+                let key = self.collection.last_playlist_key().unwrap() + 1;
+                let playlist = Playlist {
+                    key: key.clone(),
+                    title: name,
+                    desc: None,
+                    tracks: Vec::new(),
+                    origin: self.collection.id()
+                };
+
+                self.collection.add_playlist(playlist.clone())
+                    .map(|x| AnswerAction::AddPlaylist(playlist))
                     .map_err(|err| Error::Database(err))
             },
 
@@ -244,7 +253,7 @@ impl State {
             },
 
             RequestAction::UpdatePlaylist { key, title, desc } => {
-                self.collection.update_playlist(key, title, desc, None, )
+                self.collection.update_playlist(key, title, desc)
                     .map(|_| AnswerAction::UpdatePlaylist)
                     .map_err(|err| Error::Database(err))
             },
@@ -288,7 +297,7 @@ impl State {
             },
             RequestAction::DeleteTrack { key } => {
                 println!("Delete track with key: {}", key);
-                self.collection.add_event(Action::DeleteSong(key.clone()).with_origin(origin.clone())).unwrap();
+                //self.collection.add_event(Action::DeleteSong(key.clone()).with_origin(origin.clone())).unwrap();
 
                 self.collection.delete_track(key)
                     .map(|x| AnswerAction::DeleteTrack(x))
@@ -318,8 +327,7 @@ impl State {
                 // tick each item
                 for item in &mut self.uploads {
                     if let Some(track) = item.tick(self.data_path.clone()) {
-                        self.collection.add_event(Action::AddSong(track.key.clone()).with_origin(origin.clone())).unwrap();
-                        self.collection.insert_track(track).unwrap();
+                        self.collection.add_track(track).unwrap();
                     }
                 }
 
@@ -349,7 +357,6 @@ impl State {
             },
             RequestAction::GetToken { token } => {
                 self.token_avail = true;
-                *gtoken.lock().unwrap() = token as i64;
 
                 self.collection.get_token(token)
                     .map(|(token, x)| {
@@ -369,13 +376,21 @@ impl State {
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::CreateToken => {
-                self.collection.create_token()
+                let id = self.collection.last_token_id().unwrap() + 1;
+                let token = Token {
+                    token: id,
+                    key: None,
+                    played: Vec::new(),
+                    pos: None,
+                    last_use: 0
+                };
+
+                self.collection.add_token(token)
                     .map(|id| AnswerAction::CreateToken(id))
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::UpdateToken { token, key, played, pos } => {
                 if self.token_avail {
-                    *gtoken.lock().unwrap() = -1;
                     self.token_avail = false;
                 }
 
@@ -384,18 +399,17 @@ impl State {
                      .map_err(|err| Error::Database(err))
             },
             RequestAction::LastToken => {
-                let val = match *gtoken.lock().unwrap() {
-                    -1 => None,
-                    x => Some(x as i64)
-                };
-                
-                Ok(AnswerAction::LastToken(val))
+                self.collection.get_last_used_token()
+                    .map(|x| AnswerAction::LastToken(Some(x.0.token)))
+                    .map_err(|err| Error::Database(err))
             },
             RequestAction::GetSummarise => {
-                Ok(AnswerAction::GetSummarise(self.collection.get_summarisation()))
+                Ok(AnswerAction::GetSummarise(Vec::new()))
+                //Ok(AnswerAction::GetSummarise(self.collection.get_summarisation()))
             },
             RequestAction::GetEvents => {
-                Ok(AnswerAction::GetEvents(self.collection.get_events()))
+                //Ok(AnswerAction::GetEvents(self.collection.get_events()))
+                Ok(AnswerAction::GetEvents(Vec::new()))
             },
             RequestAction::Download { format, tracks } => {
                 let id = id.clone();
@@ -434,10 +448,10 @@ impl State {
     /// * `origin` - where does the request originates from
     /// * `msg` - what is the content of the message
     /// * `gtoken` - globally shared token, used to change the token in frontend
-    pub fn process(&mut self, origin: String, buf: Vec<u8>, gtoken: Arc<Mutex<i64>>) -> Option<Vec<u8>> {
+    pub fn process(&mut self, origin: String, buf: Vec<u8>) -> Option<Vec<u8>> {
         //println!("Process buf {}", buf.len());
         Request::try_from(&buf)
-            .map(|req| self.process_request(origin, req, gtoken))
+            .map(|req| self.process_request(origin, req))
             .and_then(|answer| answer.to_buf())
             .map_err(|err| { println!("Parse error: {:?}", err); err})
             .ok()

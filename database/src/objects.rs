@@ -4,10 +4,21 @@
 use rusqlite::Row;
 #[cfg(feature="rusqlite")]
 use rusqlite::Result;
+
 use std::{mem, fmt};
 use std::path::PathBuf;
 
+#[cfg(feature = "rusqlite")]
 use sha2::{Digest, Sha256};
+
+#[cfg(feature = "hex-gossip")]
+use hex_gossip::PeerId;
+
+/// Peer id copy
+#[cfg(not(feature="hex-gossip"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
+pub struct PeerId([u8; 16]);
 
 /// Track identification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -91,6 +102,7 @@ pub struct Track {
 
 impl Track {
     /// Create an empty track with no metadata
+    #[cfg(feature="rusqlite")]
     pub fn empty(fingerprint: Fingerprint, duration: f64) -> Track {
         let mut hasher = Sha256::new();                                                           
         let v_bytes: &[u8] = unsafe {
@@ -151,9 +163,8 @@ pub struct Playlist {
     pub desc: Option<String>,
     /// Vector of all track keys
     pub tracks: Vec<TrackKey>,
-    /// In case the playlist originates from an outside server and should be updated by the `sync`
-    /// crate
-    pub origin: Option<String>
+    /// The author of this playlist
+    pub origin: PeerId
 }
 
 #[cfg(feature = "rusqlite")]
@@ -168,7 +179,7 @@ impl Playlist {
             title:  row.get_checked(1)?,
             desc:   row.get_checked(2)?,
             tracks: keys,
-            origin: row.get_checked(4)?
+            origin: PeerId(row.get_checked(4)?)
         })
     }
 }
@@ -187,10 +198,8 @@ pub struct Token {
     pub played: Vec<TrackKey>,
     /// Position of the actual song
     pub pos: Option<f64>,
-    /// Change counter (shared between all peers)
-    pub counter: u32,
-    /// Last time the token was updates (local version)
-    pub last_update: String
+    /// Last time the token was used
+    pub last_use: i64
 }
 
 #[cfg(feature = "rusqlite")]
@@ -205,8 +214,7 @@ impl Token {
             key:            row.get_checked(1)?,
             played:         keys,
             pos:            row.get_checked(3)?,
-            counter:        row.get_checked(4)?,
-            last_update:    row.get_checked(5)?
+            last_use:    row.get_checked(4)?
         })
     }
 }
@@ -240,6 +248,8 @@ pub fn u8_into_u32(mut buf: Vec<u8>) -> Vec<u32> {
         Vec::from_raw_parts(ptr, length, capacity)
     }
 }
+
+
 /*
 pub fn i64_into_u8(mut buf: Vec<i64>) -> Vec<u8> {
     unsafe {

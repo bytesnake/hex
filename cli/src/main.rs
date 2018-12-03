@@ -5,13 +5,16 @@ extern crate cpal;
 extern crate rb;
 extern crate nix;
 extern crate terminal_size;
+extern crate toml;
+#[macro_use]
+extern crate serde;
 
 extern crate hex_database;
 extern crate hex_music_container;
-extern crate hex_sync;
 
+mod conf;
 mod audio;
-mod sync;
+//mod sync;
 mod play;
 mod modify;
 
@@ -19,22 +22,33 @@ use std::io::{self, Write};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use hex_database::{Collection, search::SearchQuery, Track};
+use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf};
 
 use getopts::Options;
 
 fn main() {
-    let (data_path, path_db) = env::vars()
-        .filter(|(key, _)| key == "HEX_PATH").map(|(_, a)| a).next()
-        .map(|x| (PathBuf::from(&x).join("data"), PathBuf::from(&x).join("music.db")))
-        .unwrap();
-    let args: Vec<String> = env::args().collect();
+        // check if we got the configuration, otherwise just load the default settings
+    let path = env::vars()
+        .filter(|(key, _)| key == "HEX_PATH").map(|(_, a)| PathBuf::from(&a)).next()
+        .unwrap_or(PathBuf::from("/opt/music"));
 
-    let db = Collection::from_file(&path_db);
+    let conf = match conf::Conf::from_file(&path.join("conf.toml")) {
+        Ok(x) => x,
+        Err(err) => {
+            eprintln!("Error: Could not load configuration {:?}", err);
+            conf::Conf::default()
+        }
+    };
+    let data_path = PathBuf::from(&path).join("data");
+    let db_path = PathBuf::from(&path).join("music.db");
+
+    let args: Vec<String> = env::args().collect();
+    let instance = Instance::from_file(&db_path, GossipConf::new());
+    let view = instance.view();
 
     // print overview of the database
     if args.len() == 1 {
-        print_overview(&db);
+        print_overview(&view);
         return;
     }
 
@@ -59,25 +73,25 @@ fn main() {
         action = new_action;
     }
 
-    let query = SearchQuery::new(&search_pattern).unwrap();
-    let mut query = db.search_prep(query).unwrap();
-    let tracks: Vec<Track> = db.search(&mut query).collect();
+    let query = SearchQuery::new(&search_pattern);
+    let mut query = view.search_prep(query).unwrap();
+    let tracks: Vec<Track> = view.search(&mut query).collect();
 
     match action.as_ref() {
         "show" => {
             show_tracks(&search_pattern, tracks);
         },
         "delete" => {
-            delete_tracks(&db, &data_path, tracks);
+            delete_tracks(&view, &data_path, tracks);
         },
-        "sync" => {
+        /*"sync" => {
             sync::sync_tracks(tracks, &path_db, &data_path, ([0,0,0,0], 8000).into(), "Blub".to_string());
-        },
+        },*/
         "play" => {
             play::play_tracks(data_path.clone(), tracks);
         },
         "modify" => {
-            modify::modify_tracks(&db, tracks);
+            modify::modify_tracks(&view, tracks);
         },
         _ => {
             println!("Unsupported action!");
@@ -99,7 +113,7 @@ fn show_tracks(query: &str, tracks: Vec<Track>) {
 
 }
 
-fn delete_tracks(db: &Collection, data_path: &Path, tracks: Vec<Track>) {
+fn delete_tracks(db: &View, data_path: &Path, tracks: Vec<Track>) {
     print!("Do you really want to delete {} tracks [n]: ", tracks.len());
     io::stdout().flush().unwrap();
 
@@ -125,7 +139,7 @@ fn delete_tracks(db: &Collection, data_path: &Path, tracks: Vec<Track>) {
     }
 }
 
-fn print_overview(db: &Collection) {
+fn print_overview(db: &View) {
     let mut tracks = db.get_tracks();
     tracks.sort_by(|a, b| a.favs_count.cmp(&b.favs_count).reverse());
 

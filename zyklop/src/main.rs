@@ -7,7 +7,6 @@ extern crate rand;
 
 extern crate hex_database;
 extern crate hex_music_container;
-extern crate hex_sync;
 
 mod error;
 mod audio;
@@ -20,7 +19,7 @@ use events::Event;
 
 use error::Error;
 
-use hex_database::{Collection, Token};
+use hex_database::{Instance, Token, GossipConf};
 
 fn main() {
     let path = env::args().skip(1).next()
@@ -29,7 +28,8 @@ fn main() {
         .ok_or(Error::InvalidPath).expect("Could not find path!");
 
     let data_path = path.join("data");
-    let db = Collection::from_file(&path.join("music.db"));
+    let instance = Instance::from_file(&path.join("music.db"), GossipConf::new());
+    let view = instance.view();
 
     let (events, push_new) = events::events();
     let mut audio = audio::AudioDevice::new();
@@ -47,7 +47,7 @@ fn main() {
                                 1 => {audio.clear(); token.prev_track()},
                                 0 => {create_counter += 1; token.shuffle()},
                                 2 => {
-                                    if let Err(err) = db.vote_for_track(token.track_key().unwrap()) {
+                                    if let Err(err) = view.vote_for_track(token.track_key().unwrap()) {
                                         eprintln!("Error: Could not vote for track {:?}: {:?}", token.track_key(), err);
                                     }
                                 },
@@ -60,22 +60,32 @@ fn main() {
                     Event::NewCard(num) => {
                         println!("Got card with number {}", num);
 
-                        match db.get_token(num as i64) {
+                        match view.get_token(num as i64) {
                             Ok((a, Some((_, b)))) => token = Some(token::Current::new(a, b, data_path.clone())),
                             Ok((a, None)) => token = Some(token::Current::new(a, Vec::new(), data_path.clone())),
-                            Err(hex_database::Error::QueryReturnedNoRows) => {
-                                let new_token_id = db.create_token().expect("Error: Could not create a new token!");
+                            Err(hex_database::Error::NotFound) => {
+                                println!("Not found!");
+                                let id = view.last_token_id().unwrap() + 1;
+                                let token = Token {
+                                    token: id,
+                                    key: None,
+                                    played: Vec::new(),
+                                    pos: None,
+                                    last_use: 0
+                                };
 
-                                push_new.send(new_token_id as u32).unwrap();
+                                view.add_token(token).expect("Error: Could not create a new token!");
+
+                                push_new.send(id as u32).unwrap();
                             },
-                            Err(err) => eprintln!("Error: Could not get token with error: {}", err)
+                            Err(err) => eprintln!("Error: Could not get token with error: {:?}", err)
                         }
                     },
                     Event::CardLost => {
                         if let Some(ref mut token) = token {
                             let Token { token, played, pos, .. } = token.data();
 
-                            if let Err(err) = db.update_token(token, None, Some(played), pos) {
+                            if let Err(err) = view.update_token(token, None, Some(played), pos) {
                                 eprintln!("Error: Could not update token {:?} because {:?}", token, err);
                             }
                         }
@@ -94,6 +104,7 @@ fn main() {
 
         if let Some(ref mut token) = token {
             if token.has_tracks() {
+                println!("Next buffer!");
                 if let Some(packet) = token.next_packet() {
                     audio.buffer(&packet);
                 }

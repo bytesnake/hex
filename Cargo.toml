@@ -2,13 +2,13 @@
 
 members = [
     "database",
+    "database/gossip",
     "music-container",
     "server",
     "server/protocol",
     "zyklop",
     "cli",
-    "nightly-worker",
-    "sync"
+    "nightly-worker"
 ]
 
 [profile.release]

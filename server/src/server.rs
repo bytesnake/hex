@@ -5,8 +5,8 @@
 
 use std::fmt::Debug;
 use std::time::Instant;
-use std::sync::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
 
 use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
@@ -18,17 +18,17 @@ use futures::{Future, Sink, Stream};
 use state::State;
 use conf::Conf;
 
-use hex_database::events::Action;
+use hex_database::{Instance, GossipConf};
 
 /// Start the websocket server, supplied with a configuration
-pub fn start(conf: Conf) {
+pub fn start(conf: Conf, path: PathBuf) {
 	let mut core = Core::new().unwrap();
 	let handle = core.handle();
 
 	// bind to the server
     let addr = (conf.host, conf.server.port);
 	let server = Server::bind(addr, &handle).unwrap();
-    let token = Arc::new(Mutex::new(-1));
+    let instance = Instance::from_file(&path.join("music.db"), GossipConf::new());
 
 	// a stream of incoming connections
 	let f = server.incoming()
@@ -44,9 +44,8 @@ pub fn start(conf: Conf) {
             }
 
             let handle2 = handle.clone();
-            let conf_music = conf.music.clone();
-            let token = token.clone();
-            //let cards_2 = cards.clone();
+            let path_cpy = path.clone();
+            let view = instance.view();
 
             // accept the request to be a ws connection if it does
             let f = upgrade
@@ -54,7 +53,7 @@ pub fn start(conf: Conf) {
                 .accept()
                 .and_then(move |(s,_)| {
                     let now = Instant::now();
-                    let mut state = State::new(handle2, conf_music);
+                    let mut state = State::new(handle2, &path_cpy, view);
 
                     let (sink, stream) = s.split();
 
@@ -66,10 +65,10 @@ pub fn start(conf: Conf) {
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(msg) => Some(OwnedMessage::Text("Text not supported".into())),
                             OwnedMessage::Binary(data) => {
-                                state.process(addr.to_string(), data, token.clone()).map(|x| OwnedMessage::Binary(x))
+                                state.process(addr.to_string(), data).map(|x| OwnedMessage::Binary(x))
                             },
                             OwnedMessage::Close(_) => {
-                                state.collection.add_event(Action::Connect(now.elapsed().as_secs() as f32).with_origin(addr.to_string())).unwrap();
+                                //state.collection.add_event(Action::Connect(now.elapsed().as_secs() as f32).with_origin(addr.to_string())).unwrap();
 
                                 Some(OwnedMessage::Close(None))
                             },
@@ -79,10 +78,6 @@ pub fn start(conf: Conf) {
                     .forward(sink)
                     .and_then(move |(_, sink)| {
                         println!("BLUB");
-                        //println!("Disconnected: {}", now.elapsed().as_secs());
-                        //hex_database::Collection::from_file(&conf_music.db_path)
-                        //state.collection.add_event(Action::Connect(0.0).with_origin(addr.to_string())).unwrap();
-
                         sink.send(OwnedMessage::Close(None))
                     })
                 });

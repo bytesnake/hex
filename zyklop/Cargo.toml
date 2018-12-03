@@ -11,12 +11,9 @@ cpal = "*"
 rand = "0.5"
 
 hex-music-container = { path = "../music-container" }
-hex-sync = { path = "../sync" }
 
 [dependencies.hex-database]
 path = "../database/"
-features = ["serde"]
-default_features = false
 
 [dependencies.mfrc522]
 git = "https://github.com/emkw/rust-MFRC522.git"

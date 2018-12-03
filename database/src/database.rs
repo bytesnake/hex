@@ -1,32 +1,101 @@
-use std::path::Path;
-use rusqlite::{self, Result, Statement, Error};
-use search::SearchQuery;
-use objects::{self, *};
-use events::Event;
+use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+use rusqlite::{self, Statement, OpenFlags};
 
-/// Represents an open connection to a database
-pub struct Collection {
-    socket: rusqlite::Connection
+use error::{Error, Result};
+use search::SearchQuery;
+use objects::*;
+
+use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector};
+use transition::{Storage, TransitionAction, transition_from_sql};
+
+/// Instance of the database
+pub struct Instance {
+    gossip: Option<Gossip<Storage>>,
+    storage: Option<(Arc<Storage>, PeerId)>,
+    path: PathBuf
 }
 
-impl Collection {
-    /// Open a SQLite database from a file and create the neccessary tables in case they don't
-    /// exist.
-    pub fn from_file(path: &Path) -> Collection {
-        let socket = rusqlite::Connection::open(path).unwrap();
-    
-        // create the necessary tables (if not already existing)
-        socket.execute_batch(include_str!("create_db.sql")).unwrap();
+impl Instance {
+    pub fn from_file<T: AsRef<Path>>(path: T, conf: GossipConf) -> Instance {
+        let path = path.as_ref();
 
-        Collection { socket }
+        // try to create the database, if not existing
+        {
+            let socket = rusqlite::Connection::open(path).unwrap();
+    
+            // create the necessary tables (if not already existing)
+            socket.execute_batch(include_str!("create_db.sql")).unwrap();
+        }
+
+        if let Some(id) = conf.id.clone() {
+            let storage = Storage::new(path);
+
+            if conf.addr.is_some() {
+                let gossip = Some(Gossip::new(conf, storage));
+
+                Instance { gossip, storage: None, path: path.to_path_buf() }
+            } else {
+                Instance { gossip: None, storage: Some((Arc::new(storage), id)), path: path.to_path_buf() }
+            }
+        } else {
+            Instance { gossip: None, storage: None, path: path.to_path_buf() }
+        }
     }
 
-    pub fn in_memory() -> Collection {
-        let socket = rusqlite::Connection::open_in_memory().unwrap();
+    pub fn view(&self) -> View {
+        let socket = rusqlite::Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
-        socket.execute_batch(include_str!("create_db.sql")).unwrap();
+        match (&self.gossip, &self.storage) {
+            (Some(ref gossip), None) => {
+                let writer = gossip.writer();
 
-        Collection { socket }
+                View { 
+                    socket, 
+                    writer: Some(writer), 
+                    peer_id: Some(gossip.id()), 
+                    storage: None 
+                }
+            },
+            (None, Some((ref storage, ref peer_id))) => {
+                View { socket, writer: None, peer_id: Some(peer_id.clone()), storage: Some(storage.clone()) }
+            },
+            _ => {
+                View { socket, writer: None, peer_id: None, storage: None }
+            }
+        }
+    }
+}
+
+/// Represents an open connection to a database
+pub struct View {
+    socket: rusqlite::Connection,
+    peer_id: Option<PeerId>,
+    writer: Option<Arc<Spread<Storage>>>,
+    storage: Option<Arc<Storage>>
+
+}
+
+impl View {
+    pub fn commit(&self, transition: TransitionAction) -> Result<()> {
+        match (&self.writer, &self.storage, &self.peer_id) {
+            (Some(ref writer), _, _) => { writer.push(transition.to_vec()); Ok(()) },
+            (None, Some(ref storage), Some(ref id)) => {
+                let tips = storage.tips();
+                let transition = Transition::new(id.clone(), tips, transition.to_vec());
+                storage.store(transition);
+
+                Ok(())
+            },
+            _ => {
+                Err(Error::ReadOnly)
+            }
+        }
+    }
+
+    pub fn id(&self) -> PeerId {
+        self.peer_id.clone().unwrap()
     }
 
     /// Prepare a search with a provided query and translate it to SQL. This method fails in case
@@ -34,7 +103,7 @@ impl Collection {
     pub fn search_prep(&self, query: SearchQuery) -> Result<Statement> {
         let query = query.to_sql_query();
 
-        self.socket.prepare(&query)
+        self.socket.prepare(&query).map_err(|e| Error::Sqlite(e))
     }
 
     /// Execute the prepared search and return an iterator over all results
@@ -44,7 +113,7 @@ impl Collection {
 
     /// Search for a query and returns 50 tracks starting at `start`
     pub fn search_limited(&self, query: &str, start: usize) -> Result<Vec<Track>> {
-        let query = SearchQuery::new(query).ok_or(Error::QueryReturnedNoRows)?;
+        let query = SearchQuery::new(query);
 
         let mut stmt = self.search_prep(query)?;
         let res = self.search(&mut stmt).skip(start).take(50).collect();
@@ -70,69 +139,144 @@ impl Collection {
         vec
     }
 
+    /// Get a track with key `key`
+    pub fn get_track(&self, key: TrackKey) -> Result<Track> {
+        let mut stmt = self.socket.prepare("SELECT * FROM Tracks WHERE Key = ?").unwrap();
+
+        let mut stream = stmt.query_map(&[&key.to_vec()], |row| Track::from_row(row)).unwrap()
+            .filter_map(|x| x.ok()).filter_map(|x| x.ok());
+
+        stream.next().ok_or(Error::NotFound)
+    }
+
+    /// Get the metadata and tracks for a certain playlist
+    pub fn get_token(&self, token: TokenId) -> Result<(Token, Option<(Playlist, Vec<Track>)>)> {
+        let mut stmt = self.socket.prepare("SELECT * FROM Tokens WHERE Token=?;").unwrap();
+            
+        let mut query = stmt.query(&[&token]).unwrap();
+
+        let token = query.next()
+            .ok_or(Error::NotFound)
+            .and_then(|x| x.map_err(|e| Error::Sqlite(e)))
+            .and_then(|row| Token::from_row(&row).map_err(|e| Error::Sqlite(e)))?;
+
+        if let Some(playlist) = token.key {
+            let (playlist, tracks) = self.get_playlist(playlist)?;
+
+            Ok((token, Some((playlist, tracks))))
+        } else {
+            Ok((token, None))
+        }
+    }
+
     /// Get a playlist with a certain key and return the metadata and tracks
     pub fn get_playlist(&self, key: PlaylistKey) -> Result<(Playlist, Vec<Track>)> {
-        let mut stmt = self.socket.prepare(
-            "SELECT * FROM Playlists WHERE Key=?;")?;
+        let mut stmt = self.socket.prepare("SELECT * FROM Playlists WHERE Key=?;").unwrap();
 
-        let mut query = stmt.query(&[&key])?;
-        let playlist = query.next().ok_or(Error::QueryReturnedNoRows)?.map(|row| Playlist::from_row(&row))??;
+        let mut query = stmt.query(&[&key]).unwrap();
+        let playlist = query.next()
+            .ok_or(Error::NotFound)
+            .and_then(|x| x.map_err(|e| Error::Sqlite(e)))
+            .and_then(|row| Playlist::from_row(&row).map_err(|e| Error::Sqlite(e)))?;
 
         let query = format!("SELECT * FROM Tracks WHERE hex(key) in ({});", playlist.tracks.iter().map(|key| format!("\"{}\"", key.to_string())).collect::<Vec<String>>().join(","));
-        let mut stmt = self.socket.prepare(&query)?;
+        let mut stmt = self.socket.prepare(&query).unwrap();
         let res = self.search(&mut stmt).collect();
-        //let mut stmt = self.socket.prepare("SELECT * FROM Tracks WHERE hex(key) in ()");
-
 
         Ok((playlist, res))
+    }
+
+    /// Get the last used token
+    pub fn get_last_used_token(&self) -> Result<(Token, Option<(Playlist, Vec<Track>)>)> {
+        let mut stmt = self.socket.prepare("SELECT * FROM Tokens ORDER BY datetime(lastuse) DESC Limit 1").unwrap();
+
+        let mut query = stmt.query(&[]).unwrap();
+        let token = query.next()
+            .ok_or(Error::NotFound)
+            .and_then(|x| x.map_err(|e| Error::Sqlite(e)))
+            .and_then(|row| Token::from_row(&row).map_err(|e| Error::Sqlite(e)))?;
+
+        if let Some(playlist) = token.key {
+            let (playlist, tracks) = self.get_playlist(playlist)?;
+
+            Ok((token, Some((playlist, tracks))))
+        } else {
+            Ok((token, None))
+        }
     }
 
     /// Look all playlists up belonging to a certain track
     pub fn get_playlists_of_track(&self, key: TrackKey) -> Result<Vec<Playlist>> {
         let tmp = key.to_vec();
-        let mut stmt = self.socket.prepare("SELECT * FROM Playlists WHERE INSTR(Tracks, ?) > 0")?;
+        let mut stmt = self.socket.prepare("SELECT * FROM Playlists WHERE INSTR(Tracks, ?) > 0").unwrap();
 
-        let res = stmt.query_map(&[&tmp], |row| Playlist::from_row(row))?.filter_map(|x| x.ok()).filter_map(|x| x.ok()).collect();
+        let res = stmt.query_map(&[&tmp], |row| Playlist::from_row(row)).unwrap().filter_map(|x| x.ok()).filter_map(|x| x.ok()).collect();
 
         Ok(res)
     }
 
+    /// Return all database transitions
+    pub fn get_transitions(&self) -> Vec<Transition> {
+        let mut stmt = self.socket.prepare("SELECT * FROM Transitions;").unwrap();
+
+        let rows = stmt.query_map(&[], |x| transition_from_sql(x)).unwrap().filter_map(|x| x.ok()).collect();
+
+        rows
+    }
+
+    pub fn last_playlist_key(&self) -> Result<PlaylistKey> {
+        let mut stmt = self.socket.prepare("SELECT Key FROM Playlists ORDER BY Key DESC LIMIT 1").unwrap();
+        let res: i64 = stmt.query_map(&[], |row| row.get(0)).unwrap().filter_map(|x| x.ok()).next().unwrap_or(0);
+
+        Ok(res)
+    }
+
+    pub fn last_token_id(&self) -> Result<TokenId> {
+        let mut stmt = self.socket.prepare("SELECT token FROM Tokens ORDER BY Key DESC LIMIT 1").unwrap();
+        let res: i64 = stmt.query_map(&[], |row| row.get(0)).unwrap().filter_map(|x| x.ok()).next().unwrap_or(0);
+
+        Ok(res)
+    }
 
     /// Create a empty playlist with a `title` and `origin`
     ///
     /// The `origin` field is only used when the playlist originates from a different server and
     /// should therefore be updated after a new version appears.
-    pub fn add_playlist(&self, title: &str, origin: Option<String>) -> Result<Playlist> {
-        self.socket.execute("INSERT INTO playlists (title, origin, tracks) VALUES (?1, ?2, ?3)", &[&title, &origin, &Vec::new()])?;
-        let rowid = self.socket.last_insert_rowid();
+    pub fn add_playlist(&self, mut playlist: Playlist) -> Result<()> {
+        let has_playlist = self.get_playlist(playlist.key).is_ok();
 
-        Ok(Playlist {
-            key: rowid,
-            title: title.into(),
-            desc: None,
-            tracks: Vec::new(),
-            origin: origin
-        })
+        if !has_playlist {
+            // get highest id
+
+            if !self.peer_id.is_some() {
+                return Err(Error::ReadOnly);
+            }
+
+            playlist.origin = self.peer_id.clone().unwrap();
+
+            self.commit(TransitionAction::UpsertPlaylist(playlist))
+        } else {
+            Err(Error::AlreadyExists)
+        }
     }
 
     /// Deletes a playlist with key `key`
     pub fn delete_playlist(&self, key: PlaylistKey) -> Result<()> {
-        self.socket.execute("DELETE FROM Playlists WHERE Key = ?", &[&key])
-            .map(|_| ())
+        self.commit(TransitionAction::DeletePlaylist(key))
     }
 
-    pub fn update_playlist(&self, key: PlaylistKey, title: Option<String>, desc: Option<String>, origin: Option<String>) -> Result<()> {
-        let mut query = String::from("UPDATE Playlists SET ");
+    pub fn update_playlist(&self, key: PlaylistKey, title: Option<String>, desc: Option<String>) -> Result<()> {
+        let (mut playlist, _) = self.get_playlist(key).unwrap();
 
-        let mut parts = Vec::new();
-        if title.is_some() { parts.push("title = ?1"); }
-        if desc.is_some() { parts.push("desc = ?2"); }
-        if origin.is_some() { parts.push("origin = ?3"); }
+        if let Some(title) = title {
+            playlist.title = title;
+        }
 
-        query.push_str(&parts.join(", "));
-        query.push_str(" WHERE Key = ?4;");
+        if let Some(desc) = desc {
+            playlist.desc = Some(desc);
+        }
 
-        self.socket.execute(&query, &[&title, &desc, &origin, &key]).map(|_| ())
+        self.commit(TransitionAction::UpsertPlaylist(playlist))
     }
 
     /// Add a track to a certain playlist
@@ -140,200 +284,122 @@ impl Collection {
     /// It is important that `playlist` is the title of the playlist and not the key. This method
     /// returns the updated playlist.
     pub fn add_to_playlist(&self, key: TrackKey, playlist: PlaylistKey) -> Result<()> {
-        let mut stmt = self.socket.prepare(
-            "SELECT tracks FROM Playlists WHERE Key=?;")?;
-        
-        let mut query = stmt.query(&[&playlist])?;
-        let row = query.next().ok_or(Error::QueryReturnedNoRows)??;
+        let (mut playlist, _) = self.get_playlist(playlist).unwrap();
 
-        let tracks: Vec<u8> = row.get(0);
-        let mut tracks: Vec<TrackKey> = tracks.chunks(16)
-            .map(|x| TrackKey::from_vec(x)).collect();
+        playlist.tracks.push(key);
 
-        tracks.push(key);
-        let tracks: Vec<u8> = tracks.into_iter().flat_map(|x| x.to_vec()).collect();
-
-        self.socket.execute("UPDATE Playlists SET tracks = ?1 WHERE Key = ?2", &[&tracks, &playlist])?;
-
-        Ok(())
+        self.commit(TransitionAction::UpsertPlaylist(playlist))
     }
 
     /// Remove a track to a certain playlist
     pub fn delete_from_playlist(&self, key: TrackKey, playlist: PlaylistKey) -> Result<()> {
-        let mut stmt = self.socket.prepare(
-            "SELECT tracks FROM Playlists WHERE Key=?;")?;
-        
-        let mut query = stmt.query(&[&playlist])?;
-        let row = query.next().ok_or(Error::QueryReturnedNoRows)??;
+        let (mut playlist, _) = self.get_playlist(playlist).unwrap();
 
-        let tracks: Vec<u8> = row.get(0);
-        let mut tracks: Vec<TrackKey> = tracks.chunks(16)
-            .map(|x| TrackKey::from_vec(x)).collect();
+        let index = playlist.tracks.iter().position(|x| x.to_vec() == key.to_vec())
+            .ok_or(Error::NotFound)?;
 
-        let index = tracks.iter().position(|x| x.to_vec() == key.to_vec())
-            .ok_or(Error::QueryReturnedNoRows)?;
+        playlist.tracks.remove(index);
 
-        tracks.remove(index);
-        let tracks: Vec<u8> = tracks.into_iter().flat_map(|x| x.to_vec()).collect();
-
-        self.socket.execute("UPDATE Playlists SET tracks = ?1 WHERE Key = ?2", &[&tracks, &playlist])?;
-
-        Ok(())
+        self.commit(TransitionAction::UpsertPlaylist(playlist))
     }
 
     /// Insert a new track into the database
-    pub fn insert_track(&self, track: Track) -> Result<()> {
-        let buf = objects::u32_into_u8(track.fingerprint.clone());
+    pub fn add_track(&self, track: Track) -> Result<()> {
+        let has_track = self.get_track(track.key).is_ok();
 
-        self.socket.execute("INSERT INTO Tracks
-                                    (Key, Fingerprint, Title, Album, Interpret, People, Composer, Duration, FavsCount, Created)
-                                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, DATETIME('NOW'))",
-                                    &[&track.key.to_vec(), &buf, &track.title, &track.album, &track.interpret, &track.people, &track.composer, &track.duration, &track.favs_count]).map(|_| ())
-    }
-
-    /// Insert a new playlist into the database
-    pub fn insert_playlist(&self, p: Playlist) -> Result<()> {
-        let tracks: Vec<u8> = p.tracks.iter().flat_map(|x| x.to_vec()).collect();
-
-        self.socket.execute("INSERT INTO Playlists
-                                (Key, Title, Desc, Tracks, Origin)
-                                VALUES (?1, ?2, ?3, ?4, ?5)",
-                                &[&p.key, &p.title, &p.desc, &tracks, &p.origin]).map(|_| ())
+        if !has_track {
+            self.commit(TransitionAction::UpsertTrack(track))
+        } else {
+            Err(Error::AlreadyExists)
+        }
     }
 
     /// Delete a track with key `key`
     pub fn delete_track(&self, key: TrackKey) -> Result<()> {
-        self.socket.execute("DELETE FROM Tracks WHERE Key = ?", &[&key.to_vec()]).map(|_| ())
-    }
-
-    /// Get a track with key `key`
-    pub fn get_track(&self, key: TrackKey) -> Result<Track> {
-        let mut stmt = self.socket.prepare("SELECT * FROM Tracks WHERE Key = ?")?;
-        let mut stream = stmt.query_map(&[&key.to_vec()], |row| Track::from_row(row)).unwrap().filter_map(|x| x.ok()).filter_map(|x| x.ok());
-
-        stream.next().ok_or(Error::QueryReturnedNoRows)
+        self.commit(TransitionAction::DeleteTrack(key))
     }
 
     /// Update the metadata of tracks
     ///
     /// In case none of the parameters is Option::Some, then no field is updated.
     pub fn update_track(&self, key: TrackKey, title: Option<&str>, album: Option<&str>, interpret: Option<&str>, people: Option<&str>, composer: Option<&str>) -> Result<TrackKey> {
-        let mut query = String::from("UPDATE Tracks SET ");
+        let mut track = self.get_track(key).unwrap();
 
-        let mut parts = Vec::new();
-        if title.is_some() { parts.push("title = ?1"); }
-        if album.is_some() { parts.push("album = ?2"); }
-        if interpret.is_some() { parts.push("interpret = ?3"); }
-        if people.is_some() { parts.push("people = ?4"); }
-        if composer.is_some() { parts.push("composer = ?5"); }
+        if let Some(title) = title {
+            track.title = Some(title.into());
+        }
 
-        query.push_str(&parts.join(", "));
-        query.push_str(" WHERE Key = ?6;");
+        if let Some(album) = album {
+            track.album = Some(album.into());
+        }
 
-        self.socket.execute(&query, &[&title, &album, &interpret, &people, &composer, &key.to_vec()]).map(|_| key)
+        if let Some(interpret) = interpret {
+            track.interpret = Some(interpret.into());
+        }
+
+        if let Some(people) = people {
+            track.people = Some(people.into());
+        }
+
+        if let Some(composer) = composer {
+            track.composer = Some(composer.into());
+        }
+
+        self.commit(TransitionAction::UpsertTrack(track))
+            .map(|_| key)
     }
 
     /// Increment the favourite count for a track
     pub fn vote_for_track(&self, key: TrackKey) -> Result<()> {
-        self.socket.execute("UPDATE Tracks SET FavsCount = FavsCount + 1 WHERE Key = ?1", &[&key.to_vec()]).map(|_| ())
-    }
+        let mut track = self.get_track(key).unwrap();
 
-    /// Get the metadata and tracks for a certain playlist
-    pub fn get_token(&self, token: TokenId) -> Result<(Token, Option<(Playlist, Vec<Track>)>)> {
-        let mut stmt = self.socket.prepare(
-            "SELECT * FROM Tokens WHERE Token=?;")?;
-            
-        let mut query = stmt.query(&[&token])?;
-        let token = query.next().ok_or(Error::QueryReturnedNoRows)?.map(|row| Token::from_row(&row))??;
+        track.favs_count += 1;
 
-        if let Some(playlist) = token.key {
-            let (playlist, tracks) = self.get_playlist(playlist)?;
-
-            Ok((token, Some((playlist, tracks))))
-        } else {
-            Ok((token, None))
-        }
-    }
-
-    /// Get the last used token
-    pub fn get_last_used_token(&self) -> Result<(Token, Option<(Playlist, Vec<Track>)>)> {
-        let mut stmt = self.socket.prepare(
-            "SELECT * FROM Tokens ORDER BY datetime(lastuse) DESC Limit 1")?;
-
-        let mut query = stmt.query(&[])?;
-        let token = query.next().ok_or(Error::QueryReturnedNoRows)?.map(|row| Token::from_row(&row))??;
-
-        if let Some(playlist) = token.key {
-            let (playlist, tracks) = self.get_playlist(playlist)?;
-
-            Ok((token, Some((playlist, tracks))))
-        } else {
-            Ok((token, None))
-        }
+        self.commit(TransitionAction::UpsertTrack(track))
     }
 
     pub fn use_token(&self, token: TokenId) -> Result<()> {
-        self.socket.execute(
-            "UPDATE Tokens SET lastuse = DATETIME('now') WHERE token = ?",&[&token])
-            .map(|_| ())
+        let (mut token, _) = self.get_token(token).unwrap();
 
+        let start = SystemTime::now();
+        let since_the_epoch = start.duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        token.last_use = since_the_epoch.as_secs() as i64;
+
+        self.commit(TransitionAction::UpsertToken(token))
     }
 
     /// Create a new token with a valid id
-    pub fn create_token(&self) -> Result<TokenId> {
-        let empty = Vec::new();
+    pub fn add_token(&self, token: Token) -> Result<TokenId> {
+        let id = token.token;
 
-        self.socket.execute(
-            "INSERT INTO Tokens(played, pos, counter, lastuse) VALUES (?1, ?2, ?3, DATETIME('now'))",
-                &[&empty, &0.0, &0])?;
-
-        Ok(self.socket.last_insert_rowid())
+        self.commit(TransitionAction::UpsertToken(token))
+            .map(|_| id)
     }
 
     /// Update the metadata of a token
     ///
     /// When no parameter is Option::Some no metadata will be updated.
     pub fn update_token(&self, token: TokenId, key: Option<PlaylistKey>, played: Option<Vec<TrackKey>>, pos: Option<f64>) -> Result<()> {
-        let mut query = String::from("UPDATE Tokens SET ");
+        let (mut token, _) = self.get_token(token).unwrap();
 
-        let mut parts = vec!["counter = counter+1"];
-        if key.is_some() { parts.push("key = ?1"); }
-        if played.is_some() { parts.push("played = ?2"); }
-        if pos.is_some() { parts.push("pos = ?3"); }
+        if let Some(key) = key {
+            token.key = Some(key);
+        }
 
-        query.push_str(&parts.join(", "));
-        query.push_str(" WHERE token = ?4;");
+        if let Some(played) = played {
+            token.played = played;
+        }
 
-        let played: Option<Vec<u8>> = played.map(|x|x.into_iter().flat_map(|x| x.to_vec()).collect());
+        if let Some(pos) = pos {
+            token.pos = Some(pos);
+        }
 
-        self.socket.execute(&query, &[&key, &played, &pos, &token]).map(|_| ())
+        self.commit(TransitionAction::UpsertToken(token))
     }
 
-    /// Add a new event to the database with a timestamp
-    pub fn add_event(&self, event: Event) -> Result<()> {
-        self.socket.execute(
-            "INSERT INTO Events (Date, Origin, Event, Data) VALUES (datetime('now'), ?1, ?2, ?3)",
-                &[&event.origin(), &event.tag(), &event.data_to_string()]).map(|_| ())
-    }
-
-    /// Return all registered events
-    pub fn get_events(&self) -> Vec<(String, Event)> {
-        let mut stmt = self.socket.prepare(
-            "SELECT Date, Origin, Event, Data FROM Events;").unwrap();
-
-        let rows = stmt.query_map(&[], |x| {
-            (x.get(0), Event::from(x.get(1), x.get(2), x.get(3)))
-        }).unwrap().filter_map(|x| x.ok()).filter_map(|x| {
-            if let Some(y) = x.1.ok() {
-                Some((x.0, y))
-            } else {
-                None
-            }
-        }).collect();
-
-        rows
-    }
-
+    /*
     /// Summarise a day (used by `nightly-worker`)
     pub fn summarise_day(&self, day: String, connects: u32, plays: u32, adds: u32, removes: u32) -> Result<()> {
         self.socket.execute(
@@ -362,42 +428,51 @@ impl Collection {
         let row = query.next().ok_or(Error::QueryReturnedNoRows)??;
 
         Ok(row.get(0))
-    }
+    }*/
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Collection;
-    use objects::{Playlist, Track};
+
+    use super::{Instance, View};
+    use std::path::Path;
+    use hex_gossip::{GossipConf, PeerId};
+    use objects::{Playlist, Track, Token};
     use search::SearchQuery;
 
     fn gen_track() -> Track {
-        let mut track = Track::empty(vec![1i32; 10], 100.0);
+        let mut track = Track::empty(vec![1u32; 10], 100.0);
         track.title = Some("Blue like something".into());
         track.composer = Some("Random Guy".into());
 
         track
     }
 
+    fn gossip() -> GossipConf {
+        GossipConf::new().id(PeerId(vec![0; 16]))
+    }
+
     #[test]
     pub fn test_search() {
-        let db = Collection::in_memory();
+        let instance = Instance::from_file("/tmp/test.db", gossip());
+        let view = instance.view();
 
         let track = gen_track();
 
-        db.insert_track(track.clone()).unwrap();
+        view.add_track(track.clone()).unwrap();
 
         // create a new search query
-        let query = SearchQuery::new("title:Blue").unwrap();
+        let query = SearchQuery::new("title:Blue");
 
         // initiate the search
-        let mut stmt = db.search_prep(query).unwrap();
-        assert_eq!(track, db.search(&mut stmt).next().unwrap());
+        let mut stmt = view.search_prep(query).unwrap();
+        assert_eq!(track, view.search(&mut stmt).next().unwrap());
     }
 
     #[test]
     pub fn test_playlist() {
-        let db = Collection::in_memory();
+        let instance = Instance::from_file("/tmp/test2.db", gossip());
+        let view = instance.view();
 
         let track = gen_track();
         let playlist = Playlist {
@@ -405,56 +480,57 @@ mod tests {
             title: "My very own playlist".into(),
             desc: Some("".into()),
             tracks: vec![],
-            origin: None
+            origin: PeerId(vec![0; 16])
         };
 
         // check if there are no playlists in the database
-        assert_eq!(db.get_playlists().len(), 0);
+        assert_eq!(view.get_playlists().len(), 0);
 
         // add a new playlist to the database
-        db.insert_playlist(playlist.clone()).unwrap();
-        assert_eq!(db.get_playlists(), vec![playlist.clone()]);
-        assert_eq!(db.get_playlist(playlist.key).unwrap().0, playlist);
+        view.add_playlist(playlist.clone()).unwrap();
+        assert_eq!(view.get_playlists(), vec![playlist.clone()]);
+        assert_eq!(view.get_playlist(playlist.key).unwrap().0, playlist);
 
         // update the playlist, add a desc
         let new_desc = Some("Even with a description".into());
-        db.update_playlist(playlist.key, None, new_desc.clone(), None).unwrap();
-        assert_eq!(db.get_playlist(playlist.key).unwrap().0.desc, new_desc);
-        db.update_playlist(playlist.key, None, Some("".into()), None).unwrap();
+        view.update_playlist(playlist.key, None, new_desc.clone()).unwrap();
+        assert_eq!(view.get_playlist(playlist.key).unwrap().0.desc, new_desc);
+        view.update_playlist(playlist.key, None, Some("".into())).unwrap();
 
         // add a track to the playlist
-        db.insert_track(track.clone()).unwrap();
-        db.add_to_playlist(track.key, playlist.key).unwrap();
-        assert_eq!(db.get_playlists_of_track(track.key).unwrap()[0].title, playlist.title);
+        view.add_track(track.clone()).unwrap();
+        view.add_to_playlist(track.key, playlist.key).unwrap();
+        assert_eq!(view.get_playlists_of_track(track.key).unwrap()[0].title, playlist.title);
         
         // remove the track from the playlist
-        db.delete_from_playlist(track.key, playlist.key).unwrap();
-        assert_eq!(db.get_playlists_of_track(track.key).unwrap().len(), 0);
+        view.delete_from_playlist(track.key, playlist.key).unwrap();
+        assert_eq!(view.get_playlists_of_track(track.key).unwrap().len(), 0);
 
     }
 
     #[test]
     pub fn test_tracks() {
-        let db = Collection::in_memory();
+        let instance = Instance::from_file("/tmp/test3.db", gossip());
+        let view = instance.view();
 
         // create a new track
         let track = gen_track();
-        db.insert_track(track.clone()).unwrap();
+        view.add_track(track.clone()).unwrap();
 
         // vote ten times for this track
         for _ in 0..10 {
-            db.vote_for_track(track.key).unwrap();
+            view.vote_for_track(track.key).unwrap();
         }
 
-        assert_eq!(db.get_track(track.key).unwrap().favs_count, track.favs_count + 10);
+        assert_eq!(view.get_track(track.key).unwrap().favs_count, track.favs_count + 10);
 
         // update the track metadata
         let (title, album, interpret, people, composer) = (
             "Eye in the Sky", "Live", "Alan Parsons", "Alan Parsons", "Alan Parsons");
         
-        db.update_track(track.key, Some(title), Some(album), Some(interpret), None, Some(composer)).unwrap();
+        view.update_track(track.key, Some(title), Some(album), Some(interpret), None, Some(composer)).unwrap();
 
-        let tmp = db.get_track(track.key).unwrap();
+        let tmp = view.get_track(track.key).unwrap();
         assert!(
             tmp.title == Some(title.into()) && 
             tmp.album == Some(album.into()) && 
@@ -463,14 +539,15 @@ mod tests {
             tmp.composer == Some(composer.into())
         );
 
-        db.delete_track(track.key).unwrap();
+        view.delete_track(track.key).unwrap();
 
-        assert_eq!(db.get_tracks().len(), 0);
+        assert_eq!(view.get_tracks().len(), 0);
     }
 
     #[test]
     pub fn test_tokens() {
-        let db = Collection::in_memory();
+        let instance = Instance::from_file("/tmp/test4.db", gossip());
+        let view = instance.view();
 
         //create a track and playlist
         let track = gen_track();
@@ -479,38 +556,39 @@ mod tests {
             title: "My very own playlist".into(),
             desc: Some("".into()),
             tracks: vec![],
-            origin: None
+            origin: PeerId(vec![0u8; 16])
         };
 
         // setup up track and plalist
-        db.insert_track(track.clone()).unwrap();
-        db.insert_playlist(playlist.clone()).unwrap();
-        db.add_to_playlist(track.key, playlist.key).unwrap();
+        view.add_track(track.clone()).unwrap();
+        view.add_playlist(playlist.clone()).unwrap();
+        view.add_to_playlist(track.key, playlist.key).unwrap();
 
-        assert_eq!(db.create_token().unwrap(), 1);
+        let token = Token {
+            token: view.last_token_id().unwrap() + 1,
+            key: None,
+            played: Vec::new(),
+            pos: None,
+            last_use: 0
+        };
+
+        assert_eq!(view.add_token(token).unwrap(), 1);
 
         // set the playlist as a token and compare everything
-        db.update_token(1, Some(playlist.key), None, Some(5.0)).unwrap();
+        view.update_token(1, Some(playlist.key), None, Some(5.0)).unwrap();
 
-        let (tmp, rem) = db.get_token(1).unwrap();
+        let (tmp, rem) = view.get_token(1).unwrap();
         let rem = rem.unwrap();
         assert!(tmp.key.unwrap() == playlist.key && tmp.pos == Some(5.0));
-        assert_eq!(tmp.counter, 1);
         assert_eq!(rem.0.title, playlist.title);
         assert_eq!(rem.1[0].key, track.key);
         
-        // create ten tokens
-        for _ in 0..10 {
-            db.create_token().unwrap();
-        }
+        // update the 0th token
+        view.use_token(1).unwrap();
 
-        // the next one should have the id 12
-        assert_eq!(db.create_token().unwrap(), 12);
-        
-        // update the 6th token
-        db.use_token(6).unwrap();
+        let (last_token, _) = view.get_last_used_token().unwrap();
 
-        let (token, _) = db.get_last_used_token().unwrap();
+        assert_eq!(view.get_token(1).unwrap().0, last_token);
     }
 
 }
