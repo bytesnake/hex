@@ -1,0 +1,92 @@
+   Compiling hex-gossip v0.1.0 (/home/lorenz/Documents/projects/hex/database/gossip)
+error[E0433]: failed to resolve. Use of undeclared type or module `Sha_256`
+  --> database/gossip/src/transition.rs:33:26
+   |
+33 |         let mut hasher = Sha_256::new();
+   |                          ^^^^^^^ Use of undeclared type or module `Sha_256`
+
+error[E0433]: failed to resolve. Use of undeclared type or module `AesSafe128Decryptor`
+   --> database/gossip/src/protocol.rs:188:24
+    |
+188 |             decryptor: AesSafe128Decryptor::new(key)
+    |                        ^^^^^^^^^^^^^^^^^^^ Use of undeclared type or module `AesSafe128Decryptor`
+
+error[E0433]: failed to resolve. Use of undeclared type or module `AesSafe128Encryptor`
+   --> database/gossip/src/protocol.rs:193:24
+    |
+193 |             encryptor: AesSafe128Encryptor::new(key)
+    |                        ^^^^^^^^^^^^^^^^^^^ Use of undeclared type or module `AesSafe128Encryptor`
+
+error[E0412]: cannot find type `AesSafe128Decryptor` in this scope
+   --> database/gossip/src/protocol.rs:165:16
+    |
+165 |     decryptor: AesSafe128Decryptor
+    |                ^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `AesSafe128Encryptor` in this scope
+   --> database/gossip/src/protocol.rs:175:16
+    |
+175 |     encryptor: AesSafe128Encryptor
+    |                ^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+warning: unused import: `std::thread`
+  --> database/gossip/src/lib.rs:36:5
+   |
+36 | use std::thread;
+   |     ^^^^^^^^^^^
+   |
+   = note: #[warn(unused_imports)] on by default
+
+warning: unused imports: `Poll`, `future`
+  --> database/gossip/src/lib.rs:41:22
+   |
+41 | use futures::{Async, Poll, Stream, task, future, Future};
+   |                      ^^^^                ^^^^^^
+
+warning: unused import: `Discover`
+  --> database/gossip/src/lib.rs:48:30
+   |
+48 | use self::discover::{Beacon, Discover};
+   |                              ^^^^^^^^
+
+warning: use of deprecated item 'tokio::net::ConnectFuture': use `tokio::net::tcp::ConnectFuture` instead
+  --> database/gossip/src/protocol.rs:14:29
+   |
+14 | use tokio::net::{TcpStream, ConnectFuture};
+   |                             ^^^^^^^^^^^^^
+   |
+   = note: #[warn(deprecated)] on by default
+
+warning: use of deprecated item 'tokio::net::ConnectFuture': use `tokio::net::tcp::ConnectFuture` instead
+  --> database/gossip/src/protocol.rs:80:17
+   |
+80 |     Connecting((ConnectFuture, NetworkKey, PeerPresence, Vec<Transition>)),
+   |                 ^^^^^^^^^^^^^
+
+warning: use of deprecated item 'tokio::net::Incoming': use `tokio::net::tcp::Incoming` instead
+  --> database/gossip/src/lib.rs:44:42
+   |
+44 | use tokio::net::{TcpListener, TcpStream, Incoming};
+   |                                          ^^^^^^^^
+
+warning: use of deprecated item 'tokio::net::Incoming': use `tokio::net::tcp::Incoming` instead
+   --> database/gossip/src/lib.rs:165:15
+    |
+165 |     incoming: Incoming,
+    |               ^^^^^^^^
+
+error[E0277]: can't compare `transition::TransitionKey` with `transition::TransitionKey`
+  --> database/gossip/src/transition.rs:17:48
+   |
+17 | #[derive(Deserialize, Serialize, Clone, Debug, Eq, Hash)]
+   |                                                ^^ no implementation for `transition::TransitionKey == transition::TransitionKey`
+   |
+   = help: the trait `std::cmp::PartialEq` is not implemented for `transition::TransitionKey`
+
+error: aborting due to 6 previous errors
+
+Some errors occurred: E0277, E0412, E0433.
+For more information about an error, try `rustc --explain E0277`.
+error: Could not compile `hex-gossip`.
+
+To learn more, run the command again with --verbose.

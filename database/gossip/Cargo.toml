@@ -1,0 +1,14 @@
+[package]
+name = "hex-gossip"
+version = "0.1.0"
+authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
+
+[dependencies]
+futures = "0.1"
+tokio = "0.1"
+serde = { features = ["derive"], version = "1.0" }
+bincode = "1.0"
+bytes = "0.4"
+ring = "0.13"
+nix = "0.11"
+log = "0.4"
