@@ -16,7 +16,6 @@ use tokio_core::reactor::Handle;
 
 use websocket::message::OwnedMessage;
 
-use conf;
 use error::{Result, Error};
 
 use convert::{UploadState, download::{DownloadState}};
@@ -55,8 +54,6 @@ pub struct State {
     pub collection: View,
     /// Path to the data section
     data_path: PathBuf,
-    /// Buffer for incoming buffering requests
-    buffer: Vec<u8>,
     /// All uploads
     uploads: Vec<UploadState>,
     /// All downloads
@@ -73,7 +70,6 @@ impl State {
             reqs: HashMap::new(),
             collection: view,
             data_path: path.join("data"),
-            buffer: Vec::new(),
             uploads: Vec::new(),
             downloads: Vec::new(),
             token_avail: false

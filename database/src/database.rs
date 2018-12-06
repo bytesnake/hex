@@ -1,20 +1,25 @@
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use futures::{Sink, Stream, Future, IntoFuture};
+use futures::sync::mpsc::{channel, Sender, Receiver};
 use rusqlite::{self, Statement, OpenFlags};
+use tokio;
+use std::thread;
 
 use error::{Error, Result};
 use search::SearchQuery;
 use objects::*;
 
-use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector};
+use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover};
 use transition::{Storage, TransitionAction, transition_from_sql};
 
 /// Instance of the database
 pub struct Instance {
-    gossip: Option<Gossip<Storage>>,
-    storage: Option<(Arc<Storage>, PeerId)>,
-    path: PathBuf
+    gossip: Option<(Arc<Spread<Storage>>, PeerId)>,
+    storage: Option<(Arc<Storage>, PeerId, Sender<TransitionAction>)>,
+    path: PathBuf,
+    receiver: Option<Receiver<TransitionAction>>
 }
 
 impl Instance {
@@ -30,39 +35,59 @@ impl Instance {
         }
 
         if let Some(id) = conf.id.clone() {
-            let storage = Storage::new(path);
+            let (sender, receiver) = channel(1024);
 
             if conf.addr.is_some() {
-                let gossip = Some(Gossip::new(conf, storage));
+                let storage = Storage::new(path);
+                let gossip = Gossip::new(conf, storage);
+                let writer = gossip.writer();
 
-                Instance { gossip, storage: None, path: path.to_path_buf() }
+                let gossip = gossip
+                    .map_err(|e| eprintln!("Err: {}", e))
+                    .and_then(move |x| {
+                        let tmp = sender.clone();
+                        tmp.send(TransitionAction::from_vec(&x.body.unwrap()))
+                            .map_err(|_| ())
+                    })
+                    .for_each(|_| Ok(())).into_future();
+
+                let discover = Discover::new(1).for_each(|_| Ok(())).into_future()
+                    .map_err(|_| ());
+
+                thread::spawn(move || tokio::run(Future::join(gossip, discover).map(|_| ())));
+
+                Instance { gossip: Some((writer, id)), storage: None, path: path.to_path_buf(), receiver: Some(receiver) }
             } else {
-                Instance { gossip: None, storage: Some((Arc::new(storage), id)), path: path.to_path_buf() }
+                let storage = Storage::new(path);
+                Instance { gossip: None, storage: Some((Arc::new(storage), id, sender)), path: path.to_path_buf(), receiver: Some(receiver) }
             }
         } else {
-            Instance { gossip: None, storage: None, path: path.to_path_buf() }
+            Instance { gossip: None, storage: None, path: path.to_path_buf(), receiver: None }
         }
+    }
+
+    pub fn recv(&mut self) -> Receiver<TransitionAction> {
+        self.receiver.take().unwrap()
     }
 
     pub fn view(&self) -> View {
         let socket = rusqlite::Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
         match (&self.gossip, &self.storage) {
-            (Some(ref gossip), None) => {
-                let writer = gossip.writer();
-
+            (Some((ref writer, ref peer_id)), None) => {
                 View { 
                     socket, 
-                    writer: Some(writer), 
-                    peer_id: Some(gossip.id()), 
-                    storage: None 
+                    writer: Some(writer.clone()), 
+                    peer_id: Some(peer_id.clone()), 
+                    storage: None,
+                    sender: None
                 }
             },
-            (None, Some((ref storage, ref peer_id))) => {
-                View { socket, writer: None, peer_id: Some(peer_id.clone()), storage: Some(storage.clone()) }
+            (None, Some((ref storage, ref peer_id, ref sender))) => {
+                View { socket, writer: None, peer_id: Some(peer_id.clone()), storage: Some(storage.clone()), sender: Some(sender.clone()) }
             },
             _ => {
-                View { socket, writer: None, peer_id: None, storage: None }
+                View { socket, writer: None, peer_id: None, storage: None, sender: None }
             }
         }
     }
@@ -73,15 +98,17 @@ pub struct View {
     socket: rusqlite::Connection,
     peer_id: Option<PeerId>,
     writer: Option<Arc<Spread<Storage>>>,
-    storage: Option<Arc<Storage>>
+    storage: Option<Arc<Storage>>,
+    sender: Option<Sender<TransitionAction>>
 
 }
 
 impl View {
     pub fn commit(&self, transition: TransitionAction) -> Result<()> {
-        match (&self.writer, &self.storage, &self.peer_id) {
-            (Some(ref writer), _, _) => { writer.push(transition.to_vec()); Ok(()) },
-            (None, Some(ref storage), Some(ref id)) => {
+        match (&self.writer, &self.storage, &self.peer_id, &self.sender) {
+            (Some(ref writer), _, _, _) => { writer.push(transition.to_vec()); Ok(()) },
+            (None, Some(ref storage), Some(ref id), Some(ref sender)) => {
+                sender.clone().send(transition.clone()).wait().unwrap();
                 let tips = storage.tips();
                 let transition = Transition::new(id.clone(), tips, transition.to_vec());
                 storage.store(transition);
@@ -434,11 +461,12 @@ impl View {
 #[cfg(test)]
 mod tests {
 
-    use super::{Instance, View};
-    use std::path::Path;
+    use super::Instance;
     use hex_gossip::{GossipConf, PeerId};
     use objects::{Playlist, Track, Token};
     use search::SearchQuery;
+    use transition::TransitionAction;
+    use futures::{Stream, IntoFuture, Future, Async};
 
     fn gen_track() -> Track {
         let mut track = Track::empty(vec![1u32; 10], 100.0);
@@ -471,7 +499,7 @@ mod tests {
 
     #[test]
     pub fn test_playlist() {
-        let instance = Instance::from_file("/tmp/test2.db", gossip());
+        let mut instance = Instance::from_file("/tmp/test2.db", gossip());
         let view = instance.view();
 
         let track = gen_track();
@@ -505,7 +533,6 @@ mod tests {
         // remove the track from the playlist
         view.delete_from_playlist(track.key, playlist.key).unwrap();
         assert_eq!(view.get_playlists_of_track(track.key).unwrap().len(), 0);
-
     }
 
     #[test]
@@ -525,7 +552,7 @@ mod tests {
         assert_eq!(view.get_track(track.key).unwrap().favs_count, track.favs_count + 10);
 
         // update the track metadata
-        let (title, album, interpret, people, composer) = (
+        let (title, album, interpret, _, composer) = (
             "Eye in the Sky", "Live", "Alan Parsons", "Alan Parsons", "Alan Parsons");
         
         view.update_track(track.key, Some(title), Some(album), Some(interpret), None, Some(composer)).unwrap();
@@ -591,4 +618,20 @@ mod tests {
         assert_eq!(view.get_token(1).unwrap().0, last_token);
     }
 
+    #[test]
+    pub fn recv_stream() {
+        let mut instance = Instance::from_file("/tmp/test5.db", gossip());
+        let view = instance.view();
+
+        let track = gen_track();
+
+        view.add_track(track.clone()).unwrap();
+
+        match instance.recv().poll() {
+            Ok(Async::Ready(Some(x))) => {
+                assert_eq!(x, TransitionAction::UpsertTrack(track));
+            },
+            _ => { panic!("Wrong result!"); }
+        }
+    }
 }

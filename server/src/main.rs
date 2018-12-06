@@ -37,19 +37,18 @@ extern crate http;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate serde;
-extern crate toml;
 extern crate curl;
 extern crate chromaprint;
 extern crate base64;
 extern crate tempfile;
 extern crate sha2;
 
+extern crate hex_conf;
 extern crate hex_database;
 extern crate hex_music_container;
 extern crate hex_server_protocol;
 
 mod error;
-mod conf;
 mod webserver;
 mod acousticid;
 mod convert;
@@ -67,18 +66,15 @@ use tokio_core::reactor::Core;
 
 /// Main function spinning up all server
 fn main() {
-    // check if we got the configuration, otherwise just load the default settings
-    let path = env::vars()
-        .filter(|(key, _)| key == "HEX_PATH").map(|(_, a)| PathBuf::from(&a)).next()
-        .unwrap_or(PathBuf::from("/opt/music"));
-
-    let conf = match conf::Conf::from_file(&path.join("conf.toml")) {
+    let (conf, path) = match hex_conf::Conf::new() {
         Ok(x) => x,
         Err(err) => {
             eprintln!("Error: Could not load configuration {:?}", err);
-            conf::Conf::default()
+            (hex_conf::Conf::default(), PathBuf::from("/opt/music/"))
         }
     };
+
+    let data_path = path.join("data");
 
     println!("Configuration: {:#?}", conf);
 

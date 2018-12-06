@@ -12,7 +12,6 @@ tokio-process = "0.1.4"
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
-toml = "0.4"
 hyper = "0.12"
 hyper-staticfile = "0.3"
 http = "0.1.5"
@@ -21,15 +20,12 @@ curl = { version = "0.4", default-features = false }
 base64 = "0.10.0"
 tempfile = "3"
 sha2 = "0.8"
+hex-conf = { path = "../conf/" }
+hex-database = { path = "../database/" }
+hex-music-container = { path = "../music-container/" }
 
 [dependencies.chromaprint]
 git = "https://github.com/bytesnake/rust-chromaprint"
-
-[dependencies.hex-music-container]
-path = "../music-container/"
-
-[dependencies.hex-database]
-path = "../database/"
 
 [dependencies.hex-server-protocol]
 path = "protocol/"

@@ -16,7 +16,7 @@ use tokio_core::reactor::{Handle, Core};
 use futures::{Future, Sink, Stream};
 
 use state::State;
-use conf::Conf;
+use hex_conf::Conf;
 
 use hex_database::{Instance, GossipConf};
 
@@ -28,7 +28,16 @@ pub fn start(conf: Conf, path: PathBuf) {
 	// bind to the server
     let addr = (conf.host, conf.server.port);
 	let server = Server::bind(addr, &handle).unwrap();
-    let instance = Instance::from_file(&path.join("music.db"), GossipConf::new());
+
+    let mut gossip = GossipConf::new();
+    
+    if let Some(ref peer) = conf.peer {
+        gossip = gossip.addr((conf.host, peer.port));
+        gossip = gossip.id(peer.id());
+        gossip = gossip.network_key(peer.network_key());
+    }
+
+    let instance = Instance::from_file(&path.join("music.db"), gossip);
 
 	// a stream of incoming connections
 	let f = server.incoming()

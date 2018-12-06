@@ -34,6 +34,10 @@ extern crate sha2;
 extern crate hex_gossip;
 #[cfg(feature="rusqlite")]
 extern crate bincode;
+#[cfg(feature="rusqlite")]
+extern crate futures;
+#[cfg(feature="rusqlite")]
+extern crate tokio;
 
 pub mod error;
 pub mod objects;

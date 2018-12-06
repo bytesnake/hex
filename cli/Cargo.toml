@@ -11,13 +11,10 @@ rb = "0.3"
 cpal = "*"
 nix = "0.11.0"
 terminal_size = "0.1"
-toml = "0.4"
-serde = "1.0"
+hex-conf = { path = "../conf/" }
 
 [dependencies.hex-music-container]
 path = "../music-container/"
 
 [dependencies.hex-database]
 path = "../database/"
-default_features = false
-features = ["rusqlite", "hex-gossip", "serde"]

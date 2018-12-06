@@ -5,16 +5,12 @@ extern crate cpal;
 extern crate rb;
 extern crate nix;
 extern crate terminal_size;
-extern crate toml;
-#[macro_use]
-extern crate serde;
 
+extern crate hex_conf;
 extern crate hex_database;
 extern crate hex_music_container;
 
-mod conf;
 mod audio;
-//mod sync;
 mod play;
 mod modify;
 
@@ -27,23 +23,26 @@ use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf};
 use getopts::Options;
 
 fn main() {
-        // check if we got the configuration, otherwise just load the default settings
-    let path = env::vars()
-        .filter(|(key, _)| key == "HEX_PATH").map(|(_, a)| PathBuf::from(&a)).next()
-        .unwrap_or(PathBuf::from("/opt/music"));
-
-    let conf = match conf::Conf::from_file(&path.join("conf.toml")) {
+    let (conf, path) = match hex_conf::Conf::new() {
         Ok(x) => x,
         Err(err) => {
             eprintln!("Error: Could not load configuration {:?}", err);
-            conf::Conf::default()
+            (hex_conf::Conf::default(), PathBuf::from("/opt/music/"))
         }
     };
-    let data_path = PathBuf::from(&path).join("data");
-    let db_path = PathBuf::from(&path).join("music.db");
+    let data_path = path.join("data");
+    let db_path = path.join("music.db");
 
     let args: Vec<String> = env::args().collect();
-    let instance = Instance::from_file(&db_path, GossipConf::new());
+    let mut gossip = GossipConf::new();
+    
+    if let Some(ref peer) = conf.peer {
+        gossip = gossip.addr((conf.host, peer.port));
+        gossip = gossip.id(peer.id());
+        gossip = gossip.network_key(peer.network_key());
+    }
+
+    let instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
 
     // print overview of the database

@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "conf",
     "database",
     "database/gossip",
     "music-container",
