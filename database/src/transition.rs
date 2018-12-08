@@ -64,16 +64,17 @@ impl TransitionAction {
 pub fn transition_from_sql(row: &Row) -> Transition {
     let a: Vec<u8> = row.get(0);
     let b: Vec<u8> = row.get(1);
-    //let c: Vec<u8> = row.get(3);
+    let c: Vec<u8> = row.get(3);
 
-    let pk = PeerId(a);
-    let refs = b.chunks(32).map(|x| TransitionKey::from_vec(x)).collect();
+    let key = TransitionKey::from_vec(&a);
+    let pk = PeerId(b);
+    let refs = c.chunks(32).map(|x| TransitionKey::from_vec(x)).collect();
 
     Transition {
-        pk, refs, 
-        body: row.get(2),
+        key, pk, refs, 
+        body: row.get(5),
         sign: [0; 32],
-        is_tip: row.get(4)
+        state: row.get(4)
     }
 }
 
@@ -89,39 +90,25 @@ impl Storage {
             socket: rusqlite::Connection::open(path).unwrap()
         }
     }
-}
 
-impl Inspector for Storage {
-    fn approve(&self, trans: &Transition) -> bool {
-        deserialize::<TransitionAction>(&trans.body.clone().unwrap()).is_ok()
-    }
-
-    fn store(&self, trans: Transition) {
-        //println!("Store: {:?}", deserialize::<TransitionAction>(&trans.body.clone().unwrap()));
-        let key = trans.key().0;
-        let key_ref = key.as_ref();
-        let pk = trans.pk.0.clone();
-
-        self.socket.execute("INSERT INTO Transitions (Key, PublicKey, Signature, Refs, IsTip, Data, Created) VALUES (?1, ?2, ?3, ?4, 1, ?5, DATETIME('NOW'))",
-            &[
-                &key_ref, 
-                &pk, 
-                &trans.sign.as_ref(), 
-                &trans.refs.clone().into_iter().map(|x| x.0.to_vec()).flatten().collect::<Vec<u8>>(), 
-                &trans.body
-            ]).unwrap();
-
+    pub fn apply(&self, trans: Transition) {
         // set refs to non-tip
         let tips: Vec<TransitionKey> = self.tips().into_iter()
             .filter(|x| trans.refs.contains(x))
             .collect();
 
         for key in tips {
-            self.socket.execute("UPDATE Transitions SET IsTip=0 WHERE Key=?", &[&key.0.as_ref()]).unwrap();
+            trace!("Set {} to non-tip", key.to_string());
+
+            self.socket.execute("UPDATE Transitions SET State=0 WHERE Key=?", &[&key.0.as_ref()]).unwrap();
         }
 
+        // parse the body to a transition action
+        let res: TransitionAction = deserialize(&trans.body.unwrap()).unwrap();
+        trace!("Apply {:?}", res);
+
         // update database according to the change
-        match deserialize(&trans.body.unwrap()).unwrap() {
+        match res {
             TransitionAction::UpsertTrack(track) => self.socket.execute(UPSERT_TRACK, 
                 &[
                     &track.key.to_vec(), 
@@ -149,21 +136,84 @@ impl Inspector for Storage {
             TransitionAction::DeleteToken(token) => self.socket.execute("DELETE FROM Tokens WHERE token=?", &[&token]).unwrap()
         };
 
+        // find references to this transitions and try to apply them too
+        let mut stmt = self.socket.prepare("SELECT * FROM Transitions WHERE INSTR(Refs, ?)").unwrap();
+
+        let key = trans.key.0.to_vec();
+        let vec: Vec<Transition> = stmt.query_map(&[&key], |row| transition_from_sql(&row)).unwrap().filter_map(|x| x.ok()).collect();
+
+        // if there is no reference to us, we are a tip, otherweise integrated
+        if vec.len() == 0 {
+            self.socket.execute("UPDATE Transitions SET State=1 WHERE Key=?", &[&trans.key.0.as_ref()]).unwrap();
+        } else {
+            self.socket.execute("UPDATE Transitions SET State=0 WHERE Key=?", &[&trans.key.0.as_ref()]).unwrap();
+        }
+
+        for t in vec {
+            if t.state == 2 {
+                self.apply(t);
+            }
+        }
     }
 
-    fn restore(&self, keys: Vec<TransitionKey>) -> Vec<Transition> {
-        let stmt = format!("SELECT * FROM Transitions WHERE Key IN ({})", keys.into_iter().map(|x| format!("x'{}'", x.to_string())).collect::<Vec<String>>().join(","));
+}
+
+impl Inspector for Storage {
+    fn approve(&self, trans: &Transition) -> bool {
+        deserialize::<TransitionAction>(&trans.body.clone().unwrap()).is_ok()
+    }
+
+    fn store(&self, trans: Transition) {
+        // check wether all references are already applied
+        let all_applied = match self.restore(trans.refs.clone()) {
+            Some(x) => x.iter().all(|x| x.state != 2),
+            None => false
+        };
+
+        let state = if all_applied {
+            1 // all references are already applied, this is just a tip
+        } else {
+            2 // there are some references not applied, neither apply this
+        };
+
+        {
+            let key_ref = trans.key.0.as_ref();
+            let pk = trans.pk.0.clone();
+
+            self.socket.execute("INSERT INTO Transitions (Key, PublicKey, Signature, Refs, State, Data, Created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, DATETIME('NOW'))",
+                &[
+                    &key_ref, 
+                    &pk, 
+                    &trans.sign.as_ref(), 
+                    &trans.refs.clone().into_iter().map(|x| x.0.to_vec()).flatten().collect::<Vec<u8>>(), 
+                    &state,
+                    &trans.body.clone().unwrap()
+                ]).unwrap();
+        }
+
+        if all_applied {
+            self.apply(trans);
+        }
+    }
+
+    fn restore(&self, keys: Vec<TransitionKey>) -> Option<Vec<Transition>> {
+        let key_len = keys.len();
+
+        let stmt = format!("SELECT * FROM Transitions WHERE hex(key) IN ({});", keys.into_iter().map(|x| format!("\"{}\"", x.to_string())).collect::<Vec<String>>().join(","));
 
         let mut stmt = self.socket.prepare(&stmt).unwrap();
 
-        let vec = stmt.query_map(&[], |row| transition_from_sql(&row)).unwrap().filter_map(|x| x.ok()).collect();
+        let vec: Vec<Transition> = stmt.query_map(&[], |row| transition_from_sql(&row)).unwrap().filter_map(|x| x.ok()).collect();
 
-        vec
-
+        if vec.len() != key_len {
+            None
+        } else {
+            Some(vec)
+        }
     }
 
     fn tips(&self) -> Vec<TransitionKey> {
-        let mut stmt = self.socket.prepare("SELECT Key FROM Transitions WHERE IsTip=1").unwrap();
+        let mut stmt = self.socket.prepare("SELECT Key FROM Transitions WHERE State=1").unwrap();
 
         let vec = stmt.query_map(&[], |row| {
             let key: Vec<u8> = row.get(0);
@@ -176,6 +226,7 @@ impl Inspector for Storage {
         
     }
 
+    // TODO Probably not working
     fn has(&self, key: &TransitionKey) -> bool {
         let mut stmt = self.socket.prepare("SELECT * FROM Transitions WHERE Key = ?").unwrap();
         let mut stream = stmt.query_map(&[&key.0.as_ref()], |_| true).unwrap()

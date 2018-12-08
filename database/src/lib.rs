@@ -38,6 +38,8 @@ extern crate bincode;
 extern crate futures;
 #[cfg(feature="rusqlite")]
 extern crate tokio;
+#[macro_use]
+extern crate log;
 
 pub mod error;
 pub mod objects;

@@ -223,7 +223,7 @@ impl<T: Inspector> Gossip<T> {
 
 
         let tips = inspector.tips();
-        let tips = inspector.restore(tips);
+        let tips = inspector.restore(tips).unwrap();
 
         let peers = match contact {
             Some(addr) => {
@@ -262,16 +262,6 @@ impl<T: Inspector> Gossip<T> {
     pub fn id(&self) -> PeerId {
         self.myself.id.clone()
     }
-
-    /*
-    pub fn spawn_in_thread(self) {
-        let (sender, receiver) = channel(1024);
-            let gossip = self.for_each(|x| {sender.send(x); Ok(())}).into_future();
-
-        thread::spawn(|| {
-            //tokio::run(Future::join(Discover::new(1), self));
-        });
-    }*/
 }
 
 /// Create a new stream, managing the gossip protocol
@@ -284,7 +274,7 @@ impl<T: Inspector> Stream for Gossip<T> {
         match self.incoming.poll() {
             Ok(Async::Ready(Some(socket))) => {
                 let tips = self.inspector.lock().unwrap().tips();
-                let tips = self.inspector.lock().unwrap().restore(tips);
+                let tips = self.inspector.lock().unwrap().restore(tips).unwrap();
 
                 self.resolve.add_peer(Peer::send_join(socket, self.key, self.myself.clone(), tips));
             },
@@ -303,14 +293,14 @@ impl<T: Inspector> Stream for Gossip<T> {
                 //println!("Gossip: connection established from {} to {}", self.myself.id, presence.id);
 
                 if self.books.contains_key(&presence.id) || self.myself.id == presence.id {
-                    println!("Got already existing id: {:?}", presence.id);
+                    warn!("Got already existing id {:?} from {:?}", presence.id, presence.addr);
 
                     writer.shutdown().unwrap();
                 } else {
+                    info!("New peer connected with {:?} tips from {:?}", tips.len(), presence.addr);
+
                     // hook up the packet output to us
                     reader.redirect_to(self.sender.clone(), presence.id.clone(), task::current());
-                    self.books.insert(presence.id.clone(), presence.clone());
-
                     // ask for other peers if this is our contact
                     if self.books.is_empty() {
                         writer.buffer(Packet::GetPeers(None));
@@ -323,6 +313,8 @@ impl<T: Inspector> Stream for Gossip<T> {
 
                     // write everything to the peer
                     writer.poll_flush().unwrap();
+
+                    self.books.insert(presence.id.clone(), presence.clone());
 
                     // empty a new log entry for our peer
                     let idx = self.writer.add_peer(&presence.id, writer);
@@ -359,16 +351,16 @@ impl<T: Inspector> Stream for Gossip<T> {
             Packet::GetPeers(Some(peers)) => {
                 for presence in peers {
                     if !self.books.contains_key(&presence.id) && !self.resolve.has_peer(&presence.id) {
-                        println!("Gossip: Add peer {:?} in {:?}", presence.id, self.myself.id);
+                        info!("Add peer {:?} in {:?}", presence.id, self.myself.id);
                         let tips = self.inspector.lock().unwrap().tips();
-                        let tips = self.inspector.lock().unwrap().restore(tips);
+                        let tips = self.inspector.lock().unwrap().restore(tips).unwrap();
                         self.resolve.add_peer(Peer::connect(&presence.addr, self.key, self.myself.clone(), tips));
                     }
                 }
             }
             Packet::Push(transition) => {
                 if !self.inspector.lock().unwrap().approve(&transition) {
-                    println!("Received wrong transition!");
+                    error!("Received wrong transition!");
                 } else if !self.inspector.lock().unwrap().has(&transition.key()) {
                     self.inspector.lock().unwrap().store(transition.clone());
 

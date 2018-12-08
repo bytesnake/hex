@@ -92,6 +92,8 @@ impl Peer {
         let mut addr = addr.clone();
         addr.set_port(8000);
 
+        trace!("Send JOIN to {:?} with {} tips", addr, tips.len());
+
         Peer::Connecting((TcpStream::connect(&addr), key, myself, tips))
     }
 
@@ -300,8 +302,11 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
 
         // check the version
         if version != VERSION {
+            trace!("Parse packet with invalid version {} != {}", version, VERSION);
             return Err(Error::WrongVersion);
         }
+
+        //println!("Requied length: {}", required_length);
 
         // continue till we have enough bytes
         if required_length as usize > buffer_length {
@@ -316,7 +321,6 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
         let nonce = Vec::from(&buf[0..12]);
 
         //println!("Nonce {:?}", nonce);
-        //println!("Header length: {}", 14 + meta_length);
         //println!("Read buf {:?}", buf.len());
 
         // decrypt and check signature
@@ -326,7 +330,11 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
             &[],
             14+meta_length,
             &mut buf
-        ).map_err(|_| Error::Cryptography)?;
+        ).map_err(|_| {
+            error!("Cryptographic failure, probably connection attempt with wrong network key!");
+
+            Error::Cryptography
+        })?;
 
         // now try to deserialise it to a message, we have to skip the header bytes
         deserialize::<Packet>(&buf).map_err(|_| Error::Deserialize)
@@ -338,7 +346,6 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
             self.rd.reserve(1024);
             let read = self.read.read_buf(&mut self.rd);
 
-            //println!("{:?}", read);
             let n = match read {
                 Ok(Async::Ready(n)) => n,
                 Ok(Async::NotReady) => return Ok(Async::NotReady),
@@ -351,6 +358,7 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
                 }
             };
 
+            //println!("{:?}", &self.rd[0..n]);
             if n == 0 {
                 return Ok(Async::Ready(()));
             }
@@ -459,9 +467,10 @@ impl<T: Debug + AsyncRead> Stream for PeerCodecRead<T> {
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         // read new data that might have been received off the socket
         // track if the socket is closed here
-        let is_closed = self.fill_read_buf()
-            .map_err(|x| {println!("{:?}", x); x})?
-            .is_ready();
+        let res = self.fill_read_buf()
+            .map_err(|x| {println!("{:?}", x); x})?;
+            
+        let is_closed = res.is_ready();
 
         if is_closed {
             // the socket seems to have closed after the last call, signal that
@@ -547,7 +556,7 @@ mod tests {
 
         let packet = Packet::Push(Transition::new(PeerId(Vec::new()), Vec::new(), tmp));
 
-        let mut key = [0u8; 16];
+        let mut key = [0u8; 32];
         rng.fill(&mut key).unwrap();
 
         let (mut read, mut write) = new(&mut buf, key);

@@ -34,7 +34,7 @@ BEGIN;
         PublicKey   BLOB NOT NULL,
         Signature   BLOB NOT NULL,
         Refs        BLOB NOT NULL,
-        IsTip       INTEGER NOT NULL,
+        State       INTEGER NOT NULL,
         Data        BLOB,
         Created     INTEGER NOT NULL
     );

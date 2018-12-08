@@ -16,7 +16,7 @@ use transition::{Storage, TransitionAction, transition_from_sql};
 
 /// Instance of the database
 pub struct Instance {
-    gossip: Option<(Arc<Spread<Storage>>, PeerId)>,
+    gossip: Option<(Arc<Spread<Storage>>, PeerId, Sender<TransitionAction>)>,
     storage: Option<(Arc<Storage>, PeerId, Sender<TransitionAction>)>,
     path: PathBuf,
     receiver: Option<Receiver<TransitionAction>>
@@ -41,12 +41,15 @@ impl Instance {
                 let storage = Storage::new(path);
                 let gossip = Gossip::new(conf, storage);
                 let writer = gossip.writer();
+                let my_sender = sender.clone();
 
                 let gossip = gossip
                     .map_err(|e| eprintln!("Err: {}", e))
                     .and_then(move |x| {
+                        let action = TransitionAction::from_vec(&x.body.unwrap());
+
                         let tmp = sender.clone();
-                        tmp.send(TransitionAction::from_vec(&x.body.unwrap()))
+                        tmp.send(action)
                             .map_err(|_| ())
                     })
                     .for_each(|_| Ok(())).into_future();
@@ -56,7 +59,7 @@ impl Instance {
 
                 thread::spawn(move || tokio::run(Future::join(gossip, discover).map(|_| ())));
 
-                Instance { gossip: Some((writer, id)), storage: None, path: path.to_path_buf(), receiver: Some(receiver) }
+                Instance { gossip: Some((writer, id, my_sender)), storage: None, path: path.to_path_buf(), receiver: Some(receiver) }
             } else {
                 let storage = Storage::new(path);
                 Instance { gossip: None, storage: Some((Arc::new(storage), id, sender)), path: path.to_path_buf(), receiver: Some(receiver) }
@@ -74,13 +77,13 @@ impl Instance {
         let socket = rusqlite::Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
         match (&self.gossip, &self.storage) {
-            (Some((ref writer, ref peer_id)), None) => {
+            (Some((ref writer, ref peer_id, ref sender)), None) => {
                 View { 
                     socket, 
                     writer: Some(writer.clone()), 
                     peer_id: Some(peer_id.clone()), 
                     storage: None,
-                    sender: None
+                    sender: Some(sender.clone())
                 }
             },
             (None, Some((ref storage, ref peer_id, ref sender))) => {
@@ -105,8 +108,14 @@ pub struct View {
 
 impl View {
     pub fn commit(&self, transition: TransitionAction) -> Result<()> {
+        trace!("Commit new transition {:?}", transition);
+
         match (&self.writer, &self.storage, &self.peer_id, &self.sender) {
-            (Some(ref writer), _, _, _) => { writer.push(transition.to_vec()); Ok(()) },
+            (Some(ref writer), _, _, Some(ref sender)) => { 
+                sender.clone().send(transition.clone()).wait().unwrap();
+                writer.push(transition.to_vec()); 
+                Ok(()) 
+            },
             (None, Some(ref storage), Some(ref id), Some(ref sender)) => {
                 sender.clone().send(transition.clone()).wait().unwrap();
                 let tips = storage.tips();
