@@ -153,6 +153,8 @@ module.exports = {
     stats: { children: false }, // Ok??
     devServer: {
         historyApiFallback: true,
+        host: '192.168.1.9',
+        port: '8082'
     },
     mode: 'development'
 };

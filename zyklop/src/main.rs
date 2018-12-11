@@ -5,6 +5,7 @@ extern crate cpal;
 extern crate rb;
 extern crate rand;
 
+extern crate futures;
 extern crate hex_database;
 extern crate hex_music_container;
 
@@ -15,6 +16,10 @@ mod token;
 
 use std::env;
 use std::path::PathBuf;
+use std::thread;
+use std::sync::mpsc::channel;
+use futures::Future;
+
 use events::Event;        
 
 use error::Error;
@@ -28,9 +33,16 @@ fn main() {
         .ok_or(Error::InvalidPath).expect("Could not find path!");
 
     let data_path = path.join("data");
-    let instance = Instance::from_file(&path.join("music.db"), GossipConf::new());
+    let mut instance = Instance::from_file(&path.join("music.db"), GossipConf::new());
     let view = instance.view();
 
+    let (sender, receiver) = channel();
+    thread::spawn(move || loop {
+        if let Ok(key) = receiver.recv() {
+            instance.ask_for_file(key).wait().unwrap();
+        }
+    });
+    
     let (events, push_new) = events::events();
     let mut audio = audio::AudioDevice::new();
 
@@ -61,7 +73,13 @@ fn main() {
                         println!("Got card with number {}", num);
 
                         match view.get_token(num as i64) {
-                            Ok((a, Some((_, b)))) => token = Some(token::Current::new(a, b, data_path.clone())),
+                            Ok((a, Some((_, b)))) => {
+                                for track in &b {
+                                    sender.send(track.key.to_vec()).unwrap();
+                                }
+                                
+                                token = Some(token::Current::new(a, b, data_path.clone()));
+                            },
                             Ok((a, None)) => token = Some(token::Current::new(a, Vec::new(), data_path.clone())),
                             Err(hex_database::Error::NotFound) => {
                                 println!("Not found!");

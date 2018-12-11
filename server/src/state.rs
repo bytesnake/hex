@@ -8,13 +8,8 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::collections::HashMap;
 use std::slice;
-use std::sync::{Mutex, Arc};
-
-use serde_json;
 
 use tokio_core::reactor::Handle;
-
-use websocket::message::OwnedMessage;
 
 use error::{Result, Error};
 

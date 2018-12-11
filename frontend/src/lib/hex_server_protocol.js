@@ -1,5 +1,5 @@
 /* tslint:disable */
-import * as wasm from './hex_server_protocol_bg';
+import * as wasm from './hex_server_protocol_bg.wasm';
 
 let cachegetUint32Memory = null;
 function getUint32Memory() {
@@ -9,25 +9,30 @@ function getUint32Memory() {
     return cachegetUint32Memory;
 }
 
+let WASM_VECTOR_LEN = 0;
+
 function passArray32ToWasm(arg) {
     const ptr = wasm.__wbindgen_malloc(arg.length * 4);
     getUint32Memory().set(arg, ptr / 4);
-    return [ptr, arg.length];
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
-const slab = [{ obj: undefined }, { obj: null }, { obj: true }, { obj: false }];
+const heap = new Array(32);
 
-let slab_next = slab.length;
+heap.fill(undefined);
+
+heap.push(undefined, null, true, false);
+
+let heap_next = heap.length;
 
 function addHeapObject(obj) {
-    if (slab_next === slab.length) slab.push(slab.length + 1);
-    const idx = slab_next;
-    const next = slab[idx];
+    if (heap_next === heap.length) heap.push(heap.length + 1);
+    const idx = heap_next;
+    heap_next = heap[idx];
 
-    slab_next = next;
-
-    slab[idx] = { obj, cnt: 1 };
-    return idx << 1;
+    heap[idx] = obj;
+    return idx;
 }
 
 let cachegetUint8Memory = null;
@@ -55,7 +60,8 @@ function globalArgumentPtr() {
 * @returns {Uint8Array}
 */
 export function request_to_buf(arg0, arg1) {
-    const [ptr0, len0] = passArray32ToWasm(arg0);
+    const ptr0 = passArray32ToWasm(arg0);
+    const len0 = WASM_VECTOR_LEN;
     const retptr = globalArgumentPtr();
     wasm.request_to_buf(retptr, ptr0, len0, addHeapObject(arg1));
     const mem = getUint32Memory();
@@ -77,13 +83,15 @@ function passStringToWasm(arg) {
     const buf = cachedTextEncoder.encode(arg);
     const ptr = wasm.__wbindgen_malloc(buf.length);
     getUint8Memory().set(buf, ptr);
-    return [ptr, buf.length];
+    WASM_VECTOR_LEN = buf.length;
+    return ptr;
 }
 
 function passArray8ToWasm(arg) {
     const ptr = wasm.__wbindgen_malloc(arg.length * 1);
     getUint8Memory().set(arg, ptr / 1);
-    return [ptr, arg.length];
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 /**
 * @param {Uint32Array} arg0
@@ -93,10 +101,14 @@ function passArray8ToWasm(arg) {
 * @returns {Uint8Array}
 */
 export function upload_track(arg0, arg1, arg2, arg3) {
-    const [ptr0, len0] = passArray32ToWasm(arg0);
-    const [ptr1, len1] = passStringToWasm(arg1);
-    const [ptr2, len2] = passStringToWasm(arg2);
-    const [ptr3, len3] = passArray8ToWasm(arg3);
+    const ptr0 = passArray32ToWasm(arg0);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm(arg1);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm(arg2);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray8ToWasm(arg3);
+    const len3 = WASM_VECTOR_LEN;
     const retptr = globalArgumentPtr();
     wasm.upload_track(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
     const mem = getUint32Memory();
@@ -113,36 +125,17 @@ function getArrayU32FromWasm(ptr, len) {
     return getUint32Memory().subarray(ptr / 4, ptr / 4 + len);
 }
 
-const stack = [];
+function getObject(idx) { return heap[idx]; }
 
-function getObject(idx) {
-    if ((idx & 1) === 1) {
-        return stack[idx >> 1];
-    } else {
-        const val = slab[idx >> 1];
-
-        return val.obj;
-
-    }
-}
-
-function dropRef(idx) {
-
-    idx = idx >> 1;
-    if (idx < 4) return;
-    let obj = slab[idx];
-
-    obj.cnt -= 1;
-    if (obj.cnt > 0) return;
-
-    // If we hit 0 then free up our space in the slab
-    slab[idx] = slab_next;
-    slab_next = idx;
+function dropObject(idx) {
+    if (idx < 36) return;
+    heap[idx] = heap_next;
+    heap_next = idx;
 }
 
 function takeObject(idx) {
     const ret = getObject(idx);
-    dropRef(idx);
+    dropObject(idx);
     return ret;
 }
 
@@ -165,7 +158,8 @@ export class Wrapper {
     * @returns {}
     */
     constructor(arg0) {
-        const [ptr0, len0] = passArray8ToWasm(arg0);
+        const ptr0 = passArray8ToWasm(arg0);
+        const len0 = WASM_VECTOR_LEN;
         this.ptr = wasm.wrapper_new(ptr0, len0);
     }
     /**
@@ -191,9 +185,7 @@ export class Wrapper {
     }
 }
 
-export function __wbindgen_object_drop_ref(i) {
-    dropRef(i);
-}
+export function __wbindgen_object_drop_ref(i) { dropObject(i); }
 
 const lTextDecoder = typeof TextDecoder === 'undefined' ? require('util').TextDecoder : TextDecoder;
 
@@ -212,9 +204,9 @@ export function __wbindgen_json_parse(ptr, len) {
 }
 
 export function __wbindgen_json_serialize(idx, ptrptr) {
-    const [ptr, len] = passStringToWasm(JSON.stringify(getObject(idx)));
+    const ptr = passStringToWasm(JSON.stringify(getObject(idx)));
     getUint32Memory()[ptrptr / 4] = ptr;
-    return len;
+    return WASM_VECTOR_LEN;
 }
 
 export function __wbindgen_throw(ptr, len) {

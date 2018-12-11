@@ -1,14 +1,16 @@
 use std::thread;
 use std::io::{self, Write, Read};
 use std::fs::File;
+use std::time::Duration;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use audio::AudioDevice;
 use terminal_size::{Width, terminal_size};
 
 use nix::sys::termios;
+use futures::Future;
 
-use hex_database::Track;
+use hex_database::{Track, TrackKey, Instance};
 use hex_music_container::{Container, Configuration};
 
 #[derive(Debug)]
@@ -28,6 +30,12 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
     'outer: loop {
         if idx == tracks.len() {
             break;
+        }
+
+        // wait till file available
+        while !data_path.join(tracks[idx].key.to_path()).exists() {
+            println!("File {} not available", tracks[idx].key.to_string());
+            thread::sleep(Duration::from_millis(500));
         }
 
         let file = File::open(data_path.join(tracks[idx].key.to_path())).unwrap();
@@ -76,9 +84,11 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
 
         println!(" Finished!\n");
     }
+
+    device.shutdown();
 }
 
-pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
+pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>, mut instance: Instance) {
 
     // setup terminal to pass arrows
     // Querying original as a separate, since `Termios` does not implement copy
@@ -94,7 +104,17 @@ pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
 
     let (sender, receiver) = channel();
 
-    thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
+    let keys: Vec<TrackKey> = tracks.iter().map(|x| x.key.clone()).collect();
+    let path_copy = data_path.clone();
+    thread::spawn(move || {
+        for key in keys {
+            if !path_copy.join(key.to_string()).exists() {
+                instance.ask_for_file(key.to_vec()).wait().unwrap();
+            }
+        }
+    });
+
+    let handle = thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
 
     for byte in io::stdin().bytes() {
         match byte {

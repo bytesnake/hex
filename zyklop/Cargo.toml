@@ -9,6 +9,7 @@ sysfs_gpio = "0.5"
 rb = "0.3"
 cpal = "*"
 rand = "0.5"
+futures = "0.1"
 
 hex-music-container = { path = "../music-container" }
 

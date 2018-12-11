@@ -6,12 +6,11 @@
 //! replying server to ignore in incompatible peers
 
 use std::io::{self, Write, ErrorKind};
-use std::time::{Instant, Duration};
+use std::time::Instant;
 use std::net::UdpSocket as UdpSocket2;
 
 use tokio::net::UdpSocket;
-use tokio::timer::Interval;
-use futures::{self, Async, Future, Stream};
+use futures::{Async, Stream};
 use std::net::{SocketAddrV4, Ipv4Addr, SocketAddr, IpAddr};
 use std::os::unix::io::AsRawFd;
 

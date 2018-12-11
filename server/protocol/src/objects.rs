@@ -8,7 +8,7 @@ use error::{Error, Result};
 
 use bincode::{serialize, deserialize};
 
-use hex_database::{Track, Playlist, Token, Event, TrackKey, PlaylistKey, TokenId};
+use hex_database::{Track, Playlist, Token, Event, TrackKey, PlaylistKey, TokenId, TransitionAction};
 
 /// Identification of a packet
 ///
@@ -217,7 +217,8 @@ pub enum AnswerAction {
     GetSummarise(Vec<(String, u32, u32, u32, u32)>),
     GetEvents(Vec<(String, Event)>),
     Download,
-    AskDownloadProgress(Vec<DownloadProgress>)
+    AskDownloadProgress(Vec<DownloadProgress>),
+    Transition(TransitionAction)
 }
 
 #[derive(Debug)]

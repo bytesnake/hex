@@ -55,14 +55,9 @@ mod convert;
 mod server;
 mod state;
 
-use std::env;
 use std::thread;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::net::SocketAddr;
-use std::str::FromStr;
-use std::time::Duration;
-
-use tokio_core::reactor::Core;
 
 /// Main function spinning up all server
 fn main() {
@@ -73,8 +68,6 @@ fn main() {
             (hex_conf::Conf::default(), PathBuf::from("/opt/music/"))
         }
     };
-
-    let data_path = path.join("data");
 
     println!("Configuration: {:#?}", conf);
 
@@ -87,24 +80,6 @@ fn main() {
         });
     }
 
-    // start the sync server in a seperate thread if it mentioned in the configuration
-    /*if let Some(sync) = conf.sync.clone() {
-        let (peer, chain) = hex_sync::Peer::new(
-            path.join("music.db"),
-            path.join("data"),
-            SocketAddr::new(conf.host.clone(), sync.port),
-            sync.name,
-            sync.sync_all
-        );
-
-        thread::spawn(|| {
-            thread::sleep(Duration::from_millis(300));
-
-            let mut core = Core::new().unwrap();
-            core.run(chain);
-        });
-    }*/
-
     // start the websocket server in the main thread
-    server::start(conf, path.to_path_buf())
+    server::start(conf, path)
 }

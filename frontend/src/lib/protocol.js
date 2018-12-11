@@ -116,8 +116,12 @@ class Protocol {
             console.error("Could not parse answer!");
         
         const id = answ.id();
-        if(!id) {
-            console.error(msg);
+        if(id[0] == 0 && id[1] == 0 && id[2] == 0 && id[3] == 0) {
+            console.log("Got new transition, special case");
+            console.log(answ.action());
+            return;
+        } else if(!id) {
+            console.log(new Uint8Array(msg.data));
             console.error("Could not parse answer!");
             return;
         }
@@ -130,7 +134,6 @@ class Protocol {
         const [type, resolve, reject] = this.pending_requests[id];
         let action = answ.action();
             
-        //console.log(action);
         if(typeof action === "string" && action != type) {
             reject(action);
             return;
@@ -169,8 +172,6 @@ class Protocol {
 
         const promise = new Promise((resolve, reject) => this.pending_requests[id] = [type, resolve, reject]);
 
-        //console.log("Request " + type);
-        //console.log(req);
         if(!proto || this.socket.readyState != WebSocket.OPEN) {
             this.buffered_requests.push([id, req]);
         

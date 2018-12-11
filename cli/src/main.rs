@@ -87,7 +87,7 @@ fn main() {
             sync::sync_tracks(tracks, &path_db, &data_path, ([0,0,0,0], 8000).into(), "Blub".to_string());
         },*/
         "play" => {
-            play::play_tracks(data_path.clone(), tracks);
+            play::play_tracks(data_path.clone(), tracks, instance);
         },
         "modify" => {
             modify::modify_tracks(&view, tracks);

@@ -44,31 +44,23 @@ pub mod discover;
 pub use error::*;
 pub use transition::{Transition, TransitionKey, Inspector};
 
-use std::thread;
 use std::sync::{Mutex, Arc};
-use std::borrow::Borrow;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
-use futures::{Async, Stream, task, Future, Poll, Sink, IntoFuture};
+use futures::{Async, Stream, task, Poll};
 use futures::sync::mpsc::{Receiver, Sender, channel};
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream, tcp::Incoming};
 
-use self::protocol::{Packet, Peer, ResolvePeers, PeerCodecWrite, NetworkKey};
+use self::protocol::{Peer, ResolvePeers, PeerCodecWrite, NetworkKey};
+pub use self::protocol::Packet;
 pub use self::discover::{Beacon, Discover};
 
 /// Identification of a peer. This is the public key (256bit) of a Schnorr signature using a
 /// twisted Edwards form of Curve25519. The key is used to verify that a message is signed by its
 /// author.
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, Clone)]
-pub struct PeerId(pub Vec<u8>);
-
-impl Into<PeerId> for Vec<u8> {
-    fn into(self) -> PeerId {
-        PeerId(self)
-    }
-}
+pub type PeerId = Vec<u8>;
 
 /// Contains information about the whereabouts of a peer
 ///
@@ -111,11 +103,12 @@ impl<T: Inspector> Spread<T> {
             let mut peers = self.peers.lock().unwrap();
             for (id, peer) in peers.iter_mut() {
                 peer.buffer(packet.clone());
-                peer.poll_flush().map_err(|err| {
+
+                if let Err(err) = peer.poll_flush() {
                     println!("Could not write = {:?}", err);
 
                     remove.push(id.clone());
-                });
+                }
             }
         }
 
@@ -125,14 +118,29 @@ impl<T: Inspector> Spread<T> {
         }
     }
 
+    pub fn write_to(&self, packet: Packet, id: PeerId) {
+        let mut remove = false;
+
+        if let Some(peer) = self.peers.lock().unwrap().get_mut(&id) {
+            peer.buffer(packet);
+            if let Err(err) = peer.poll_flush() {
+                println!("Could not write = {:?}", err);
+
+                remove = true;
+            }
+        }
+
+        if remove {
+            self.peers.lock().unwrap().remove(&id);
+        }
+    }
+
     pub fn push(&self, buf: Vec<u8>) {
         let tips = self.inspector.lock().unwrap().tips();
 
         let transition = Transition::new(self.my_id.clone(), tips, buf);
         // store the new transition in our database (assuming it is correct)
         self.inspector.lock().unwrap().store(transition.clone());
-
-        //let tips = self.inspector.restore(tips);
 
         // and forward to everyone else
         self.write(Packet::Push(transition));
@@ -266,7 +274,7 @@ impl<T: Inspector> Gossip<T> {
 
 /// Create a new stream, managing the gossip protocol
 impl<T: Inspector> Stream for Gossip<T> {
-    type Item = Transition;
+    type Item = Packet;
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -357,7 +365,7 @@ impl<T: Inspector> Stream for Gossip<T> {
                         self.resolve.add_peer(Peer::connect(&presence.addr, self.key, self.myself.clone(), tips));
                     }
                 }
-            }
+            },
             Packet::Push(transition) => {
                 if !self.inspector.lock().unwrap().approve(&transition) {
                     error!("Received wrong transition!");
@@ -368,7 +376,16 @@ impl<T: Inspector> Stream for Gossip<T> {
                     self.writer.write(Packet::Push(transition.clone()));
 
                     // the peer has send us a new block of data, forward it
-                    return Ok(Async::Ready(Some(transition)));
+                    return Ok(Async::Ready(Some(Packet::Push(transition))));
+                }
+            },
+            Packet::File(file_id, data) => {
+                if let Some(data) = data {
+                    return Ok(Async::Ready(Some(Packet::File(file_id, Some(data)))));
+                } else {
+                    if let Some(data) = self.inspector.lock().unwrap().get_file(&file_id) {
+                        self.writer.write_to(Packet::File(file_id, Some(data)), id);
+                    }
                 }
             },
             Packet::Close => {

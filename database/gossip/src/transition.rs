@@ -17,6 +17,7 @@ pub trait Inspector {
     fn restore(&self, keys: Vec<TransitionKey>) -> Option<Vec<Transition>>;
     fn tips(&self) -> Vec<TransitionKey>;
     fn has(&self, key: &TransitionKey) -> bool;
+    fn get_file(&self, key: &[u8]) -> Option<Vec<u8>>;
 
     fn subgraph(&self, mut tips: Vec<Transition>) -> Vec<Transition> {
         //println!("Got tips {}", tips.clone().into_iter().map(|x| x.key.to_string()).collect::<Vec<String>>().join(","));
@@ -46,7 +47,7 @@ pub trait Inspector {
         //trace!("My tips are {:?}", self.tips().into_iter().map(|x| x.to_string()));
 
         // start at our tips and run till we reach the sampled transitions
-        let mut tips = self.restore(self.tips()).unwrap();
+        let tips = self.restore(self.tips()).unwrap();
         let mut queue = VecDeque::from_iter(tips.iter().cloned());
         let mut transitions = Vec::new();
 

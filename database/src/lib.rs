@@ -47,11 +47,11 @@ pub mod search;
 pub mod events;
 #[cfg(feature="rusqlite")]
 mod database;
-#[cfg(feature="rusqlite")]
 mod transition;
 
 pub use error::{Result, Error};
 pub use events::{Action, Event};
+pub use transition::TransitionAction;
 pub use objects::{Track, Playlist, Token, TrackKey, PlaylistKey, TokenId};
 #[cfg(feature="rusqlite")]
 pub use database::*;

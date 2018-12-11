@@ -6,10 +6,9 @@ use std::fs::{self, File};
 use std::process::Command;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::borrow::{BorrowMut, Borrow};
 
 use futures::{IntoFuture, Future, Stream};
-use futures::sync::mpsc::{channel, Sender, Receiver};
+use futures::sync::mpsc::{channel, Sender};
 use tokio_core::reactor::Handle;
 
 use error::{Result, Error};

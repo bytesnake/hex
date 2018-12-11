@@ -37,6 +37,8 @@ pub enum Packet {
     GetPeers(Option<Vec<PeerPresence>>),
     /// Push a new packet into the network with reference to received transitions
     Push(Transition),
+    /// Ask for a file
+    File(Vec<u8>, Option<Vec<u8>>),
     Close
 }
 

@@ -4,7 +4,7 @@ pub mod opus;
 pub mod download;
 
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::rc::Rc;
 use std::cell::RefCell;
 

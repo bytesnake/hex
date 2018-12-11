@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use futures::{Sink, Stream, Future, IntoFuture};
+use futures::{Sink, Stream, Future, IntoFuture, oneshot, Oneshot, Complete};
 use futures::sync::mpsc::{channel, Sender, Receiver};
 use rusqlite::{self, Statement, OpenFlags};
 use tokio;
@@ -11,15 +12,17 @@ use error::{Error, Result};
 use search::SearchQuery;
 use objects::*;
 
-use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover};
+use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet};
 use transition::{Storage, TransitionAction, transition_from_sql};
 
+type Awaiting = Arc<Mutex<HashMap<Vec<u8>, Complete<Vec<u8>>>>>;
 /// Instance of the database
 pub struct Instance {
     gossip: Option<(Arc<Spread<Storage>>, PeerId, Sender<TransitionAction>)>,
-    storage: Option<(Arc<Storage>, PeerId, Sender<TransitionAction>)>,
+    storage: Option<(Arc<Mutex<Storage>>, PeerId, Sender<TransitionAction>)>,
     path: PathBuf,
-    receiver: Option<Receiver<TransitionAction>>
+    receiver: Option<Receiver<TransitionAction>>,
+    awaiting: Awaiting
 }
 
 impl Instance {
@@ -34,6 +37,7 @@ impl Instance {
             socket.execute_batch(include_str!("create_db.sql")).unwrap();
         }
 
+        let awaiting: Awaiting = Arc::new(Mutex::new(HashMap::new()));
         if let Some(id) = conf.id.clone() {
             let (sender, receiver) = channel(1024);
 
@@ -42,15 +46,35 @@ impl Instance {
                 let gossip = Gossip::new(conf, storage);
                 let writer = gossip.writer();
                 let my_sender = sender.clone();
+                let tmp_awaiting = awaiting.clone();
 
                 let gossip = gossip
                     .map_err(|e| eprintln!("Err: {}", e))
                     .and_then(move |x| {
-                        let action = TransitionAction::from_vec(&x.body.unwrap());
+                        match x {
+                            Packet::Push(x) => {
+                                let action = TransitionAction::from_vec(&x.body.unwrap());
 
-                        let tmp = sender.clone();
-                        tmp.send(action)
-                            .map_err(|_| ())
+                                let tmp = sender.clone();
+                                tmp.send(action)
+                                    .map_err(|_| ()).map(|_| ());
+
+                                Ok(())
+                            },
+                            Packet::File(id, data) => {
+                                if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
+                                    if let Err(err) = shot.send(data.unwrap()) {
+                                        eprintln!("Err = {:?}", err);
+                                    }
+                                }
+
+                                Ok(())
+                            },
+                            _ => {
+                                Ok(())
+                            }
+                        }
+
                     })
                     .for_each(|_| Ok(())).into_future();
 
@@ -59,18 +83,33 @@ impl Instance {
 
                 thread::spawn(move || tokio::run(Future::join(gossip, discover).map(|_| ())));
 
-                Instance { gossip: Some((writer, id, my_sender)), storage: None, path: path.to_path_buf(), receiver: Some(receiver) }
+                Instance { gossip: Some((writer, id, my_sender)), storage: None, path: path.to_path_buf(), receiver: Some(receiver), awaiting }
             } else {
                 let storage = Storage::new(path);
-                Instance { gossip: None, storage: Some((Arc::new(storage), id, sender)), path: path.to_path_buf(), receiver: Some(receiver) }
+                Instance { gossip: None, storage: Some((Arc::new(Mutex::new(storage)), id, sender)), path: path.to_path_buf(), receiver: Some(receiver), awaiting }
             }
         } else {
-            Instance { gossip: None, storage: None, path: path.to_path_buf(), receiver: None }
+            Instance { gossip: None, storage: None, path: path.to_path_buf(), receiver: None, awaiting }
         }
     }
 
     pub fn recv(&mut self) -> Receiver<TransitionAction> {
         self.receiver.take().unwrap()
+    }
+
+    pub fn ask_for_file(&mut self, file_id: Vec<u8>) -> Oneshot<Vec<u8>> {
+        match self.gossip {
+            Some((ref spread, _, _)) => {
+                let (c, p) = oneshot();
+
+                self.awaiting.lock().unwrap().insert(file_id.clone(), c);
+
+                spread.write(Packet::File(file_id, None));
+
+                return p;
+            },
+            _ => panic!("I'm not in p2p mode!")
+        }
     }
 
     pub fn view(&self) -> View {
@@ -101,7 +140,7 @@ pub struct View {
     socket: rusqlite::Connection,
     peer_id: Option<PeerId>,
     writer: Option<Arc<Spread<Storage>>>,
-    storage: Option<Arc<Storage>>,
+    storage: Option<Arc<Mutex<Storage>>>,
     sender: Option<Sender<TransitionAction>>
 
 }
@@ -118,9 +157,9 @@ impl View {
             },
             (None, Some(ref storage), Some(ref id), Some(ref sender)) => {
                 sender.clone().send(transition.clone()).wait().unwrap();
-                let tips = storage.tips();
+                let tips = storage.lock().unwrap().tips();
                 let transition = Transition::new(id.clone(), tips, transition.to_vec());
-                storage.store(transition);
+                storage.lock().unwrap().store(transition);
 
                 Ok(())
             },
@@ -298,7 +337,13 @@ impl View {
 
     /// Deletes a playlist with key `key`
     pub fn delete_playlist(&self, key: PlaylistKey) -> Result<()> {
-        self.commit(TransitionAction::DeletePlaylist(key))
+        let has_playlist = self.get_playlist(key).is_ok();
+
+        if has_playlist {
+            self.commit(TransitionAction::DeletePlaylist(key))
+        } else {
+            Err(Error::NotFound)
+        }
     }
 
     pub fn update_playlist(&self, key: PlaylistKey, title: Option<String>, desc: Option<String>) -> Result<()> {
@@ -352,7 +397,13 @@ impl View {
 
     /// Delete a track with key `key`
     pub fn delete_track(&self, key: TrackKey) -> Result<()> {
-        self.commit(TransitionAction::DeleteTrack(key))
+        let has_track = self.get_track(key).is_ok();
+
+        if has_track {
+            self.commit(TransitionAction::DeleteTrack(key))
+        } else {
+            Err(Error::NotFound)
+        }
     }
 
     /// Update the metadata of tracks

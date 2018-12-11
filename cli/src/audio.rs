@@ -1,11 +1,14 @@
 use cpal;
 use std::thread;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use rb::{SpscRb, RB, RbProducer, RbConsumer, Producer, Consumer};
 
 pub struct AudioDevice {
     rb: SpscRb<i16>,
     producer: Producer<i16>,
-    thread_handle: thread::JoinHandle<()>
+    thread_handle: thread::JoinHandle<()>,
+    is_running: Arc<AtomicBool>
 }
 
 impl AudioDevice {
@@ -25,12 +28,15 @@ impl AudioDevice {
             data_type: cpal::SampleFormat::I16
         };
 
-        let thread = thread::spawn(move || Self::run(cons, device, format));
+        let is_running = Arc::new(AtomicBool::new(true));
+        let tmp = is_running.clone();
+        let thread = thread::spawn(move || Self::run(cons, device, format, tmp));
 
         AudioDevice {
             rb: rb,
             producer: prod,
-            thread_handle: thread
+            thread_handle: thread,
+            is_running
         }
     }
 
@@ -50,8 +56,13 @@ impl AudioDevice {
         self.rb.clear();
     }
 
+    pub fn shutdown(self) {
+        self.is_running.store(false, Ordering::Relaxed);
 
-    pub fn run(consumer: Consumer<i16>, device: cpal::Device, format: cpal::Format) {
+        self.thread_handle.join().unwrap();
+    }
+
+    pub fn run(consumer: Consumer<i16>, device: cpal::Device, format: cpal::Format, is_running: Arc<AtomicBool>) {
         let event_loop = cpal::EventLoop::new();
 
         let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
@@ -60,6 +71,10 @@ impl AudioDevice {
         let mut buf = vec![0i16; format.channels as usize];
 
         event_loop.run(move |_, data| {
+            if !is_running.load(Ordering::Relaxed) {
+                return;
+            }
+
             match data {
                 cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer) } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {

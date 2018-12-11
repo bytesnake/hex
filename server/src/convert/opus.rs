@@ -11,7 +11,6 @@ use error::{Result, Error};
 use hex_music_container::{Container, Configuration};
 
 use acousticid;
-use sha2::Sha256;
 use hex_database::Track;
 
 pub struct State {

@@ -16,9 +16,7 @@ use hex_gossip::PeerId;
 
 /// Peer id copy
 #[cfg(not(feature="hex-gossip"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
-pub struct PeerId([u8; 16]);
+pub type PeerId = Vec<u8>;
 
 /// Track identification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -179,7 +177,7 @@ impl Playlist {
             title:  row.get_checked(1)?,
             desc:   row.get_checked(2)?,
             tracks: keys,
-            origin: PeerId(row.get_checked(4)?)
+            origin: row.get_checked(4)?
         })
     }
 }

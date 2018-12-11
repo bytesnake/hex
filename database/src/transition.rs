@@ -1,11 +1,17 @@
-use std::path::Path;
+use std::io::Read;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 
+#[cfg(feature="rusqlite")]
 use rusqlite::Row;
+#[cfg(feature="rusqlite")]
 use bincode::{serialize, deserialize};
-use hex_gossip::{Inspector, Transition, TransitionKey, PeerId};
+#[cfg(feature="rusqlite")]
+use hex_gossip::{Inspector, Transition, TransitionKey};
 
 use objects::{self, Track, Playlist, Token, TrackKey, PlaylistKey, TokenId};
 
+#[cfg(feature="rusqlite")]
 static UPSERT_TRACK: &str = r#"
     INSERT INTO Tracks(Key, Fingerprint, Title, Album, Interpret, People, Composer, Duration, FavsCount, Created)
         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, date('now'))
@@ -18,6 +24,7 @@ static UPSERT_TRACK: &str = r#"
             FavsCount = excluded.FavsCount;
 "#;
 
+#[cfg(feature="rusqlite")]
 static UPSERT_PLAYLIST: &str = r#"
     INSERT INTO Playlists(Key, Title, Desc, Tracks, Author)
         VALUES(?1, ?2, ?3, ?4, ?5)
@@ -27,6 +34,7 @@ static UPSERT_PLAYLIST: &str = r#"
             Tracks = excluded.Tracks;
 "#;
 
+#[cfg(feature="rusqlite")]
 static UPSERT_TOKEN: &str = r#"
     INSERT INTO Tokens(Token, Key, Played, Pos, Lastuse) 
         VALUES (?1, ?2, ?3, ?4, ?5)
@@ -51,6 +59,7 @@ pub enum TransitionAction {
     DeleteToken(TokenId),
 }
 
+#[cfg(feature="rusqlite")]
 impl TransitionAction {
     pub fn from_vec(buf: &[u8]) -> TransitionAction {
         deserialize(buf).unwrap()
@@ -61,13 +70,14 @@ impl TransitionAction {
     }
 }
 
+#[cfg(feature="rusqlite")]
 pub fn transition_from_sql(row: &Row) -> Transition {
     let a: Vec<u8> = row.get(0);
     let b: Vec<u8> = row.get(1);
     let c: Vec<u8> = row.get(3);
 
     let key = TransitionKey::from_vec(&a);
-    let pk = PeerId(b);
+    let pk = b;
     let refs = c.chunks(32).map(|x| TransitionKey::from_vec(x)).collect();
 
     Transition {
@@ -80,26 +90,39 @@ pub fn transition_from_sql(row: &Row) -> Transition {
 
 /// The inspector will open a write/read connection to the database and fill it with foreign and
 /// domestic changes. Transitions issued from ourselves are also forwarded to the inspector.
+#[cfg(feature="rusqlite")]
 pub struct Storage {
-    socket: rusqlite::Connection
+    socket: rusqlite::Connection,
+    data_path: PathBuf
 }
 
+#[cfg(feature="rusqlite")]
 impl Storage {
     pub fn new<T: AsRef<Path>>(path: T) -> Storage {
         Storage {
+            data_path: path.as_ref().parent().unwrap().join("data").to_path_buf(),
             socket: rusqlite::Connection::open(path).unwrap()
         }
     }
 
     pub fn apply(&self, trans: Transition) {
-        // set refs to non-tip
+        // check wether all referenced transitions are already applied
+        let all_applied = match self.restore(trans.refs.clone()) {
+            Some(x) => x.iter().all(|x| x.state != 2),
+            None => false
+        };
+
+        // don't apply if at least one reference is not yet applied
+        if !all_applied {
+            return;
+        }
+
+        // otherweise set refs to non-tip
         let tips: Vec<TransitionKey> = self.tips().into_iter()
             .filter(|x| trans.refs.contains(x))
             .collect();
 
         for key in tips {
-            trace!("Set {} to non-tip", key.to_string());
-
             self.socket.execute("UPDATE Transitions SET State=0 WHERE Key=?", &[&key.0.as_ref()]).unwrap();
         }
 
@@ -120,7 +143,7 @@ impl Storage {
                 &[
                     &playlist.key, &playlist.title, &playlist.desc, 
                     &playlist.tracks.into_iter().map(|x| x.to_vec()).flatten().collect::<Vec<u8>>(), 
-                    &playlist.origin.0
+                    &playlist.origin
                 ]).unwrap(),
 
             TransitionAction::UpsertToken(token) => self.socket.execute(UPSERT_TOKEN, 
@@ -142,7 +165,7 @@ impl Storage {
         let key = trans.key.0.to_vec();
         let vec: Vec<Transition> = stmt.query_map(&[&key], |row| transition_from_sql(&row)).unwrap().filter_map(|x| x.ok()).collect();
 
-        // if there is no reference to us, we are a tip, otherweise integrated
+        // if there is no reference to us, we are a tip, otherwise we're fully integrated
         if vec.len() == 0 {
             self.socket.execute("UPDATE Transitions SET State=1 WHERE Key=?", &[&trans.key.0.as_ref()]).unwrap();
         } else {
@@ -158,42 +181,26 @@ impl Storage {
 
 }
 
+#[cfg(feature="rusqlite")]
 impl Inspector for Storage {
     fn approve(&self, trans: &Transition) -> bool {
         deserialize::<TransitionAction>(&trans.body.clone().unwrap()).is_ok()
     }
 
     fn store(&self, trans: Transition) {
-        // check wether all references are already applied
-        let all_applied = match self.restore(trans.refs.clone()) {
-            Some(x) => x.iter().all(|x| x.state != 2),
-            None => false
-        };
+        let Transition { key, pk, sign, refs, body, .. } = trans.clone();
 
-        let state = if all_applied {
-            1 // all references are already applied, this is just a tip
-        } else {
-            2 // there are some references not applied, neither apply this
-        };
+        self.socket.execute("INSERT INTO Transitions (Key, PublicKey, Signature, Refs, State, Data, Created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, DATETIME('NOW'))",
+            &[
+                &key.0.as_ref(), 
+                &pk, 
+                &sign.as_ref(),
+                &refs.into_iter().map(|x| x.0.to_vec()).flatten().collect::<Vec<u8>>(), 
+                &2,
+                &body.clone().unwrap()
+            ]).unwrap();
 
-        {
-            let key_ref = trans.key.0.as_ref();
-            let pk = trans.pk.0.clone();
-
-            self.socket.execute("INSERT INTO Transitions (Key, PublicKey, Signature, Refs, State, Data, Created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, DATETIME('NOW'))",
-                &[
-                    &key_ref, 
-                    &pk, 
-                    &trans.sign.as_ref(), 
-                    &trans.refs.clone().into_iter().map(|x| x.0.to_vec()).flatten().collect::<Vec<u8>>(), 
-                    &state,
-                    &trans.body.clone().unwrap()
-                ]).unwrap();
-        }
-
-        if all_applied {
-            self.apply(trans);
-        }
+        self.apply(trans);
     }
 
     fn restore(&self, keys: Vec<TransitionKey>) -> Option<Vec<Transition>> {
@@ -223,16 +230,31 @@ impl Inspector for Storage {
             .filter_map(|x| x.ok()).collect();
 
         vec
-        
     }
 
-    // TODO Probably not working
     fn has(&self, key: &TransitionKey) -> bool {
         let mut stmt = self.socket.prepare("SELECT * FROM Transitions WHERE Key = ?").unwrap();
         let mut stream = stmt.query_map(&[&key.0.as_ref()], |_| true).unwrap()
             .filter_map(|x| x.ok());
 
         stream.next().is_some()
+    }
+
+    fn get_file(&self, id: &[u8]) -> Option<Vec<u8>> {
+        if id.len() != 16 {
+            return None;
+        }
+
+        let mut tmp = String::new();
+        for i in 0..16 {
+            tmp.push_str(&format!("{:02X}", id[i]));
+        }
+
+        let mut file = File::open(self.data_path.join(&tmp)).ok()?;
+        let mut content = vec![];
+        file.read_to_end(&mut content).unwrap();
+
+        Some(content)
     }
 }
 

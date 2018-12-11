@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 
 [dependencies]
-websocket = "0.20"
+websocket = "0.21"
 futures = "0.1.14"
 tokio-core = "0.1"
 tokio-io = "0.1.3"

@@ -1,4 +1,6 @@
 use std::fs::File;
+use std::thread;
+use std::time::Duration;
 use std::path::{Path, PathBuf};
 use rand::{thread_rng, Rng};
 
@@ -14,6 +16,12 @@ pub struct Stream {
 
 impl Stream {
     pub fn new(track: Track, data_path: &Path) -> Result<Stream> {
+        let path = data_path.join(track.key.to_path());
+        
+        while !path.exists() {
+            thread::sleep(Duration::from_millis(500));
+        }
+
         let file = File::open(data_path.join(track.key.to_path()))
             .map_err(|_| Error::NotAvailable)?;
         
