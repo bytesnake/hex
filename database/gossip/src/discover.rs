@@ -9,19 +9,46 @@ use std::io::{self, Write, ErrorKind};
 use std::time::Instant;
 use std::net::UdpSocket as UdpSocket2;
 
-use tokio::net::UdpSocket;
+use nix::ifaddrs::getifaddrs;
+use nix::sys::socket::SockAddr;
+use tokio::{net::UdpSocket, reactor::Handle};
 use futures::{Async, Stream};
 use std::net::{SocketAddrV4, Ipv4Addr, SocketAddr, IpAddr};
 use std::os::unix::io::AsRawFd;
 
-use nix::sys::socket::{self, sockopt::ReusePort};
+use net2::{unix::UnixUdpBuilderExt, UdpBuilder};
+use bincode::{serialize, deserialize};
+use ring::digest;
 
-use local_ip;
+use protocol::NetworkKey;
 
+#[derive(Deserialize, Serialize, Debug)]
 struct Packet {
     version: u8,
-    key: [u8; 16],
-    contact: SocketAddr
+    key: [u8; 32],
+    contact_port: u16
+}
+
+impl Packet {
+    pub fn new(version: u8, network: NetworkKey, contact_port: u16) -> Packet {
+        let mut key = [0u8; 32];
+
+        // hash the network key
+        let hash = digest::digest(&digest::SHA256, &network.as_ref());
+        key.copy_from_slice(&hash.as_ref());
+
+        Packet {
+            version, contact_port, key
+        }
+    }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        serialize(self).unwrap()
+    }
+
+    pub fn from_vec(buf: &[u8]) -> Option<Packet> {
+        deserialize(buf).ok()
+    }
 }
 
 /// Reply to probing packets with the correct version field
@@ -29,7 +56,7 @@ pub struct Discover {
     socket: UdpSocket,
     buf: Vec<u8>,
     answer_to: Option<(usize, SocketAddr)>,
-    version: u8
+    packet: Packet
 }
 
 impl Stream for Discover {
@@ -39,13 +66,23 @@ impl Stream for Discover {
     fn poll(&mut self) -> Result<Async<Option<Self::Item>>, Self::Error> {
         loop {
             if let Some((nbuf, addr)) = self.answer_to {
-                if nbuf == 4 && self.buf[0..4] == [self.version, 0x00, 0x00, 0x01] {
-                    try_ready!(self.socket.poll_send_to(&self.buf[..nbuf], &addr));
-                }
+                if let Some(packet) = Packet::from_vec(&self.buf[0..nbuf]) {
+                    if packet.key == self.packet.key && 
+                       packet.version == self.packet.version &&
+                       packet.contact_port != self.packet.contact_port  {
 
-                self.answer_to = None
+                        let buf = self.packet.to_vec();
+
+                        try_ready!(self.socket.poll_send_to(&buf, &addr));
+
+                        self.answer_to = None;
+                    }
+                }
             }
 
+
+            //println!("{:?}", self.answer_to);
+            //println!("{:?}", try_ready!(self.socket.poll_recv_from(&mut self.buf)));
             self.answer_to = Some(try_ready!(self.socket.poll_recv_from(&mut self.buf)));
         }
     }
@@ -53,17 +90,23 @@ impl Stream for Discover {
 
 impl Discover {
     /// Create a new reply server, only replying to the specified version
-    pub fn new(version: u8) -> Discover {
+    pub fn new(version: u8, network: NetworkKey, contact_port: u16) -> Discover {
         let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8004);
-        let socket = UdpSocket::bind(&addr.into()).unwrap();
-        socket::setsockopt(socket.as_raw_fd(), ReusePort, &true).unwrap();
+        let socket = UdpBuilder::new_v4().unwrap()
+            .reuse_address(true).unwrap()
+            .reuse_port(true).unwrap()
+            .bind(addr).unwrap();
+
         socket.set_broadcast(true).unwrap();
+        socket.set_nonblocking(true).unwrap();
+
+        let packet = Packet::new(version, network, contact_port);
 
         Discover {
-            buf: vec![0; 16],
+            buf: vec![0; 1024],
             answer_to: None,
-            version,
-            socket
+            packet,
+            socket: UdpSocket::from_std(socket, &Handle::default()).unwrap()
         }
     }
 }
@@ -88,26 +131,28 @@ impl Discover {
 /// ```
 pub struct Beacon {
     socket: UdpSocket2,
-    version: u8,
     buf: Vec<u8>,
-    local_addrs: Vec<IpAddr>,
+    packet: Packet
 }
 
 impl Beacon {
     /// Create a new `Beacon` struct which tries to discover peers at an interval `interval` and
     /// with version `version`
-    pub fn new(version: u8) -> Beacon {
+    pub fn new(version: u8, network: NetworkKey, contact_port: u16) -> Beacon {
         let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8004);
-        let socket = UdpSocket2::bind(&addr).unwrap();
-        socket::setsockopt(socket.as_raw_fd(), ReusePort, &true).unwrap();
+        
+        let socket = UdpBuilder::new_v4().unwrap()
+            .reuse_address(true).unwrap()
+            .reuse_port(true).unwrap()
+            .bind(addr).unwrap();
+
         socket.set_broadcast(true).unwrap();
         socket.set_nonblocking(true).unwrap();
 
         Beacon {
-            buf: vec![0; 16],
-            local_addrs: local_ip::get().unwrap(),
-            version,
-            socket
+            buf: vec![0; 1024],
+            socket,
+            packet: Packet::new(version, network, contact_port)
         }
     }
 
@@ -116,6 +161,13 @@ impl Beacon {
         let mut last_sent = Instant::now();
         print!("Search for peers ");
         std::io::stdout().flush().unwrap();
+
+        let my_ips: Vec<IpAddr> = getifaddrs().unwrap().filter_map(|x| {
+            match x.address{
+                Some(SockAddr::Inet(inet)) => Some(inet.to_std().ip()),
+                _ => None
+            }
+        }).collect();
 
         loop {
             if Instant::now().duration_since(start).as_secs() >= nsecs {
@@ -128,24 +180,29 @@ impl Beacon {
                 std::io::stdout().flush().unwrap();
 
                 self.socket.send_to(
-                        &[self.version, 0x00, 0x00, 0x01], 
+                        &self.packet.to_vec(), 
                         &(SocketAddrV4::new(Ipv4Addr::BROADCAST, 8004))).unwrap();
 
                 last_sent = Instant::now();
             }
 
             'inner: loop {
-                let (nread, addr) = match self.socket.recv_from(&mut self.buf) {
+                let (nread, mut addr) = match self.socket.recv_from(&mut self.buf) {
                     Err(ref e) if e.kind() == ErrorKind::WouldBlock => break 'inner,
                     Ok(a) => a,
                     _ => return None
                 };
 
-                //println!("{}", addr);
-                if !self.local_addrs.contains(&addr.ip()) {
-                    if nread == 4 && self.buf[0..4] == [self.version, 0x00, 0x00, 0x01] {
-                        println!(" found peer at {}", addr);
-                        return Some(addr);
+                // check if request originates from our address and the corresponding port
+                if let Some(packet) = Packet::from_vec(&self.buf[0..nread]) {
+                    if !my_ips.contains(&addr.ip()) || packet.contact_port != self.packet.contact_port {
+                        if packet.key == self.packet.key && 
+                           packet.version == self.packet.version {
+                            addr.set_port(packet.contact_port);
+
+                            println!(" found peer at {}", addr);
+                            return Some(addr);
+                        }
                     }
                 }
             }

@@ -27,6 +27,7 @@ extern crate test;
 extern crate log;
 extern crate nix;
 extern crate bytes;
+extern crate net2;
 extern crate ring;
 extern crate bincode;
 extern crate tokio;
@@ -214,10 +215,21 @@ pub struct Gossip<T: Inspector> {
 
 impl<T: Inspector> Gossip<T> {
     pub fn new(conf: GossipConf, inspector: T) -> Gossip<T> {
-        let (addr, key, contact, id) = conf.retrieve();
+        let (mut addr, key, contact, id) = conf.retrieve();
 
         let (sender, receiver) = channel(1024);
-        let listener = TcpListener::bind(&addr).unwrap();
+
+        // check if port is available
+        let listener;
+        loop {
+            match TcpListener::bind(&addr) {
+                Ok(a) => {listener = a; break; }
+                Err(_) => {
+                    let old_port = addr.port();
+                    addr.set_port(old_port + 1);
+                }
+            }
+        }
 
         // start beacon
         //let discover = Discover::new(0);
@@ -238,7 +250,7 @@ impl<T: Inspector> Gossip<T> {
                 vec![Peer::connect(&addr, key, myself.clone(), tips)]
             },
             None => {
-                match Beacon::new(1).wait(2) {
+                match Beacon::new(1, key, myself.addr.port()).wait(2) {
                     Some(contact) => vec![Peer::connect(&contact, key, myself.clone(), tips)],
                     _ => {
                         Vec::new()
@@ -269,6 +281,14 @@ impl<T: Inspector> Gossip<T> {
 
     pub fn id(&self) -> PeerId {
         self.myself.id.clone()
+    }
+
+    pub fn network(&self) -> NetworkKey {
+        self.key.clone()
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.myself.addr.clone()
     }
 }
 
@@ -383,6 +403,7 @@ impl<T: Inspector> Stream for Gossip<T> {
                 if let Some(data) = data {
                     return Ok(Async::Ready(Some(Packet::File(file_id, Some(data)))));
                 } else {
+                    println!("Get file: {:?}", file_id);
                     if let Some(data) = self.inspector.lock().unwrap().get_file(&file_id) {
                         self.writer.write_to(Packet::File(file_id, Some(data)), id);
                     }

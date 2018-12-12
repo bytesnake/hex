@@ -1,35 +1,32 @@
 use std::io::{self, Write};
-use std::path::Path;
-use std::net::SocketAddr;
-use std::thread;
-use std::time::Duration;
+use std::path::PathBuf;
+use std::fs::File;
 
-use tokio;
 use futures::Future;
 
-use hex_sync::Peer;
-use hex_database::Track;
+use hex_database::{Track, Instance};
 
-pub fn sync_tracks(tracks: Vec<Track>, db_path: &Path, data_path: &Path, addr: SocketAddr, name: String) {
-    let (mut peer, chain) = Peer::new(
-        db_path.to_path_buf(), data_path.to_path_buf(), addr, name, false);
-
-    thread::spawn(|| {
-        tokio::run(chain);
-    });
-
-    thread::sleep(Duration::from_millis(3000));
-
+pub fn sync_tracks(tracks: Vec<Track>, mut instance: Instance, data_path: PathBuf) {
     let length = tracks.len();
     for track in tracks {
         print!("Syncing track: {}", track.key.to_string());
         io::stdout().flush().unwrap();
 
-        match peer.ask_for_track(track.key).wait() {
-            Ok(_) => println!(" ok"),
+        if data_path.join(track.key.to_path()).exists() {
+            println!(" already exists!");
+            continue;
+        }
+
+        match instance.ask_for_file(track.key.to_vec()).wait() {
+            Ok(buf) => {
+                let mut file = File::create(data_path.join(track.key.to_path())).unwrap();
+                file.write_all(&buf).unwrap();
+
+                println!(" ok")
+            },
             Err(err) => println!(" err {}", err)
         }
     }
 
-    println!("Finished! {} tracks", length);
+    println!("Finished - {} tracks synchronised!", length);
 }

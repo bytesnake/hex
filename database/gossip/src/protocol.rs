@@ -91,8 +91,7 @@ pub enum Peer {
 impl Peer {
     /// Initialise a full peer connection with just the address
     pub fn connect(addr: &SocketAddr, key: NetworkKey, myself: PeerPresence, tips: Vec<Transition>) -> Peer {
-        let mut addr = addr.clone();
-        addr.set_port(8000);
+        let addr = addr.clone();
 
         trace!("Send JOIN to {:?} with {} tips", addr, tips.len());
 

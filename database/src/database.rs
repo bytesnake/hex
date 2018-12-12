@@ -47,6 +47,7 @@ impl Instance {
                 let writer = gossip.writer();
                 let my_sender = sender.clone();
                 let tmp_awaiting = awaiting.clone();
+                let (network, addr) = (gossip.network(), gossip.addr());
 
                 let gossip = gossip
                     .map_err(|e| eprintln!("Err: {}", e))
@@ -78,7 +79,7 @@ impl Instance {
                     })
                     .for_each(|_| Ok(())).into_future();
 
-                let discover = Discover::new(1).for_each(|_| Ok(())).into_future()
+                let discover = Discover::new(1, network, addr.port()).for_each(|_| Ok(())).into_future()
                     .map_err(|_| ());
 
                 thread::spawn(move || tokio::run(Future::join(gossip, discover).map(|_| ())));

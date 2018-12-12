@@ -13,6 +13,7 @@ extern crate hex_music_container;
 mod audio;
 mod play;
 mod modify;
+mod sync;
 
 use std::io::{self, Write};
 use std::env;
@@ -83,9 +84,9 @@ fn main() {
         "delete" => {
             delete_tracks(&view, &data_path, tracks);
         },
-        /*"sync" => {
-            sync::sync_tracks(tracks, &path_db, &data_path, ([0,0,0,0], 8000).into(), "Blub".to_string());
-        },*/
+        "sync" => {
+            sync::sync_tracks(tracks, instance, data_path);
+        },
         "play" => {
             play::play_tracks(data_path.clone(), tracks, instance);
         },
