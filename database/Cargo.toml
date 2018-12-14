@@ -19,7 +19,7 @@ log = "0.4"
 
 [dev-dependencies]
 hex-conf = { path = "../conf/" }
-simple_logger = "1"
+env_logger = "0.6.0"
 
 [features]
 default = ["rusqlite", "serde", "hex-gossip", "sha2", "bincode", "futures", "tokio"]

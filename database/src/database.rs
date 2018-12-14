@@ -50,8 +50,10 @@ impl Instance {
                 let (network, addr) = (gossip.network(), gossip.addr());
 
                 let gossip = gossip
-                    .map_err(|e| eprintln!("Err: {}", e))
+                    .map_err(|e| eprintln!("Gossip err: {}", e))
                     .and_then(move |x| {
+                        println!("Got something!");
+
                         match x {
                             Packet::Push(x) => {
                                 let action = TransitionAction::from_vec(&x.body.unwrap());
@@ -59,30 +61,30 @@ impl Instance {
                                 let tmp = sender.clone();
                                 tmp.send(action)
                                     .map_err(|_| ()).map(|_| ());
-
-                                Ok(())
                             },
                             Packet::File(id, data) => {
                                 if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
                                     if let Err(err) = shot.send(data.unwrap()) {
-                                        eprintln!("Err = {:?}", err);
+                                        eprintln!("Oneshot err = {:?}", err);
                                     }
                                 }
-
-                                Ok(())
                             },
                             _ => {
-                                Ok(())
                             }
                         }
+
+                        Ok(())
 
                     })
                     .for_each(|_| Ok(())).into_future();
 
-                let discover = Discover::new(1, network, addr.port()).for_each(|_| Ok(())).into_future()
-                    .map_err(|_| ());
+                let discover = Discover::new(1, network, addr.port())
+                    .map_err(|e| eprintln!("Discover err = {:?}", e))
+                    .for_each(|_| Ok(())).into_future();
 
-                thread::spawn(move || tokio::run(Future::join(gossip, discover).map(|_| ())));
+                thread::spawn(move || {
+                    tokio::run(Future::join(gossip, discover).map(|_| ()));
+                });
 
                 Instance { gossip: Some((writer, id, my_sender)), storage: None, path: path.to_path_buf(), receiver: Some(receiver), awaiting }
             } else {

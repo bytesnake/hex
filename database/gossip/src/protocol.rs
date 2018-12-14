@@ -93,15 +93,17 @@ impl Peer {
     pub fn connect(addr: &SocketAddr, key: NetworkKey, myself: PeerPresence, tips: Vec<Transition>) -> Peer {
         let addr = addr.clone();
 
-        trace!("Send JOIN to {:?} with {} tips", addr, tips.len());
+        trace!("Connect to {:?} with {} tips", addr, tips.len());
 
         Peer::Connecting((TcpStream::connect(&addr), key, myself, tips))
     }
 
     /// Initialise a full peer connection with a connected TcpStream
     pub fn send_join(socket: TcpStream, key: NetworkKey, myself: PeerPresence, tips: Vec<Transition>) -> Peer {
-        //println!("Send join from {}", myself.id);
+        let addr = socket.peer_addr().unwrap();
         let (read, mut write) = new(socket, key);
+
+        trace!("Send JOIN to {:?} with {} tips", addr, tips.len());
 
         write.buffer(Packet::Join(myself, tips));
 
@@ -344,7 +346,7 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
     /// Try to read in some data from the byte stream
     fn fill_read_buf(&mut self) -> Poll<(), io::Error> {
         loop {
-            self.rd.reserve(1024);
+            self.rd.reserve(8192);
             let read = self.read.read_buf(&mut self.rd);
 
             let n = match read {
@@ -359,7 +361,6 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
                 }
             };
 
-            //println!("{:?}", &self.rd[0..n]);
             if n == 0 {
                 return Ok(Async::Ready(()));
             }
@@ -374,6 +375,7 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
     /// calculates the metadata values. After this we can push the block to the
     /// data stream.
     pub fn buffer(&mut self, message: Packet) {
+        //println!("Buffer: {:?}", message);
         if let Ok(mut buf) = serialize(&message) {
             // encrypt and sign our data with the network key
             // TODO generate nonce
@@ -398,6 +400,7 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
             // length
             let length = (32 - (buf_len as u32).leading_zeros()) as u8 / 8;
 
+
             // we can't transmit more than 4G at once, should never happen anyway
             if length > 4 {
                 return;
@@ -405,6 +408,7 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
 
             // check if remaining space is sufficient
             let rem = self.wr.capacity() - self.wr.len();
+
             if rem < length as usize + 14 + buf_len {
                 let new_size = self.wr.len() + rem + length as usize + 14 + buf_len;
                 self.wr.reserve(new_size);
@@ -432,21 +436,11 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
         /// Flush the whole write buffer to the underlying socket
     pub fn poll_flush(&mut self) -> Poll<(), io::Error> {
         while !self.wr.is_empty() {
-            'inner: loop {
-                match self.write.poll_write(&self.wr) {
-                    Ok(Async::Ready(n)) => {
-                        assert!(n > 0);
+            let n = try_ready!(self.write.poll_write(&self.wr));
 
-                        let _ = self.wr.split_to(n);
+            assert!(n > 0);
 
-                        break 'inner;
-                    },
-                    Ok(Async::NotReady) => {},
-                    Err(err) => {
-                        return Err(err);
-                    }
-                }
-            }
+            self.wr.split_to(n);
         }
 
         self.write.poll_flush()
@@ -480,7 +474,6 @@ impl<T: Debug + AsyncRead> Stream for PeerCodecRead<T> {
         }
         
         let res = self.parse_packet();
-        //println!("{:?}", res);
         match res {
             Ok(msg) => Ok(Async::Ready(Some(msg))),
             // peer has a wrong version, close connection
@@ -511,7 +504,7 @@ mod tests {
         let mut tmp = vec![0u8; 65536];
         rng.fill(&mut tmp).unwrap();
 
-        let packet = Packet::Push(Transition::new(PeerId(Vec::new()), Vec::new(), tmp));
+        let packet = Packet::Push(Transition::new(Vec::new(), Vec::new(), tmp));
 
         let mut key = [0u8; 32];
         rng.fill(&mut key).unwrap();
@@ -537,7 +530,7 @@ mod tests {
         let mut tmp = vec![0u8; BUF_SIZE];
         rng.fill(&mut tmp).unwrap();
 
-        let packet = Packet::Push(Transition::new(PeerId(Vec::new()), Vec::new(), tmp));
+        let packet = Packet::Push(Transition::new(Vec::new(), Vec::new(), tmp));
 
         let mut key = [0u8; 32];
         rng.fill(&mut key).unwrap();
@@ -555,7 +548,7 @@ mod tests {
         let mut tmp = vec![0u8; BUF_SIZE];
         rng.fill(&mut tmp).unwrap();
 
-        let packet = Packet::Push(Transition::new(PeerId(Vec::new()), Vec::new(), tmp));
+        let packet = Packet::Push(Transition::new(Vec::new(), Vec::new(), tmp));
 
         let mut key = [0u8; 32];
         rng.fill(&mut key).unwrap();

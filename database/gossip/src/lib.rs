@@ -231,16 +231,11 @@ impl<T: Inspector> Gossip<T> {
             }
         }
 
-        // start beacon
-        //let discover = Discover::new(0);
-        //tokio::spawn(discover.for_each(|x| { println!("Detected peer = {:?}", x); Ok(())}).map_err(|_| ()));
-
         let myself = PeerPresence {
             id: id.clone(),
             addr: listener.local_addr().unwrap(),
             writer: None
         };
-
 
         let tips = inspector.tips();
         let tips = inspector.restore(tips).unwrap();
@@ -304,6 +299,8 @@ impl<T: Inspector> Stream for Gossip<T> {
                 let tips = self.inspector.lock().unwrap().tips();
                 let tips = self.inspector.lock().unwrap().restore(tips).unwrap();
 
+                trace!("New connection from {}", socket.peer_addr().unwrap());
+
                 self.resolve.add_peer(Peer::send_join(socket, self.key, self.myself.clone(), tips));
             },
             Err(err) => {
@@ -318,9 +315,8 @@ impl<T: Inspector> Stream for Gossip<T> {
         //
         match self.resolve.poll() {
             Ok(Async::Ready(Some((reader, mut writer, mut presence, tips)))) => {
-                //println!("Gossip: connection established from {} to {}", self.myself.id, presence.id);
-
-                if self.books.contains_key(&presence.id) || self.myself.id == presence.id {
+                //if self.books.contains_key(&presence.id) || self.myself.id == presence.id {
+                if false {
                     warn!("Got already existing id {:?} from {:?}", presence.id, presence.addr);
 
                     writer.shutdown().unwrap();

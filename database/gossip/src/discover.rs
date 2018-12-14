@@ -6,7 +6,8 @@
 //! replying server to ignore in incompatible peers
 
 use std::io::{self, Write, ErrorKind};
-use std::time::Instant;
+use std::time::{Instant, Duration};
+use std::thread;
 use std::net::UdpSocket as UdpSocket2;
 
 use nix::ifaddrs::getifaddrs;
@@ -67,6 +68,7 @@ impl Stream for Discover {
         loop {
             if let Some((nbuf, addr)) = self.answer_to {
                 if let Some(packet) = Packet::from_vec(&self.buf[0..nbuf]) {
+
                     if packet.key == self.packet.key && 
                        packet.version == self.packet.version &&
                        packet.contact_port != self.packet.contact_port  {
@@ -94,11 +96,11 @@ impl Discover {
         let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8004);
         let socket = UdpBuilder::new_v4().unwrap()
             .reuse_address(true).unwrap()
-            .reuse_port(true).unwrap()
+            //.reuse_port(true).unwrap()
             .bind(addr).unwrap();
 
         socket.set_broadcast(true).unwrap();
-        socket.set_nonblocking(true).unwrap();
+        //socket.set_nonblocking(true).unwrap();
 
         let packet = Packet::new(version, network, contact_port);
 
@@ -143,7 +145,7 @@ impl Beacon {
         
         let socket = UdpBuilder::new_v4().unwrap()
             .reuse_address(true).unwrap()
-            .reuse_port(true).unwrap()
+            //.reuse_port(true).unwrap()
             .bind(addr).unwrap();
 
         socket.set_broadcast(true).unwrap();
@@ -188,24 +190,27 @@ impl Beacon {
 
             'inner: loop {
                 let (nread, mut addr) = match self.socket.recv_from(&mut self.buf) {
-                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => break 'inner,
+                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                        break 'inner
+                    },
                     Ok(a) => a,
                     _ => return None
                 };
 
                 // check if request originates from our address and the corresponding port
                 if let Some(packet) = Packet::from_vec(&self.buf[0..nread]) {
-                    if !my_ips.contains(&addr.ip()) || packet.contact_port != self.packet.contact_port {
-                        if packet.key == self.packet.key && 
-                           packet.version == self.packet.version {
+                    if (!my_ips.contains(&addr.ip()) || packet.contact_port != self.packet.contact_port) &&
+                        packet.key == self.packet.key && 
+                        packet.version == self.packet.version {
                             addr.set_port(packet.contact_port);
 
                             println!(" found peer at {}", addr);
                             return Some(addr);
-                        }
                     }
                 }
             }
+
+            thread::sleep(Duration::from_millis(50));
 
         }
     }
