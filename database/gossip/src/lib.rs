@@ -99,6 +99,7 @@ impl<T: Inspector> Spread<T> {
     }
 
     pub fn write(&self, packet: Packet) {
+        println!("Write {:?}", packet);
         let mut remove = Vec::new();
         {
             let mut peers = self.peers.lock().unwrap();
@@ -328,15 +329,17 @@ impl<T: Inspector> Stream for Gossip<T> {
                     // ask for other peers if this is our contact
                     if self.books.is_empty() {
                         writer.buffer(Packet::GetPeers(None));
+                        writer.poll_flush().unwrap();
                     }
 
                     // if everything is fine, send new transitions for this peer
                     for transition in self.inspector.lock().unwrap().subgraph(tips) {
                         writer.buffer(Packet::Push(transition));
-                    }
 
-                    // write everything to the peer
-                    writer.poll_flush().unwrap();
+                        // write everything to the peer
+                        writer.poll_flush().unwrap();
+
+                    }
 
                     self.books.insert(presence.id.clone(), presence.clone());
 
@@ -354,6 +357,7 @@ impl<T: Inspector> Stream for Gossip<T> {
         }
 
         // now try to get a new packet from the hooked peers
+        loop {
         let res = self.recv.poll();
         let (id, packet) = try_ready!(res.map_err(|_| io::ErrorKind::Other)).unwrap();
         
@@ -393,10 +397,13 @@ impl<T: Inspector> Stream for Gossip<T> {
 
                     // the peer has send us a new block of data, forward it
                     return Ok(Async::Ready(Some(Packet::Push(transition))));
+                } else {
+                    trace!("Got a well-known transition!");
                 }
             },
             Packet::File(file_id, data) => {
                 if let Some(data) = data {
+                    println!("Got file: {:?}", file_id);
                     return Ok(Async::Ready(Some(Packet::File(file_id, Some(data)))));
                 } else {
                     println!("Get file: {:?}", file_id);
@@ -408,11 +415,10 @@ impl<T: Inspector> Stream for Gossip<T> {
             Packet::Close => {
                 self.books.remove(&id);
 
-                //println!("Gossip: Connection closed to {}", id);
+                info!("Connection to {:?} closed", id);
             },
             _ => {}
         }
-
-        return Ok(Async::NotReady);
+        }
     }
 }

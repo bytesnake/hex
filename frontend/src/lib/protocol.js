@@ -1,27 +1,7 @@
 import { guid } from './uuid.js'
-//const _proto2 = import('./hex_server_protocol.js');
-
-//const _proto = import('./hex_server_protocol_bg.wasm').then(_ => {
-    const _proto = import(/* webpackChunkName: "hex_server_protocol" */ './hex_server_protocol');
-
-//    return _proto;
-//});
+const _proto = import(/* webpackChunkName: "hex_server_protocol" */ './hex_server_protocol');
 
 _proto.catch(x => console.log("REJECT: " + x));
-//import _proto from './hex_server_protocol.js';
-
-// Since webpack will change the name and potentially the path of the
-// `.wasm` file, we have to provide a `locateFile()` hook to redirect
-// to the appropriate URL.
-// More details: https://kripken.github.io/emscripten-site/docs/api_reference/module.html
-/*const module = fibonacci({
-  locateFile(path) {
-    if(path.endsWith('.wasm')) {
-      return fibonacciModule;
-    }
-    return path;
-  }
-});*/
 
 const CALLS = {
     Search: ["query"],
@@ -44,7 +24,7 @@ const CALLS = {
     UploadYoutube: ["path"],
     VoteForTrack: ["key"],
     AskUploadProgress: [],
-    GetToken: ["GetToken"],
+    GetToken: ["token"],
     UpdateToken: ["token", "key", "played", "pos"],
     CreateToken: [],
     LastToken: [],
@@ -61,6 +41,7 @@ class Protocol {
         let self = this;
         this.buffered_requests = [];
         this.pending_requests = {};
+        this.transaction_fncs = [];
 
         // create function calls to the protocol
         for(const call in CALLS) {
@@ -109,6 +90,10 @@ class Protocol {
         }
     }
 
+    ontransition(fn) {
+        this.transaction_fncs.push(fn);
+    }
+
     message(msg) {
         let answ = new proto.Wrapper(new Uint8Array(msg.data));
         
@@ -117,8 +102,10 @@ class Protocol {
         
         const id = answ.id();
         if(id[0] == 0 && id[1] == 0 && id[2] == 0 && id[3] == 0) {
-            console.log("Got new transition, special case");
-            console.log(answ.action());
+            for(const fn in this.transaction_fncs) {
+                this.transaction_fncs[fn](answ.action())
+            }
+
             return;
         } else if(!id) {
             console.log(new Uint8Array(msg.data));

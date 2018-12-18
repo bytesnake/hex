@@ -6,6 +6,7 @@ extern crate rb;
 extern crate rand;
 
 extern crate futures;
+extern crate hex_conf;
 extern crate hex_database;
 extern crate hex_music_container;
 
@@ -27,13 +28,25 @@ use error::Error;
 use hex_database::{Instance, Token, GossipConf};
 
 fn main() {
-    let path = env::args().skip(1).next()
-        .map(|x| PathBuf::from(&x))
-        .filter(|x| x.exists())
-        .ok_or(Error::InvalidPath).expect("Could not find path!");
-
+    let (conf, path) = match hex_conf::Conf::new() {
+        Ok(x) => x,
+        Err(err) => {
+            eprintln!("Error: Could not load configuration {:?}", err);
+            (hex_conf::Conf::default(), PathBuf::from("/opt/music/"))
+        }
+    };
     let data_path = path.join("data");
-    let mut instance = Instance::from_file(&path.join("music.db"), GossipConf::new());
+    let db_path = path.join("music.db");
+
+    let mut gossip = GossipConf::new();
+    
+    if let Some(ref peer) = conf.peer {
+        gossip = gossip.addr((conf.host, peer.port));
+        gossip = gossip.id(peer.id());
+        gossip = gossip.network_key(peer.network_key());
+    }
+
+    let mut instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
 
     let (sender, receiver) = channel();

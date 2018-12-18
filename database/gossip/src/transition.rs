@@ -20,12 +20,10 @@ pub trait Inspector {
     fn get_file(&self, key: &[u8]) -> Option<Vec<u8>>;
 
     fn subgraph(&self, mut tips: Vec<Transition>) -> Vec<Transition> {
-        //println!("Got tips {}", tips.clone().into_iter().map(|x| x.key.to_string()).collect::<Vec<String>>().join(","));
-
         // create a sample of the subgraph, starting by the given tips
         let mut in_transitions: HashSet<Transition> = HashSet::from_iter(tips.iter().cloned());
 
-        while in_transitions.len() < 64 {
+        while in_transitions.len() < 64 && !tips.is_empty() {
             tips = tips.into_iter()
                 .map(|x| {
                     let refs = x.refs.into_iter().filter(|x| self.has(&x)).collect();
@@ -36,27 +34,27 @@ pub trait Inspector {
             for tip in &tips {
                 in_transitions.insert(tip.clone());
             }
-
-            if tips.is_empty() {
-                break;
-            }
         }
         
         trace!("Got {} transitions for checking", in_transitions.len());
-
-        //trace!("My tips are {:?}", self.tips().into_iter().map(|x| x.to_string()));
 
         // start at our tips and run till we reach the sampled transitions
         let tips = self.restore(self.tips()).unwrap();
         let mut queue = VecDeque::from_iter(tips.iter().cloned());
         let mut transitions = Vec::new();
+        let mut inserted = HashSet::new();
 
         while !queue.is_empty() {
             let a = match queue.pop_front() {
                 Some(x) => {
+                    if inserted.contains(&x.key) {
+                        continue;
+                    }
+
                     if !in_transitions.contains(&x) {
                         trace!("Transition {}", x.key.to_string());
                         transitions.push(x.clone());
+                        inserted.insert(x.key.clone());
                     }
 
                     x
@@ -72,6 +70,9 @@ pub trait Inspector {
                 }
             }
         }
+
+        transitions.sort_unstable_by_key(|x| x.key.0);
+        transitions.dedup();
 
         trace!("Returning {} transitions", transitions.len());
 

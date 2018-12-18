@@ -71,7 +71,7 @@ impl State {
         }
     }
 
-    pub fn process_request(&mut self, origin: String, req: Request) -> Answer {
+    pub fn process_request(&mut self, req: Request) -> Answer {
         let Request { id, msg } = req;
         let mut remove = false;
 
@@ -133,7 +133,7 @@ impl State {
                 let prior_state = entry
                     .or_insert_with(|| {
                         //collection.add_event(Action::PlaySong(key.unwrap()).with_origin(origin)).unwrap();
-                        let mut file = File::open(data_path.join(key.unwrap().to_path())).unwrap();
+                        let file = File::open(data_path.join(key.unwrap().to_path())).unwrap();
 
                         RequestState::Stream {
                             container: Container::<File>::load(file).unwrap(),
@@ -148,7 +148,7 @@ impl State {
 
 
                 let mut pcm = Ok(Vec::new());
-                for i in 0..10 {
+                for _ in 0..10 {
                     let data = container.next_packet(Configuration::Stereo)
                         .map(|x| {
                             unsafe {
@@ -233,7 +233,7 @@ impl State {
                 };
 
                 self.collection.add_playlist(playlist.clone())
-                    .map(|x| AnswerAction::AddPlaylist(playlist))
+                    .map(|_| AnswerAction::AddPlaylist(playlist))
                     .map_err(|err| Error::Database(err))
             },
 
@@ -255,14 +255,14 @@ impl State {
 
             RequestAction::AddToPlaylist { key, playlist } => {
                 self.collection.add_to_playlist(key, playlist)
-                    .map(|x| AnswerAction::AddToPlaylist)
+                    .map(|_| AnswerAction::AddToPlaylist)
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::DeleteFromPlaylist { key, playlist } => {
-                self.collection.delete_from_playlist(key, playlist);
-
-                Ok(AnswerAction::DeleteFromPlaylist)
+                self.collection.delete_from_playlist(key, playlist)
+                    .map(|_| AnswerAction::DeleteFromPlaylist)
+                    .map_err(|err| Error::Database(err))
             },
 
             RequestAction::GetPlaylists => {
@@ -313,8 +313,6 @@ impl State {
             },
 
             RequestAction::AskUploadProgress => {
-                println!("Ask upload progress");
-
                 // tick each item
                 for item in &mut self.uploads {
                     if let Some(track) = item.tick(self.data_path.clone()) {
@@ -439,10 +437,10 @@ impl State {
     /// * `origin` - where does the request originates from
     /// * `msg` - what is the content of the message
     /// * `gtoken` - globally shared token, used to change the token in frontend
-    pub fn process(&mut self, origin: String, buf: Vec<u8>) -> Option<Vec<u8>> {
+    pub fn process(&mut self, buf: Vec<u8>) -> Option<Vec<u8>> {
         //println!("Process buf {}", buf.len());
         Request::try_from(&buf)
-            .map(|req| self.process_request(origin, req))
+            .map(|req| self.process_request(req))
             .and_then(|answer| answer.to_buf())
             .map_err(|err| { println!("Parse error: {:?}", err); err})
             .ok()

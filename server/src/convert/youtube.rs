@@ -4,7 +4,8 @@ use std::process::Command;
 use std::process::Stdio;
 use std::result;
 
-use tokio_io::{codec, AsyncRead};
+use tokio_io::AsyncRead;
+use tokio_codec;
 use tokio_process::{Child, ChildStderr, ChildStdout, CommandExt};
 use tokio_core::reactor::Handle;
 
@@ -17,7 +18,7 @@ struct LineCodec;
 
 // straight from
 // https://github.com/tokio-rs/tokio-line/blob/master/simple/src/lib.rs
-impl codec::Decoder for LineCodec {
+impl tokio_codec::Decoder for LineCodec {
     type Item = String;
     type Error = io::Error;
 
@@ -37,11 +38,11 @@ impl codec::Decoder for LineCodec {
 }
 
 /// A stream of Xi core stderr lines
-pub struct ToLine<T>(codec::FramedRead<T, LineCodec>);
+pub struct ToLine<T>(tokio_codec::FramedRead<T, LineCodec>);
 
 impl<T: AsyncRead> ToLine<T> {
     fn new(stderr: T) -> Self {
-        ToLine(codec::FramedRead::new(stderr, LineCodec {}))
+        ToLine(tokio_codec::FramedRead::new(stderr, LineCodec {}))
     }
 }
 

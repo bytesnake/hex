@@ -52,7 +52,7 @@ impl Instance {
                 let gossip = gossip
                     .map_err(|e| eprintln!("Gossip err: {}", e))
                     .and_then(move |x| {
-                        println!("Got something!");
+                        trace!("Got a new transition!");
 
                         match x {
                             Packet::Push(x) => {

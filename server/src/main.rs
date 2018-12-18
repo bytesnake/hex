@@ -23,11 +23,14 @@
 //!
 //! and can then be passed as an argument. (e.g. `./target/release/hex_server conf.toml`)
 
+#[macro_use]
+extern crate log;
 extern crate websocket;
 #[macro_use]
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate tokio_codec;
 extern crate tokio_process;
 extern crate bytes;
 extern crate hyper;
@@ -41,7 +44,6 @@ extern crate curl;
 extern crate chromaprint;
 extern crate base64;
 extern crate tempfile;
-extern crate sha2;
 
 extern crate hex_conf;
 extern crate hex_database;

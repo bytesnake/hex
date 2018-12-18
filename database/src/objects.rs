@@ -167,6 +167,14 @@ pub struct Playlist {
 
 #[cfg(feature = "rusqlite")]
 impl Playlist {
+    pub fn new(key: PlaylistKey, title: String, origin: PeerId) -> Playlist {
+        Playlist {
+            key, title, origin,
+            desc: None,
+            tracks: Vec::new()
+        }
+    }
+
     pub fn from_row(row: &Row) -> Result<Playlist> {
         let keys: Vec<u8> = row.get_checked(3)?;
         let keys: Vec<TrackKey> = keys.chunks(16)

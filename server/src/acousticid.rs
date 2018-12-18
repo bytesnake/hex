@@ -7,7 +7,6 @@ use serde_json::Value;
 use curl::easy::{Form,Easy};
 
 use error::{Error, Result};
-use sha2::{Digest, Sha256};
 
 /// Calculate a fingerprint to lookup music
 ///
@@ -27,7 +26,7 @@ pub fn get_fingerprint(num_channel: u16, data: &[i16]) -> Result<Vec<u32>> {
         .map(|x| x.into_iter().map(|x| x as u32).collect())
 }
 
-pub fn get_hash(fingerprint: &[i32]) -> i64 {
+/*pub fn get_hash(fingerprint: &[i32]) -> i64 {
     let mut hasher = Sha256::new();
 
     let v_bytes: &[u8] = unsafe {
@@ -41,7 +40,7 @@ pub fn get_hash(fingerprint: &[i32]) -> i64 {
     let a = hasher.result();
     (a[7] as i64) << 56 | (a[6] as i64) << 48 | (a[5] as i64) << 40 | (a[4] as i64) << 32 | 
         (a[3] as i64) << 24 | (a[2] as i64) << 16 | (a[1] as i64) << 8 | (a[0] as i64)
-}
+}*/
 
 /// Fetch metadata from acousticid.org
 ///

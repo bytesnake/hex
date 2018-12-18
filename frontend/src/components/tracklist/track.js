@@ -194,7 +194,6 @@ export default class Track extends Component {
     }
 
     render({size, track_key, title, album, interpret, people, composer}, {minimal, hide, playlists, suggestions, downloading}) {
-        console.log(track_key);
         if(hide)
             return;
 

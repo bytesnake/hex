@@ -62,7 +62,7 @@ fn worker(mut sender: Sender<DownloadProgress>, id: PacketId, format: String, tr
                         )
                     };
 
-                    out.write(&buf); 
+                    out.write(&buf).unwrap();
                 },
                 Err(MusicError::ReachedEnd) => break,
                 Err(err) => { return Err(Error::MusicContainer(err)); }
@@ -113,7 +113,7 @@ impl DownloadState {
         let (sender, recv) = channel(10);
 
         let thread = thread::spawn(move || {
-            let res = worker(sender, id, format, tracks, num_channel, data_path)?;
+            worker(sender, id, format, tracks, num_channel, data_path)?;
 
             Ok(())
         });

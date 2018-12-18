@@ -19,8 +19,6 @@ pub enum Error {
     Protocol(hex_server_protocol::Error),
     /// Input/Output error in Rust std
     Io(io::Error),
-    /// Configuration error, most of the time wrong format
-    Configuration,
     /// AcousticID error, e.g. could not generate fingerprint
     AcousticID,
     /// Wrong response wrong the acousticID server
@@ -31,8 +29,6 @@ pub enum Error {
     ConvertFFMPEG,
     /// Could not download with youtube-dl
     ConvertYoutube,
-    /// Parsing failed
-    Parsing,
     /// Channel failed
     ChannelFailed
 }

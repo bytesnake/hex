@@ -4,7 +4,6 @@
 //! the latest token to all clients and logs every events concerning connecting and disconnecting. 
 
 use std::fmt::Debug;
-use std::time::Instant;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -46,8 +45,14 @@ pub fn start(conf: Conf, path: PathBuf) {
 
     let tmp = broadcasts.clone();
     let c = instance.recv().for_each(|x| {
-        for i in &(*tmp.borrow()) {
-            i.clone().send(x.clone()).wait().unwrap();
+        let mut senders = tmp.borrow_mut();
+
+        senders.retain(|x| !x.is_closed());
+
+        for i in &mut *senders {
+            if let Err(err) = i.try_send(x.clone()) {
+                eprintln!("Got error: {}", err);
+            }
         }
 
         Ok(())
@@ -58,11 +63,11 @@ pub fn start(conf: Conf, path: PathBuf) {
         // we don't wanna save the stream if it drops
         .map_err(|InvalidConnection { error, .. }| error)
         .for_each(|(upgrade, addr)| {
-            println!("Got a connection from: {}", addr);
+            info!("Got a connection from: {}", addr);
             // check if it has the protocol we want
             if !upgrade.protocols().iter().any(|s| s == "rust-websocket") {
                 // reject it if it doesn't
-                spawn_future(upgrade.reject(), "Upgrade Rejection", &handle);
+                spawn_future(upgrade.reject(), &handle);
                 return Ok(());
             }
 
@@ -82,24 +87,20 @@ pub fn start(conf: Conf, path: PathBuf) {
 
                     let (sink, stream) = s.split();
 
-                    //sink.send(OwnedMessage::Close(None));
-
                     let stream = stream.filter_map(move |m| {
                         match m {
                             OwnedMessage::Ping(p) => Some(OwnedMessage::Pong(p)),
                             OwnedMessage::Pong(_) => None,
                             OwnedMessage::Text(_) => Some(OwnedMessage::Text("Text not supported".into())),
-                            OwnedMessage::Binary(data) => {
-                                state.process(addr.to_string(), data).map(|x| OwnedMessage::Binary(x))
-                            },
+                            OwnedMessage::Binary(data) => state.process(data).map(|x| OwnedMessage::Binary(x)),
                             OwnedMessage::Close(_) => {
-                                //state.collection.add_event(Action::Connect(now.elapsed().as_secs() as f32).with_origin(addr.to_string())).unwrap();
-
+                                info!("Client disconnected from {}", addr);
                                 Some(OwnedMessage::Close(None))
                             }
                         }
                     });
 
+                    // forward transitions
                     let push = r.and_then(|x| {
                         Answer::new([0u32; 4], Ok(AnswerAction::Transition(x))).to_buf()
                             .map(|x| OwnedMessage::Binary(x))
@@ -107,26 +108,24 @@ pub fn start(conf: Conf, path: PathBuf) {
                     }).map_err(|_| WebSocketError::NoDataAvailable);
 
                     Stream::select(stream, push)
-                    .forward(sink)
-                    .and_then(move |(_, sink)| {
-                        println!("BLUB");
-                        sink.send(OwnedMessage::Close(None))
-                    })
+                        .forward(sink)
+                        .and_then(move |(_, sink)| {
+                            sink.send(OwnedMessage::Close(None))
+                        })
                 });
 
-            spawn_future(f, "Client Status", &handle);
+            spawn_future(f, &handle);
+
             Ok(())
         }).map_err(|_| ());
-
-    println!("Server is running!");
 
 	core.run(Future::join(f, c)).unwrap();
 }
 
-fn spawn_future<F, I, E>(f: F, desc: &'static str, handle: &Handle)
+fn spawn_future<F, I, E>(f: F, handle: &Handle)
 	where F: Future<Item = I, Error = E> + 'static,
 	      E: Debug
 {
-	handle.spawn(f.map_err(move |e| println!("{}: '{:?}'", desc, e))
-	              .map(move |_| println!("{}: Finished.", desc)));
+	handle.spawn(f.map_err(move |_| ())
+	              .map(move |_| ()));
 }

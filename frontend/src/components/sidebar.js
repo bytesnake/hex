@@ -20,6 +20,26 @@ export default class Sidebar extends Component {
         Protocol.get_playlists().then(x => {
             self.setState({playlists: x});
         });
+
+        Protocol.ontransition(action => {
+            if("DeletePlaylist" in action["Transition"]) {
+                let playlists = self.state.playlists.filter(x => x.key != action["Transition"]["DeletePlaylist"]);
+                console.log(playlists)
+                self.setState({playlists});
+            }
+
+            if("UpsertPlaylist" in action["Transition"]) {
+                const index = self.state.playlists.findIndex(e => e.key == action["Transition"]["UpsertPlaylist"].key);
+
+                let playlists = self.state.playlists;
+                if(index === -1)
+                    playlists.push(action["Transition"]["UpsertPlaylist"]);
+                else
+                    playlists[index] = action["Transition"]["UpsertPlaylist"];
+
+                self.setState({playlists});
+            }
+        });
     }
 
     click(e) {
@@ -62,7 +82,7 @@ export default class Sidebar extends Component {
                         <div class={style.add_playlist}><input placeholder="Name" onClick={e => e.stopPropagation()} ref={x => this.elm_name = x} onKeyup={this.add_playlist.bind(this)}/><Icon icon="add" onClick={this.add_playlist.bind(this)} /> </div>
                     )}
                     { playlists && playlists.map( x => (
-                        <Navigation.Link href={"/playlist/" + x.key} class={style.link}><Icon icon="queue music" /><b>{x.title}</b><span>{x.count}</span></Navigation.Link>
+                        <Navigation.Link href={"/playlist/" + x.key} class={style.link}><Icon icon="queue music" /><b>{x.title}</b><span>{x.tracks.length}</span></Navigation.Link>
                     ))}
 				</Navigation>
 			</Layout.Drawer>

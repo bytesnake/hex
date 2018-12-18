@@ -15,9 +15,8 @@ use nix::sys::socket::SockAddr;
 use tokio::{net::UdpSocket, reactor::Handle};
 use futures::{Async, Stream};
 use std::net::{SocketAddrV4, Ipv4Addr, SocketAddr, IpAddr};
-use std::os::unix::io::AsRawFd;
 
-use net2::{unix::UnixUdpBuilderExt, UdpBuilder};
+use net2::UdpBuilder;
 use bincode::{serialize, deserialize};
 use ring::digest;
 
@@ -68,10 +67,11 @@ impl Stream for Discover {
         loop {
             if let Some((nbuf, addr)) = self.answer_to {
                 if let Some(packet) = Packet::from_vec(&self.buf[0..nbuf]) {
-
                     if packet.key == self.packet.key && 
                        packet.version == self.packet.version &&
                        packet.contact_port != self.packet.contact_port  {
+
+                        println!("Send to {}", addr);
 
                         let buf = self.packet.to_vec();
 
@@ -199,6 +199,8 @@ impl Beacon {
 
                 // check if request originates from our address and the corresponding port
                 if let Some(packet) = Packet::from_vec(&self.buf[0..nread]) {
+                    println!("Got: {:?} from {}", packet, addr);
+
                     if (!my_ips.contains(&addr.ip()) || packet.contact_port != self.packet.contact_port) &&
                         packet.key == self.packet.key && 
                         packet.version == self.packet.version {

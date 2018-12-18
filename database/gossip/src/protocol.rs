@@ -229,10 +229,12 @@ impl PeerCodecRead<TcpStream> {
 
         let stream = self.map_err(|_| ())
         .and_then(move |x| {
-            task.notify();
             sender.start_send((id.clone(), x)).map_err(|err| {println!("Send error: {}", err); ()})
         })    
-        .and_then(move |_| sender3.poll_complete().map_err(|_| ()))
+        .and_then(move |_| {
+            task.notify();
+            sender3.poll_complete().map_err(|e| eprintln!("Err = {}", e))
+        })
         .for_each(move |_| Ok(()))
         .then(move |_| {
             // ugh
@@ -436,7 +438,10 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
         /// Flush the whole write buffer to the underlying socket
     pub fn poll_flush(&mut self) -> Poll<(), io::Error> {
         while !self.wr.is_empty() {
+            println!("{}", self.wr.len());
             let n = try_ready!(self.write.poll_write(&self.wr));
+
+            println!("Wrote {}", n);
 
             assert!(n > 0);
 
@@ -474,6 +479,7 @@ impl<T: Debug + AsyncRead> Stream for PeerCodecRead<T> {
         }
         
         let res = self.parse_packet();
+
         match res {
             Ok(msg) => Ok(Async::Ready(Some(msg))),
             // peer has a wrong version, close connection
