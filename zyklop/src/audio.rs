@@ -38,6 +38,7 @@ impl AudioDevice {
         let mut written = 0;
         loop {
             let n = self.producer.write_blocking(&buf[written..]).expect("Couldn't queue block to buffer");
+
             written += n;
 
             if written == buf.len() {

@@ -19,6 +19,7 @@ impl Stream {
         let path = data_path.join(track.key.to_path());
         
         while !path.exists() {
+            println!("Wait for file ..");
             thread::sleep(Duration::from_millis(500));
         }
 
@@ -87,8 +88,6 @@ impl Current {
         if let Some(ref mut stream) = self.stream {
             match stream.next() {
                 Ok(buf) => {
-                    println!("Acquired new buffer {}", buf.len());
-            
                     if let Some(ref mut pos) = self.token.pos {
                         *pos += buf.len() as f64 / 2.0 / 48000.0;
                     }
@@ -96,6 +95,8 @@ impl Current {
                     return Some(buf);
                 },
                 Err(Error::MusicContainer(hex_music_container::error::Error::ReachedEnd)) => {
+                    println!("Reached end!");
+
                     remove = true;
                 },
                 Err(err) => { eprintln!("Error: {:?}", err); }

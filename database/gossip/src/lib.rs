@@ -125,10 +125,13 @@ impl<T: Inspector> Spread<T> {
 
         if let Some(peer) = self.peers.lock().unwrap().get_mut(&id) {
             peer.buffer(packet);
-            if let Err(err) = peer.poll_flush() {
-                println!("Could not write = {:?}", err);
 
-                remove = true;
+            while !peer.is_empty() {
+                if let Err(err) = peer.poll_flush() {
+                    println!("Could not write = {:?}", err);
+
+                    remove = true;
+                }
             }
         }
 
@@ -403,10 +406,8 @@ impl<T: Inspector> Stream for Gossip<T> {
             },
             Packet::File(file_id, data) => {
                 if let Some(data) = data {
-                    println!("Got file: {:?}", file_id);
                     return Ok(Async::Ready(Some(Packet::File(file_id, Some(data)))));
                 } else {
-                    println!("Get file: {:?}", file_id);
                     if let Some(data) = self.inspector.lock().unwrap().get_file(&file_id) {
                         self.writer.write_to(Packet::File(file_id, Some(data)), id);
                     }

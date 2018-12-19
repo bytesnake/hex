@@ -351,6 +351,7 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
             self.rd.reserve(8192);
             let read = self.read.read_buf(&mut self.rd);
 
+            println!("read {:?}", read);
             let n = match read {
                 Ok(Async::Ready(n)) => n,
                 Ok(Async::NotReady) => return Ok(Async::NotReady),
@@ -438,10 +439,9 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
         /// Flush the whole write buffer to the underlying socket
     pub fn poll_flush(&mut self) -> Poll<(), io::Error> {
         while !self.wr.is_empty() {
-            println!("{}", self.wr.len());
             let n = try_ready!(self.write.poll_write(&self.wr));
 
-            println!("Wrote {}", n);
+            println!("Wrote {} left {}", n, self.wr.len());
 
             assert!(n > 0);
 
@@ -453,6 +453,10 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
 
     pub fn shutdown(mut self) -> Poll<(), io::Error> {
         self.write.shutdown()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.wr.len() == 0
     }
 }
 

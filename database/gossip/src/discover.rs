@@ -20,6 +20,7 @@ use net2::UdpBuilder;
 use bincode::{serialize, deserialize};
 use ring::digest;
 
+use local_ip;
 use protocol::NetworkKey;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -56,7 +57,8 @@ pub struct Discover {
     socket: UdpSocket,
     buf: Vec<u8>,
     answer_to: Option<(usize, SocketAddr)>,
-    packet: Packet
+    packet: Packet,
+    ips: Vec<IpAddr>
 }
 
 impl Stream for Discover {
@@ -69,9 +71,8 @@ impl Stream for Discover {
                 if let Some(packet) = Packet::from_vec(&self.buf[0..nbuf]) {
                     if packet.key == self.packet.key && 
                        packet.version == self.packet.version &&
-                       packet.contact_port != self.packet.contact_port  {
-
-                        println!("Send to {}", addr);
+                       (packet.contact_port != self.packet.contact_port ||
+                        !self.ips.contains(&addr.ip())) {
 
                         let buf = self.packet.to_vec();
 
@@ -108,7 +109,8 @@ impl Discover {
             buf: vec![0; 1024],
             answer_to: None,
             packet,
-            socket: UdpSocket::from_std(socket, &Handle::default()).unwrap()
+            socket: UdpSocket::from_std(socket, &Handle::default()).unwrap(),
+            ips: local_ip::get().unwrap()
         }
     }
 }
@@ -199,8 +201,6 @@ impl Beacon {
 
                 // check if request originates from our address and the corresponding port
                 if let Some(packet) = Packet::from_vec(&self.buf[0..nread]) {
-                    println!("Got: {:?} from {}", packet, addr);
-
                     if (!my_ips.contains(&addr.ip()) || packet.contact_port != self.packet.contact_port) &&
                         packet.key == self.packet.key && 
                         packet.version == self.packet.version {

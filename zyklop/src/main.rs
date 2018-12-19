@@ -16,16 +16,18 @@ mod events;
 mod token;
 
 use std::env;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 use std::thread;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{Sender, Receiver, channel};
 use futures::Future;
 
 use events::Event;        
 
 use error::Error;
 
-use hex_database::{Instance, Token, GossipConf};
+use hex_database::{Instance, Token, GossipConf, TrackKey};
 
 fn main() {
     let (conf, path) = match hex_conf::Conf::new() {
@@ -49,10 +51,21 @@ fn main() {
     let mut instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
 
-    let (sender, receiver) = channel();
+    let data_path_2 = data_path.clone();
+    let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
     thread::spawn(move || loop {
         if let Ok(key) = receiver.recv() {
-            instance.ask_for_file(key).wait().unwrap();
+            let path = data_path_2.join(key.to_path());
+            if path.exists() {
+                continue;
+            }
+
+            println!("Ask for file {}", key.to_string());
+            let buf = instance.ask_for_file(key.to_vec()).wait().unwrap();
+
+            println!("Got file write ..!");
+            let mut file = File::create(path).unwrap();
+            file.write(&buf).unwrap();
         }
     });
     
@@ -63,6 +76,8 @@ fn main() {
     let mut create_counter = 0;
     loop {
         if let Ok(events) = events.try_recv() {
+            println!("Got events {:?}", events);
+
             for event in events {
                 match event {
                     Event::ButtonPressed(x) => {
@@ -88,7 +103,7 @@ fn main() {
                         match view.get_token(num as i64) {
                             Ok((a, Some((_, b)))) => {
                                 for track in &b {
-                                    sender.send(track.key.to_vec()).unwrap();
+                                    sender.send(track.key.clone()).unwrap();
                                 }
                                 
                                 token = Some(token::Current::new(a, b, data_path.clone()));
@@ -119,6 +134,10 @@ fn main() {
                             if let Err(err) = view.update_token(token, None, Some(played), pos) {
                                 eprintln!("Error: Could not update token {:?} because {:?}", token, err);
                             }
+
+                            if let Err(err) = view.use_token(token) {
+                                eprintln!("Error: Could not user token {:?} because {:?}", token, err);
+                            }
                         }
                         
                         token = None;
@@ -134,12 +153,11 @@ fn main() {
         }*/
 
         if let Some(ref mut token) = token {
-            if token.has_tracks() {
-                println!("Next buffer!");
+            //if token.has_tracks() {
                 if let Some(packet) = token.next_packet() {
                     audio.buffer(&packet);
                 }
-            }
+            //}
         }
     }
 }
