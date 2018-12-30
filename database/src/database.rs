@@ -217,6 +217,13 @@ impl View {
         vec
     }
 
+    pub fn get_num_tracks(&self) -> i64 {
+        let mut stmt = self.socket.prepare("SELECT COUNT(*) FROM Tracks").unwrap();
+        let count: i64 = stmt.query_map(&[], |row| row.get(0)).unwrap().next().unwrap().unwrap();
+
+        count
+    }
+
     /// Get a track with key `key`
     pub fn get_track(&self, key: TrackKey) -> Result<Track> {
         let mut stmt = self.socket.prepare("SELECT * FROM Tracks WHERE Key = ?").unwrap();
@@ -297,9 +304,14 @@ impl View {
     pub fn get_transitions(&self) -> Vec<Transition> {
         let mut stmt = self.socket.prepare("SELECT * FROM Transitions;").unwrap();
 
+
         let rows = stmt.query_map(&[], |x| transition_from_sql(x)).unwrap().filter_map(|x| x.ok()).collect();
 
         rows
+    }
+
+    pub fn get_num_transitions(&self, days: u32) -> u64 {
+        0
     }
 
     pub fn last_playlist_key(&self) -> Result<PlaylistKey> {
@@ -489,36 +501,37 @@ impl View {
         self.commit(TransitionAction::UpsertToken(token))
     }
 
-    /*
     /// Summarise a day (used by `nightly-worker`)
-    pub fn summarise_day(&self, day: String, connects: u32, plays: u32, adds: u32, removes: u32) -> Result<()> {
+    pub fn summarise_day(&self, day: String, transitions: u32, tracks: u32) -> Result<()> {
         self.socket.execute(
-            "INSERT INTO Summarise (day, connects, plays, adds, removes) VALUES (?1, ?2, ?3, ?4, ?5)",
-                &[&day, &connects, &plays, &adds, &removes]).map(|_| ())
+            "INSERT INTO Summary (Day, Transitions, Tracks) VALUES (?1, ?2, ?3)",
+                &[&day, &transitions, &tracks]).map(|_| ()).map_err(|e| Error::Sqlite(e))
+
     }
 
     /// Get a summarise of all days since beginning of use
-    pub fn get_summarisation(&self) -> Vec<(String, u32, u32, u32, u32)> {
+    pub fn get_complete_summary(&self) -> Vec<(String, u32, u32)> {
         let mut stmt = self.socket.prepare(
-            "SELECT day, connects, plays, adds, removes FROM Summarise;").unwrap();
+            "SELECT Day, Transitions, Tracks FROM Summary;").unwrap();
 
         let rows = stmt.query_map(&[], |x| {
-            (x.get(0), x.get(1), x.get(2), x.get(3), x.get(4))
+            (x.get(0), x.get(1), x.get(2))
         }).unwrap().filter_map(|x| x.ok()).collect();
 
         rows
     }
 
     /// Find the latest summarise day in the database
-    pub fn get_newest_summarise_day(&self) -> Result<String> {
+    pub fn get_latest_summary_day(&self) -> Result<String> {
         let mut stmt = self.socket.prepare(
-            "SELECT day FROM Summarise order by day desc limit 1;").unwrap();
+            "SELECT day FROM Summary order by Day desc limit 1;").unwrap();
 
         let mut query = stmt.query(&[]).unwrap();
-        let row = query.next().ok_or(Error::QueryReturnedNoRows)??;
+        let row = query.next().ok_or(Error::NotFound)?
+            .map_err(|e| Error::Sqlite(e))?;
 
         Ok(row.get(0))
-    }*/
+    }
 }
 
 #[cfg(test)]

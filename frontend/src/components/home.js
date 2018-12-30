@@ -31,13 +31,13 @@ export default class Home extends Component {
     };
 
     componentWillMount() {
-        Protocol.get_events()
+        /*Protocol.get_transitions()
             .then(x => {
                 console.log(x);
                 this.setState({ events: x })
-            });
+            });*/
 
-        Protocol.get_summarise()
+        Protocol.get_summary()
             .then(x => {
                 let dates = x.map(x => Date.parse(x[0]));
                 let m = new Date(Math.max.apply(null,dates));
@@ -57,7 +57,7 @@ export default class Home extends Component {
                     ]
                 };
 
-                this.setState({heatmap: plays, graph: adds, end: new Date(year, month+1, 0), start: new Date(year, month-8, 0) })
+                this.setState({heatmap: plays, graph: adds, end: new Date(year, month+1, 0), start: new Date(year, month-8, 0), events: [] })
             });
     }
 

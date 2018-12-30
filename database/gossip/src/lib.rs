@@ -99,7 +99,7 @@ impl<T: Inspector> Spread<T> {
     }
 
     pub fn write(&self, packet: Packet) {
-        println!("Write {:?}", packet);
+        //println!("Write {:?}", packet);
         let mut remove = Vec::new();
         {
             let mut peers = self.peers.lock().unwrap();

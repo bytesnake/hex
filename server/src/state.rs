@@ -392,13 +392,11 @@ impl State {
                     .map(|x| AnswerAction::LastToken(Some(x.0.token)))
                     .map_err(|err| Error::Database(err))
             },
-            RequestAction::GetSummarise => {
-                Ok(AnswerAction::GetSummarise(Vec::new()))
-                //Ok(AnswerAction::GetSummarise(self.collection.get_summarisation()))
+            RequestAction::GetSummary => {
+                Ok(AnswerAction::GetSummary(self.collection.get_complete_summary()))
             },
-            RequestAction::GetEvents => {
-                //Ok(AnswerAction::GetEvents(self.collection.get_events()))
-                Ok(AnswerAction::GetEvents(Vec::new()))
+            RequestAction::GetTransitions => {
+                Ok(AnswerAction::GetTransitions(self.collection.get_transitions()))
             },
             RequestAction::Download { format, tracks } => {
                 let id = id.clone();

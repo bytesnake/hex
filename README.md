@@ -1,11 +1,11 @@
 <img align="left" src="assets/github.png" width="220px"/>
 
-#  Hex - a personal music library
+#  Hex - a personal music service
 > "He was spending more nights now watching Hex trawl the invisible writings for any hints. In theory, because of the nature of L-space, absolutely everything was available to him, but that only meant that it was more or less impossible to find whatever it was you were looking for, which is the purpose of computers."
 >
 > &mdash; <cite>Terry Pratchett (in The Last Continent)</cite>
 
-Hex is a collection of crates which can store, manage, tokenise and play music. It was born out of the desire to be independent from any music provider and to support music tokens (real world objects like CDs representing a playlist). The project is written in Rust and at the moment running on two platforms, a music server and player.
+Hex is a collection of crates which can store, manage, tokenise and play music. It was born out of the desire to be independent from any music provider and to support music tokens (real world objects like CDs representing a playlist). The project is written in Rust and at the moment running on two peers, a storage and playback device.
 
 *What is the motivation for this project?*
  * having a music server running on a Raspberry Pi
@@ -14,12 +14,13 @@ Hex is a collection of crates which can store, manage, tokenise and play music. 
 
 *Of which parts is Hex made of?*
  * [database](database/) library - interface to a SQLite database
+ * [database/gossip](database/gossip/) library - peer discovery and database synchronisation with p2p overlay network
  * [music-container](music-container/) library - music codec with Opus and Spherical Harmonics
- * [sync](sync/) library - replicate database between peers (e.g. server and end device)
  * [server](server) binary - a HTTP and websocket server providing all the necessary calls
+ * [server/protocol](server/protocol) library - protocol objects support compiling to WASM
  * [frontend](frontend) website - nice GUI for music management
- * [cli](cli) binary - local management of the music collection without any server
- * [zyklop](zyklop) binary - music playing system with support for tokens in conjunction with a server
+ * [cli](cli) binary - local management of the music collection
+ * [zyklop](zyklop) binary - music playing system with support for tokens
  * [nightly-worker](nightly-worker) binary - summarize each day and perform some kind of cleanup
 
 *Can you give me a rough overview?*

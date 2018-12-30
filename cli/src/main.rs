@@ -15,13 +15,14 @@ mod play;
 mod modify;
 mod sync;
 
-use std::io::{self, Write};
-use std::env;
+use std::io::{self, Write, BufRead};
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::thread;
 use std::fs;
 use std::path::{Path, PathBuf};
-use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf};
+use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf, TrackKey};
 
-use getopts::Options;
+use futures::Future;
 
 fn main() {
     let (conf, path) = match hex_conf::Conf::new() {
@@ -34,7 +35,6 @@ fn main() {
     let data_path = path.join("data");
     let db_path = path.join("music.db");
 
-    let args: Vec<String> = env::args().collect();
     let mut gossip = GossipConf::new();
     
     if let Some(ref peer) = conf.peer {
@@ -43,62 +43,75 @@ fn main() {
         gossip = gossip.network_key(peer.network_key());
     }
 
-    let instance = Instance::from_file(&db_path, gossip);
+    let mut instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
 
-    // print overview of the database
-    if args.len() == 1 {
-        print_overview(&view);
-        return;
-    }
+    let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
+    let path_copy = data_path.clone();
+    thread::spawn(move || {
+        while let Ok(key) = receiver.recv() {
+            if !path_copy.join(key.to_string()).exists() {
+                instance.ask_for_file(key.to_vec()).wait().unwrap();
+            }
+        }
+    });
 
-    // in case the arguments are beginning with a value, we assume a search 
-    let mut search_pattern = args.iter().skip(1)
-        .take_while(|x| !x.contains("-")).cloned()
-        .collect::<Vec<String>>().join(" ");
+    loop {
+        print!(" > ");
+        io::stdout().flush().ok().expect("Could not flush stdout");
 
-    // now build the option pattern
-    let mut opts = Options::new();
-    opts.optopt("s", "search", "search for tracks", "QUERY");
-    opts.optopt("a", "action", "execute a certain action", "delete|modify|show|play|sync");
-    opts.optflag("h", "help", "hex command line");
-    let matches = opts.parse(&args[1..]).unwrap();
+        // get next line
+        let line1 = {
+            let stdin = io::stdin();
+            let mut iterator = stdin.lock().lines();
+            iterator.next().unwrap().unwrap()
+        };
 
-    if let Some(query) = matches.opt_str("s") {
-        search_pattern = query;
-    }
+        let mut args: Vec<&str> = line1.splitn(2, ' ').collect();
+        if args.len() == 0 {
+            continue;
+        } else if args.len() == 1 {
+            args.push("");
+        }
 
-    let mut action = "show".into();
-    if let Some(new_action) = matches.opt_str("a") {
-        action = new_action;
-    }
+        let query = SearchQuery::new(&args[1]);
+        let mut query = view.search_prep(query).unwrap();
+        let tracks: Vec<Track> = view.search(&mut query).collect();
 
-    let query = SearchQuery::new(&search_pattern);
-    let mut query = view.search_prep(query).unwrap();
-    let tracks: Vec<Track> = view.search(&mut query).collect();
+        let data_path = data_path.clone();
+        let sender = sender.clone();
+        match args[0] {
+            "" => {
+                print_overview(&view);
+            },
+            "show" => {
+                show_tracks(&args[1], tracks);
+            },
+            "delete" => {
+                delete_tracks(&view, &data_path, tracks);
+            },
+            "sync" => {
+                sync::sync_tracks(tracks, sender, data_path);
+            },
+            "play" => {
+                for key in tracks.iter().map(|x| x.key.clone()) {
+                    sender.send(key).unwrap();
+                }
 
-    match action.as_ref() {
-        "show" => {
-            show_tracks(&search_pattern, tracks);
-        },
-        "delete" => {
-            delete_tracks(&view, &data_path, tracks);
-        },
-        "sync" => {
-            sync::sync_tracks(tracks, instance, data_path);
-        },
-        "play" => {
-            play::play_tracks(data_path.clone(), tracks, instance);
-        },
-        "modify" => {
-            modify::modify_tracks(&view, tracks);
-        },
-        _ => {
-            println!("Unsupported action!");
-            return;
+                play::play_tracks(data_path.clone(), tracks);
+            },
+            "modify" => {
+                modify::modify_tracks(&view, tracks);
+            },
+            "quit" => {
+                println!("Exit ..");
+                return;
+            },
+            _ => {
+                println!("Unsupported action!");
+            }
         }
     }
-
 }
 
 fn show_tracks(query: &str, tracks: Vec<Track>) {

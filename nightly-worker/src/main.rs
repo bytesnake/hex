@@ -1,4 +1,5 @@
 extern crate chrono;
+extern crate hex_conf;
 extern crate hex_database;
 
 use std::env;
@@ -7,10 +8,25 @@ use hex_database::{Collection, Event, events::Action};
 use chrono::{TimeZone, Utc, Date, Duration};
 
 fn main() {
-    let db = env::args().skip(1).next()
-        .map(|x| Collection::from_file(Path::new(&x))).expect("Please specify database path");
+    let (conf, path) = match hex_conf::Conf::new() {
+        Ok(x) => x,
+        Err(err) => {
+            eprintln!("Error: Could not load configuration {:?}", err);
+            (hex_conf::Conf::default(), PathBuf::from("/opt/music/"))
+        }
+    };
+    let db_path = path.join("music.db");
 
-    let newest_date = db.get_newest_summarise_day()
+    let mut gossip = GossipConf::new();
+
+    if let Some(ref peer) = conf.peer {
+        gossip = gossip.id(peer.id());
+    }
+
+    let instance = Instance::from_file(&db_path, gossip);
+    let view = instance.view();
+
+    let newest_date = view.get_latest_summary_day()
         .map(|x| Utc.datetime_from_str(&format!("{} 10:10:00", x), "%Y-%m-%d %H:%M:%S").unwrap().date())
         .unwrap_or(Utc::today().checked_sub_signed(Duration::days(2)).unwrap());
 
@@ -21,28 +37,14 @@ fn main() {
         return;
     }
 
-    let mut days = vec![(0u32, 0u32, 0u32, 0u32); num_days as usize];
+    let mut days = vec![(0u32, 0u32); num_days as usize];
 
-    let events: Vec<(Date<Utc>, Event)> = db.get_events().into_iter()
-        .filter_map(|x| {
-            Utc.datetime_from_str(&x.0, "%Y-%m-%d %H:%M:%S").map(|y| (y.date(), x.1)).ok()
-        }).collect();
+    let num_tracks = view.get_num_tracks();
 
-    for event in events {
-        let diff = event.0.signed_duration_since(newest_date);
+    for day in 0..num_days {
+        let num_transitions = view.get_num_transitions(day);
 
-        if diff.num_days() < num_days {
-            continue;
-        }
-
-        let idx = Utc::today().signed_duration_since(event.0).num_days() as usize - 1;
-
-        match event.1.action() {
-            Action::Connect(_) => days[idx].0 += 1,
-            Action::PlaySong(_) => days[idx].1 += 1,
-            Action::AddSong(_) => days[idx].2 += 1,
-            Action::DeleteSong(_) => days[idx].3 += 1
-        }
+        days[day] = (num_tracks, num_transitions);
     }
 
     for i in 0..days.len() {
@@ -50,9 +52,8 @@ fn main() {
         let datestamp = datestamp.format("%Y-%m-%d");
 
         
-        db.summarise_day(datestamp.to_string(), days[i].0, days[i].1, days[i].2, days[i].3).unwrap();
+        db.summarise_day(datestamp.to_string(), days[i].0, days[i].1).unwrap();
     }
 
     println!("{:#?}", days);
-
 }

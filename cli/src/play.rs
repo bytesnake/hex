@@ -8,15 +8,15 @@ use audio::AudioDevice;
 use terminal_size::{Width, terminal_size};
 
 use nix::sys::termios;
-use futures::Future;
 
-use hex_database::{Track, TrackKey, Instance};
+use hex_database::Track;
 use hex_music_container::{Container, Configuration};
 
 #[derive(Debug)]
 pub enum Event {
     Next,
-    Prev
+    Prev,
+    Quit
 }
 
 pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
@@ -34,6 +34,19 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
 
         // wait till file available
         while !data_path.join(tracks[idx].key.to_path()).exists() {
+            match events.try_recv() {
+                Ok(Event::Next) => {
+                    continue 'outer;
+                },
+                Ok(Event::Prev) => {
+                    idx -= 2;
+
+                    continue 'outer;
+                },
+                Ok(Event::Quit) => return,
+                Err(_) => {}
+            }
+
             println!("File {} not available", tracks[idx].key.to_string());
             thread::sleep(Duration::from_millis(500));
         }
@@ -74,6 +87,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
 
                     break 'inner;
                 },
+                Ok(Event::Quit) => return,
                 _ => {}
             }
         }
@@ -88,7 +102,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
     device.shutdown();
 }
 
-pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>, mut instance: Instance) {
+pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
 
     // setup terminal to pass arrows
     // Querying original as a separate, since `Termios` does not implement copy
@@ -97,29 +111,22 @@ pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>, mut instance: Instanc
     // Unset canonical mode, so we get characters immediately
     term.local_flags.remove(termios::LocalFlags::ICANON);
     // Don't generate signals on Ctrl-C and friends
-    //term.local_flags.remove(termios::LocalFlags::ISIG);
+    term.local_flags.remove(termios::LocalFlags::ISIG);
     // Disable local echo
     term.local_flags.remove(termios::LocalFlags::ECHO);
     termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &term).unwrap();
-
     let (sender, receiver) = channel();
 
-    let keys: Vec<TrackKey> = tracks.iter().map(|x| x.key.clone()).collect();
-    let path_copy = data_path.clone();
-    thread::spawn(move || {
-        for key in keys {
-            if !path_copy.join(key.to_string()).exists() {
-                instance.ask_for_file(key.to_vec()).wait().unwrap();
-            }
-        }
-    });
-
-    let handle = thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
+    let _handle = thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
 
     for byte in io::stdin().bytes() {
         match byte {
             Ok(68) => sender.send(Event::Prev).unwrap(),
             Ok(67) => sender.send(Event::Next).unwrap(),
+            Ok(3) => {
+                sender.send(Event::Quit).unwrap();
+                break
+            },
             _ => {}
         }
     }

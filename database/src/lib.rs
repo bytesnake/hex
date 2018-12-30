@@ -56,4 +56,25 @@ pub use objects::{Track, Playlist, Token, TrackKey, PlaylistKey, TokenId};
 #[cfg(feature="rusqlite")]
 pub use database::*;
 #[cfg(feature="hex-gossip")]
-pub use hex_gossip::GossipConf;
+pub use hex_gossip::{GossipConf, Transition};
+#[cfg(not(feature = "hex-gossip"))]
+mod GossipDummy {
+    pub type PeerId = Vec<u8>;
+
+    /// Transition key is the 256bit hash of the body
+    #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct TransitionKey(pub [u8; 32]);
+
+    /// A signed transition in a DAG
+    #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct Transition {
+        pub key: TransitionKey,
+        pub pk: PeerId,
+        pub refs: Vec<TransitionKey>,
+        pub body: Option<Vec<u8>>,
+        pub sign: [u8; 32],
+        pub state: u8
+    }
+}
+#[cfg(not(feature = "hex-gossip"))]
+pub use GossipDummy::Transition;

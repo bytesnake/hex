@@ -1,31 +1,20 @@
 use std::io::{self, Write};
 use std::path::PathBuf;
-use std::fs::File;
+use std::sync::mpsc::Sender;
 
-use futures::Future;
+use hex_database::{Track, TrackKey};
 
-use hex_database::{Track, Instance};
-
-pub fn sync_tracks(tracks: Vec<Track>, mut instance: Instance, data_path: PathBuf) {
+pub fn sync_tracks(tracks: Vec<Track>, sender: Sender<TrackKey>, data_path: PathBuf) {
     let length = tracks.len();
     for track in tracks {
         print!("Syncing track: {}", track.key.to_string());
         io::stdout().flush().unwrap();
 
-        if data_path.join(track.key.to_path()).exists() {
-            println!(" already exists!");
-            continue;
-        }
+        sender.send(track.key.clone()).unwrap();
 
-        match instance.ask_for_file(track.key.to_vec()).wait() {
-            Ok(buf) => {
-                let mut file = File::create(data_path.join(track.key.to_path())).unwrap();
-                file.write_all(&buf).unwrap();
+        while !data_path.join(track.key.to_path()).exists() {}
 
-                println!(" ok")
-            },
-            Err(err) => println!(" err {}", err)
-        }
+        println!(" ok");
     }
 
     println!("Finished - {} tracks synchronised!", length);

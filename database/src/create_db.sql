@@ -39,9 +39,9 @@ BEGIN;
         Created     INTEGER NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS Summarise (
+    CREATE TABLE IF NOT EXISTS Summary (
         Day         TEXT, 
-        Adds        INTEGER, 
-        Removes     INTEGER
+        Transitions INTEGER,
+        Tracks      INTEGER
     );
 COMMIT;

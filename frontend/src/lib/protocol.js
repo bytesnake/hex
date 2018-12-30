@@ -28,8 +28,8 @@ const CALLS = {
     UpdateToken: ["token", "key", "played", "pos"],
     CreateToken: [],
     LastToken: [],
-    GetSummarise: [],
-    GetEvents: [],
+    GetSummary: [],
+    GetTransitions: [],
     Download: ["format", "tracks"],
     AskDownloadProgress: []
 }
@@ -55,30 +55,27 @@ class Protocol {
 
         _proto.then(x => {
             proto = x;
-            self.try_connect('ws://' + location.hostname + ':2794');
+            self.try_connect();
         });
 
         return this;
     }
 
-    try_connect(addr) {
-        this.socket = new WebSocket('ws://' + location.hostname + ':2794', 'rust-websocket');
+    try_connect() {
+        this.socket = new WebSocket('ws://localhost:2794', "rust-websocket");
         this.socket.binaryType = 'arraybuffer';
 
-        this.socket.onerror = function(err) {
-            console.error("Websocket error occured: " + err);
-        }
-
         let self = this;
-        this.socket.onclose = function() {
-            console.error("Connection to " + this.url + " closed!");
+        this.socket.onclose = function(e) {
+            console.error("Connection to " + this.url + " closed with code " + e.code + "!");
 
-            setTimeout(_ => self.try_connect(addr), 500);
+            setTimeout(_ => self.try_connect(), 500);
         }
 
         this.socket.onmessage = this.message.bind(this);
 
         this.socket.onopen = function() {
+            console.log("Connection opened!");
             const buffered = self.buffered_requests.splice(0, self.buffered_requests.length);
 
             for(const idx in buffered) {
@@ -87,6 +84,11 @@ class Protocol {
                 const buf = proto.request_to_buf(id, req);
                 self.socket.send(buf.buffer);
             }
+        }
+
+        this.socket.onerror = function(err) {
+            console.log("Got error");
+            console.log(err)
         }
     }
 
@@ -120,6 +122,8 @@ class Protocol {
         
         const [type, resolve, reject] = this.pending_requests[id];
         let action = answ.action();
+        console.log(action);
+        console.log(id);
             
         if(typeof action === "string" && action != type) {
             reject(action);

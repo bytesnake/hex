@@ -7,6 +7,8 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
 
 use websocket::WebSocketError;
 use websocket::message::OwnedMessage;
@@ -28,8 +30,9 @@ pub fn start(conf: Conf, path: PathBuf) {
 	let handle = core.handle();
 
 	// bind to the server
-    let addr = (conf.host, conf.server.port);
-	let server = Server::bind(addr, &handle).unwrap();
+    let addr = ("127.0.0.1", conf.server.port);
+
+    let incoming = Server::bind(addr, &handle).unwrap().incoming();
 
     let mut gossip = GossipConf::new();
     
@@ -59,11 +62,16 @@ pub fn start(conf: Conf, path: PathBuf) {
     });
 
 	// a stream of incoming connections
-	let f = server.incoming()
+	let f = incoming
+        .map(|x| Some(x))
         // we don't wanna save the stream if it drops
-        .map_err(|InvalidConnection { error, .. }| error)
+        .or_else(|InvalidConnection { error, .. }| {
+            eprintln!("Error = {:?}", error);
+
+            Ok(None)
+        }).filter_map(|x| x)
         .for_each(|(upgrade, addr)| {
-            info!("Got a connection from: {}", addr);
+            info!("Got a connection from {} (to {})", addr, upgrade.uri());
             // check if it has the protocol we want
             if !upgrade.protocols().iter().any(|s| s == "rust-websocket") {
                 // reject it if it doesn't
@@ -98,6 +106,11 @@ pub fn start(conf: Conf, path: PathBuf) {
                                 Some(OwnedMessage::Close(None))
                             }
                         }
+                    })
+                    .or_else(|e| {
+                        eprintln!("Got websocket error = {:?}", e);
+
+                        Ok(OwnedMessage::Close(None))
                     });
 
                     // forward transitions
@@ -117,7 +130,7 @@ pub fn start(conf: Conf, path: PathBuf) {
             spawn_future(f, &handle);
 
             Ok(())
-        }).map_err(|_| ());
+        });
 
 	core.run(Future::join(f, c)).unwrap();
 }

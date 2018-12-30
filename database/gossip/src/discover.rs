@@ -183,9 +183,13 @@ impl Beacon {
                 print!(".");
                 std::io::stdout().flush().unwrap();
 
-                self.socket.send_to(
+                if let Err(err) = self.socket.send_to(
                         &self.packet.to_vec(), 
-                        &(SocketAddrV4::new(Ipv4Addr::BROADCAST, 8004))).unwrap();
+                        &(SocketAddrV4::new(Ipv4Addr::BROADCAST, 8004))) {
+                    eprintln!(" could not send ping {}", err);
+
+                    return None;
+                }
 
                 last_sent = Instant::now();
             }

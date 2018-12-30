@@ -8,7 +8,7 @@ use error::{Error, Result};
 
 use bincode::{serialize, deserialize};
 
-use hex_database::{Track, Playlist, Token, Event, TrackKey, PlaylistKey, TokenId, TransitionAction};
+use hex_database::{Track, Playlist, Token, Event, TrackKey, PlaylistKey, TokenId, TransitionAction, Transition};
 
 /// Identification of a packet
 ///
@@ -128,9 +128,9 @@ pub enum RequestAction {
     /// Get the last inserted token
     LastToken,
     /// Get the summarise for all days
-    GetSummarise,
+    GetSummary,
     /// Get all events
-    GetEvents,
+    GetTransitions,
     /// Start download a bunch of tracks
     Download {
         format: String,
@@ -214,8 +214,8 @@ pub enum AnswerAction {
     UpdateToken,
     CreateToken(TokenId),
     LastToken(Option<TokenId>),
-    GetSummarise(Vec<(String, u32, u32, u32, u32)>),
-    GetEvents(Vec<(String, Event)>),
+    GetSummary(Vec<(String, u32, u32)>),
+    GetTransitions(Vec<Transition>),
     Download,
     AskDownloadProgress(Vec<DownloadProgress>),
     Transition(TransitionAction)

@@ -25,7 +25,7 @@ use std::default::Default;
 #[derive(Deserialize, Debug)]
 pub struct Server {
     #[serde(default = "default_port")]
-    pub port: u16
+    pub port: u16,
 }
 
 /// Default host is localhost
@@ -40,7 +40,7 @@ fn default_port_dbpeer() -> u16 { 8004 }
 impl Default for Server {
     fn default() -> Self {
         Server {
-            port: 2798
+            port: 2798,
         }
     }
 }
