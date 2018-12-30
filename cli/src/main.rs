@@ -56,18 +56,28 @@ fn main() {
         }
     });
 
-    loop {
+    'outer: loop {
         print!(" > ");
         io::stdout().flush().ok().expect("Could not flush stdout");
 
         // get next line
-        let line1 = {
-            let stdin = io::stdin();
-            let mut iterator = stdin.lock().lines();
-            iterator.next().unwrap().unwrap()
-        };
+        let line; 
+        
+        let stdin = io::stdin();
+        let mut iterator = stdin.lock().lines();
 
-        let mut args: Vec<&str> = line1.splitn(2, ' ').collect();
+        loop {
+            match iterator.next() {
+                Some(Ok(e)) => { line = e; break; },
+                Some(Err(_)) => continue,
+                None => {
+                    println!("");
+                    continue 'outer
+                }
+            }
+        }
+
+        let mut args: Vec<&str> = line.splitn(2, ' ').collect();
         if args.len() == 0 {
             continue;
         } else if args.len() == 1 {
