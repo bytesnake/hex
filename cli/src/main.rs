@@ -20,7 +20,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use std::fs;
 use std::path::{Path, PathBuf};
-use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf, TrackKey};
+use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf, TrackKey, Playlist};
 
 use futures::Future;
 
@@ -100,6 +100,9 @@ fn main() {
             "delete" => {
                 delete_tracks(&view, &data_path, tracks);
             },
+            "add-playlist" => {
+                add_playlist(&view, tracks);
+            },
             "sync" => {
                 sync::sync_tracks(tracks, sender, data_path);
             },
@@ -134,6 +137,21 @@ fn show_tracks(query: &str, tracks: Vec<Track>) {
         }
     }
 
+}
+
+fn add_playlist(db: &View, tracks: Vec<Track>) {
+    println!("Create new playlist with {} tracks", tracks.len());
+
+    let last_key = db.last_playlist_key().unwrap();
+    let pl = Playlist {
+        key: last_key + 1,
+        title: "New Playlist".into(),
+        desc: None,
+        tracks: tracks.into_iter().map(|x| x.key).collect(),
+        origin: vec![0; 16]
+    };
+
+    db.add_playlist(pl).unwrap();
 }
 
 fn delete_tracks(db: &View, data_path: &Path, tracks: Vec<Track>) {

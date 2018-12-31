@@ -49,9 +49,10 @@ use std::sync::{Mutex, Arc};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
-use futures::{Async, Stream, task, Poll};
+use futures::{Async, Stream, task, Poll, future, Future};
 use futures::sync::mpsc::{Receiver, Sender, channel};
 use tokio::io;
+use tokio::prelude::task::Task;
 use tokio::net::{TcpListener, TcpStream, tcp::Incoming};
 
 use self::protocol::{Peer, ResolvePeers, PeerCodecWrite, NetworkKey};
@@ -74,6 +75,11 @@ pub struct PeerPresence {
     writer: Option<usize>
 }
 
+pub enum SpreadTo {
+    Everyone,
+    Peer(PeerId)
+}
+
 /// Push packets to peers, either to everyone or to a single destination. 
 ///
 /// This wraps the write map inside a mutex and is therefore safe to share across threads. Any
@@ -81,13 +87,71 @@ pub struct PeerPresence {
 /// flushing is immediately successful.
 pub struct Spread<T: Inspector> {
     my_id: PeerId,
-    peers: Mutex<HashMap<PeerId, PeerCodecWrite<TcpStream>>>,
+    task: Arc<Mutex<Option<Task>>>,
+    peers: Arc<Mutex<HashMap<PeerId, PeerCodecWrite<TcpStream>>>>,
     inspector: Arc<Mutex<T>>
 }
 
+impl<T: Inspector> Clone for Spread<T> {
+    fn clone(&self) -> Spread<T> {
+        Spread {
+            my_id: self.my_id.clone(),
+            task: self.task.clone(),
+            peers: self.peers.clone(),
+            inspector: self.inspector.clone()
+        }
+    }
+}
+
+//unsafe impl<T: Inspector> Send for Spread<T> {}
+//unsafe impl<T: Inspector> Sync for Spread<T> {}
+
 impl<T: Inspector> Spread<T> {
     pub fn new(my_id: PeerId, inspector: Arc<Mutex<T>>) -> Spread<T> {
-        Spread { peers: Mutex::new(HashMap::new()), my_id, inspector }
+        Spread { 
+            peers: Arc::new(Mutex::new(HashMap::new())), 
+            task: Arc::new(Mutex::new(None)),
+            my_id, inspector 
+        }
+    }
+
+    pub fn get(&self) -> impl Future<Item = (), Error = ()> {
+        let peers_cloned = self.peers.clone();
+        let task_cloned = self.task.clone();
+        let mut set_task = false;
+
+        let future = future::poll_fn(move || {
+            if !set_task {
+                let task = task::current();
+                *(task_cloned.lock().unwrap()) = Some(task);
+                set_task = true;
+            }
+
+            let mut removed = Vec::new();
+            {
+                let mut peers = peers_cloned.lock().unwrap();
+                for (id, peer) in peers.iter_mut() {
+                    if !peer.is_empty() {
+                        match peer.poll_flush() {
+                            Err(_) => {
+                                removed.push(id.clone());
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            let mut peers = peers_cloned.lock().unwrap();
+            for id in removed {
+                peers.remove(&id).unwrap().shutdown().unwrap();
+            }
+
+
+            return Ok(Async::NotReady); 
+        });
+
+        future
     }
 
     pub fn add_peer(&self, id: &PeerId, writer: PeerCodecWrite<TcpStream>) -> usize {
@@ -98,45 +162,24 @@ impl<T: Inspector> Spread<T> {
         return len;
     }
 
-    pub fn write(&self, packet: Packet) {
-        //println!("Write {:?}", packet);
-        let mut remove = Vec::new();
-        {
-            let mut peers = self.peers.lock().unwrap();
-            for (id, peer) in peers.iter_mut() {
-                peer.buffer(packet.clone());
-
-                if let Err(err) = peer.poll_flush() {
-                    println!("Could not write = {:?}", err);
-
-                    remove.push(id.clone());
+    pub fn spread(&self, packet: Packet, dest: SpreadTo) {
+        match dest {
+            SpreadTo::Everyone => {
+                let mut peers = self.peers.lock().unwrap();
+                for (_, peer) in peers.iter_mut() {
+                    peer.buffer(packet.clone());
+                }
+            },
+            SpreadTo::Peer(id) => {
+                let mut peers = self.peers.lock().unwrap();
+                if let Some(ref mut peer) = peers.get_mut(&id) {
+                    peer.buffer(packet);
                 }
             }
         }
 
-        let mut peers = self.peers.lock().unwrap();
-        for id in remove {
-            peers.remove(&id).unwrap().shutdown().unwrap();
-        }
-    }
-
-    pub fn write_to(&self, packet: Packet, id: PeerId) {
-        let mut remove = false;
-
-        if let Some(peer) = self.peers.lock().unwrap().get_mut(&id) {
-            peer.buffer(packet);
-
-            while !peer.is_empty() {
-                if let Err(err) = peer.poll_flush() {
-                    println!("Could not write = {:?}", err);
-
-                    remove = true;
-                }
-            }
-        }
-
-        if remove {
-            self.peers.lock().unwrap().remove(&id);
+        if let Some(ref task) = *self.task.lock().unwrap() {
+            task.notify();
         }
     }
 
@@ -148,7 +191,7 @@ impl<T: Inspector> Spread<T> {
         self.inspector.lock().unwrap().store(transition.clone());
 
         // and forward to everyone else
-        self.write(Packet::Push(transition));
+        self.spread(Packet::Push(transition), SpreadTo::Everyone);
     }
 }
 
@@ -210,7 +253,7 @@ pub struct Gossip<T: Inspector> {
     recv: Receiver<(PeerId, Packet)>,
     sender: Sender<(PeerId, Packet)>,
     books: HashMap<PeerId, PeerPresence>,
-    writer: Arc<Spread<T>>,
+    writer: Spread<T>,
     resolve: ResolvePeers,
     incoming: Incoming,
     key: NetworkKey,
@@ -269,12 +312,12 @@ impl<T: Inspector> Gossip<T> {
             books: HashMap::new(),
             incoming: listener.incoming(),
             resolve: ResolvePeers::new(peers),
-            writer: Arc::new(Spread::new(id, inspector.clone())),
+            writer: Spread::new(id, inspector.clone()),
             key, inspector
         }
     }
 
-    pub fn writer(&self) -> Arc<Spread<T>> {
+    pub fn writer(&self) -> Spread<T> {
         self.writer.clone()
     }
 
@@ -377,7 +420,7 @@ impl<T: Inspector> Stream for Gossip<T> {
                         return None;
                     }).collect();
 
-                self.writer.write(Packet::GetPeers(Some(list)));
+                self.writer.spread(Packet::GetPeers(Some(list)), SpreadTo::Peer(id));
             },
             Packet::GetPeers(Some(peers)) => {
                 for presence in peers {
@@ -396,7 +439,7 @@ impl<T: Inspector> Stream for Gossip<T> {
                     self.inspector.lock().unwrap().store(transition.clone());
 
                     // forward to everyone else :(
-                    self.writer.write(Packet::Push(transition.clone()));
+                    self.writer.spread(Packet::Push(transition.clone()), SpreadTo::Everyone);
 
                     // the peer has send us a new block of data, forward it
                     return Ok(Async::Ready(Some(Packet::Push(transition))));
@@ -409,7 +452,7 @@ impl<T: Inspector> Stream for Gossip<T> {
                     return Ok(Async::Ready(Some(Packet::File(file_id, Some(data)))));
                 } else {
                     if let Some(data) = self.inspector.lock().unwrap().get_file(&file_id) {
-                        self.writer.write_to(Packet::File(file_id, Some(data)), id);
+                        self.writer.spread(Packet::File(file_id, Some(data)), SpreadTo::Peer(id));
                     }
                 }
             },

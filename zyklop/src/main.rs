@@ -53,6 +53,7 @@ fn main() {
 
     let data_path_2 = data_path.clone();
     let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
+
     thread::spawn(move || loop {
         if let Ok(key) = receiver.recv() {
             let path = data_path_2.join(key.to_path());
@@ -87,8 +88,10 @@ fn main() {
                                 1 => {audio.clear(); token.prev_track()},
                                 0 => {create_counter += 1; token.shuffle()},
                                 2 => {
-                                    if let Err(err) = view.vote_for_track(token.track_key().unwrap()) {
-                                        eprintln!("Error: Could not vote for track {:?}: {:?}", token.track_key(), err);
+                                    if let Some(ref stream) = token.stream {
+                                        if let Err(err) = view.vote_for_track(stream.track.key) {
+                                            eprintln!("Error: Could not vote for track {:?}: {:?}", token.track_key(), err);
+                                        }
                                     }
                                 },
                                 x => eprintln!("Error: Input {} not supported yet", x)
@@ -102,13 +105,14 @@ fn main() {
 
                         match view.get_token(num as i64) {
                             Ok((a, Some((_, b)))) => {
-                                for track in &b {
-                                    sender.send(track.key.clone()).unwrap();
-                                }
-                                
-                                token = Some(token::Current::new(a, b, data_path.clone()));
+                                let sender = sender.clone();
+                                token = Some(token::Current::new(a, b, data_path.clone(), sender));
                             },
-                            Ok((a, None)) => token = Some(token::Current::new(a, Vec::new(), data_path.clone())),
+                            Ok((a, None)) => {
+                                let sender = sender.clone();
+                                
+                                token = Some(token::Current::new(a, Vec::new(), data_path.clone(), sender));
+                            },
                             Err(hex_database::Error::NotFound) => {
                                 println!("Not found!");
                                 let id = view.last_token_id().unwrap() + 1;
@@ -126,18 +130,28 @@ fn main() {
                             },
                             Err(err) => eprintln!("Error: Could not get token with error: {:?}", err)
                         }
+                        if let Some(ref token) = token {
+                            if let Err(err) = view.use_token(token.token.token) {
+                                eprintln!("Error: Could not user token {:?} because {:?}", token.token.token, err);
+                            }
+                        }
                     },
                     Event::CardLost => {
                         if let Some(ref mut token) = token {
-                            let Token { token, played, pos, .. } = token.data();
+                            let current_track = token.track();
+                            let Token { token, mut played, pos, .. } = token.data();
+
+                            // push current track as last element of played tracks
+                            if let Some(current_track) = current_track {
+                                if !played.contains(&current_track.key) {
+                                    played.push(current_track.key);
+                                }
+                            }
 
                             if let Err(err) = view.update_token(token, None, Some(played), pos) {
                                 eprintln!("Error: Could not update token {:?} because {:?}", token, err);
                             }
 
-                            if let Err(err) = view.use_token(token) {
-                                eprintln!("Error: Could not user token {:?} because {:?}", token, err);
-                            }
                         }
                         
                         token = None;
@@ -148,16 +162,31 @@ fn main() {
             }
         }
 
-        /*if create_counter == 10 {
-            1
-        }*/
+        if create_counter == 3 {
+            println!("Reset token to new id ..");
+            let id = view.last_token_id().unwrap() + 1;
+            let token = Token {
+                token: id,
+                key: None,
+                played: Vec::new(),
+                pos: None,
+                last_use: 0
+            };
+
+            view.add_token(token).expect("Error: Could not create a new token!");
+
+            push_new.send(id as u32).unwrap();
+
+            create_counter = 0;
+        }
 
         if let Some(ref mut token) = token {
-            //if token.has_tracks() {
+            if token.has_tracks() {
                 if let Some(packet) = token.next_packet() {
                     audio.buffer(&packet);
                 }
-            //}
+            } else {
+            }
         }
     }
 }

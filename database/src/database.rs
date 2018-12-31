@@ -12,13 +12,13 @@ use error::{Error, Result};
 use search::SearchQuery;
 use objects::*;
 
-use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet};
+use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo};
 use transition::{Storage, TransitionAction, transition_from_sql};
 
 type Awaiting = Arc<Mutex<HashMap<Vec<u8>, Complete<Vec<u8>>>>>;
 /// Instance of the database
 pub struct Instance {
-    gossip: Option<(Arc<Spread<Storage>>, PeerId, Sender<TransitionAction>)>,
+    gossip: Option<(Spread<Storage>, PeerId, Sender<TransitionAction>)>,
     storage: Option<(Arc<Mutex<Storage>>, PeerId, Sender<TransitionAction>)>,
     path: PathBuf,
     receiver: Option<Receiver<TransitionAction>>,
@@ -82,8 +82,10 @@ impl Instance {
                     .map_err(|e| eprintln!("Discover err = {:?}", e))
                     .for_each(|_| Ok(())).into_future();
 
+                let spread = writer.get();
+
                 thread::spawn(move || {
-                    tokio::run(Future::join(gossip, discover).map(|_| ()));
+                    tokio::run(Future::join3(gossip, discover, spread).map(|_| ()));
                 });
 
                 Instance { gossip: Some((writer, id, my_sender)), storage: None, path: path.to_path_buf(), receiver: Some(receiver), awaiting }
@@ -107,7 +109,7 @@ impl Instance {
 
                 self.awaiting.lock().unwrap().insert(file_id.clone(), c);
 
-                spread.write(Packet::File(file_id, None));
+                spread.spread(Packet::File(file_id, None), SpreadTo::Everyone);
 
                 return p;
             },
@@ -142,7 +144,7 @@ impl Instance {
 pub struct View {
     socket: rusqlite::Connection,
     peer_id: Option<PeerId>,
-    writer: Option<Arc<Spread<Storage>>>,
+    writer: Option<Spread<Storage>>,
     storage: Option<Arc<Mutex<Storage>>>,
     sender: Option<Sender<TransitionAction>>
 
@@ -273,7 +275,7 @@ impl View {
 
     /// Get the last used token
     pub fn get_last_used_token(&self) -> Result<(Token, Option<(Playlist, Vec<Track>)>)> {
-        let mut stmt = self.socket.prepare("SELECT * FROM Tokens ORDER BY datetime(lastuse) DESC Limit 1").unwrap();
+        let mut stmt = self.socket.prepare("SELECT * FROM Tokens ORDER BY lastuse DESC Limit 1").unwrap();
 
         let mut query = stmt.query(&[]).unwrap();
         let token = query.next()
