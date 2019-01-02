@@ -5,6 +5,9 @@ extern crate cpal;
 extern crate rb;
 extern crate nix;
 extern crate terminal_size;
+extern crate walkdir;
+extern crate id3;
+extern crate chromaprint;
 
 extern crate hex_conf;
 extern crate hex_database;
@@ -14,6 +17,7 @@ mod audio;
 mod play;
 mod modify;
 mod sync;
+mod store;
 
 use std::io::{self, Write, BufRead};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -63,16 +67,18 @@ fn main() {
         // get next line
         let line; 
         
-        let stdin = io::stdin();
-        let mut iterator = stdin.lock().lines();
+        {
+            let stdin = io::stdin();
+            let mut iterator = stdin.lock().lines();
 
-        loop {
-            match iterator.next() {
-                Some(Ok(e)) => { line = e; break; },
-                Some(Err(_)) => continue,
-                None => {
-                    println!("");
-                    continue 'outer
+            loop {
+                match iterator.next() {
+                    Some(Ok(e)) => { line = e; break; },
+                    Some(Err(_)) => continue,
+                    None => {
+                        println!("");
+                        continue 'outer
+                    }
                 }
             }
         }
@@ -116,6 +122,9 @@ fn main() {
             "modify" => {
                 modify::modify_tracks(&view, tracks);
             },
+            "store" => {
+                store::store(&view, Path::new(args[1]), data_path.clone());
+            },
             "quit" => {
                 println!("Exit ..");
                 return;
@@ -132,8 +141,8 @@ fn show_tracks(query: &str, tracks: Vec<Track>) {
     println!("");
 
     for track in tracks {
-        if let (Some(ref title), Some(ref interpret)) = (&track.title, &track.interpret) {
-            println!("\t{} ## {}", title, interpret);
+        if let (Some(ref title), Some(ref album), Some(ref interpret)) = (&track.title, &track.album, &track.interpret) {
+            println!("\t{} ({}) ## {}", title, album, interpret);
         }
     }
 
@@ -158,15 +167,19 @@ fn delete_tracks(db: &View, data_path: &Path, tracks: Vec<Track>) {
     print!("Do you really want to delete {} tracks [n]: ", tracks.len());
     io::stdout().flush().unwrap();
 
-    let mut input = String::new();
-    match io::stdin().read_line(&mut input) {
-        Ok(_) => {
-            if input != "y\n" {
+    let stdin = io::stdin();
+    let lock = stdin.lock();
+    let mut lines = lock.lines();
+
+    match lines.next() {
+        Some(Ok(input)) => {
+            println!("Got {:?}", input);
+
+            if input != "y" {
                 return;
             }
         },
-        Err(err) => {
-            eprintln!("Error: {}", err);
+        _ => {
             return;
         }
     }

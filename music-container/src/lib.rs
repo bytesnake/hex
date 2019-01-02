@@ -211,49 +211,36 @@ impl<T> Container<T>
     ///
     /// The `progress` field can be used to connect a channel to the convesion process and get live
     /// updates of the progress.
-    pub fn save_pcm(conf: Configuration, pcm: &[i16], mut inner: T, mut progress: Option<Sender<f32>>) -> Result<Container<T>> {
+    pub fn save_pcm(conf: Configuration, mut pcm: Vec<i16>, mut inner: T, mut progress: Option<Sender<f32>>) -> Result<Container<T>> {
         inner.write_u8(1).map_err(|err| Error::File(err))?;
         inner.write_u8(conf.sh_order()).map_err(|err| Error::File(err))?;
     
-        let samples = pcm.len() as u32 / conf.num_channels();
-        inner.write_u32::<LittleEndian>(samples).map_err(|err| Error::File(err))?;
+        // fill the audio signal encoded as channels up to multiple of RAW_BLOCK_SIZE
+        let mut samples = pcm.len() / conf.num_channels() as usize;
+        let rem = RAW_BLOCK_SIZE - samples % RAW_BLOCK_SIZE;
+        pcm.extend(vec![0; rem * conf.num_channels()]);
+        samples += rem;
+
+        inner.write_u32::<LittleEndian>(samples as u32).map_err(|err| Error::File(err))?;
 
         // scale the audio data to the max 16bit range
         let max_value = pcm.iter().map(|x| *x).max().ok_or(Error::InvalidRange)?;
         let scale = 32767.0 / max_value as f32;
-        let pcm: Vec<i16> = pcm.iter().map(|x| (*x as f32 * scale) as i16).collect();
 
-        // convert the raw audio channels to spherical harmonics
+        for val in pcm.iter_mut() {
+            *val = (*val as f32 * scale) as i16;
+        }
+
+        // find the scales
         let sh_codec = conf.codec();
-        let harmonics: Vec<f32> = sh_codec.to_harmonics(&pcm)?;//vec![0f32; conf.num_harmonics() * samples];
+        let scales = sh_codec.scales(&pcm)?;
 
-        // determine scale factor for each harmonic to fit them into 16bit
-        let mut sh_scales = vec![0.0; conf.num_harmonics() as usize];
-        for sample in 0..samples as usize {
-            for harmonic in 0..conf.num_harmonics() as usize {
-                let val = harmonics[sample * conf.num_harmonics() as usize + harmonic].abs();
-
-                if val > sh_scales[harmonic] {
-                    sh_scales[harmonic] = val;
-                }
-            }
-        }
-
-        for scale in &mut sh_scales {
-            if scale.abs() < std::f32::EPSILON {
-                *scale = 1.0;
-            }else {
-                *scale = 32767.0 / *scale;
-            }
-        }
-
-        // write the Spherical Harmonic scales to the file (the decoding process needs them to
-        // restore the original scaling)
-        for scale in &sh_scales {
+        for scale in &scales {
             inner.write_f32::<LittleEndian>(*scale).map_err(|err| Error::File(err))?;
         }
 
-        // compress with Opus and the proper scaling factor
+        // the audio signal encoded in spherical harmonics
+        let mut harmonics = vec![0i16; RAW_BLOCK_SIZE * conf.num_harmonics()];
         let mut opus_result: Vec<Vec<u8>> = (0..conf.num_harmonics()).map(|_| vec![0u8; 256]).collect();
 
         let mut encoders: Vec<opus::Encoder> = (0..conf.num_harmonics()).map(|_| {
@@ -263,20 +250,14 @@ impl<T> Container<T>
             encoder
         }).collect();
 
-        let steps = (samples as f32 / RAW_BLOCK_SIZE as f32).ceil() as usize;
         let mut nwritten = vec![0u16; conf.num_harmonics() as usize];
 
-        for i in 0..steps {
+        for i in 0..samples / RAW_BLOCK_SIZE {
+            let channels = &pcm[i*RAW_BLOCK_SIZE*conf.num_channels() .. (i+1)*RAW_BLOCK_SIZE*conf.num_channels()];
+            sh_codec.to_harmonics(&scales, &channels, &mut harmonics);
+
             for j in 0..conf.num_harmonics() as usize {
-                // convert each channel seperately with the corresponding scaling factor
-                let mut source = vec![0i16; RAW_BLOCK_SIZE];
-
-                // assert that we don't read after the buffer
-                for k in 0..usize::min(RAW_BLOCK_SIZE, samples as usize - i * RAW_BLOCK_SIZE) {
-                    source[k] = (harmonics[j + k * conf.num_harmonics() as usize + i * conf.num_harmonics() as usize * RAW_BLOCK_SIZE] * sh_scales[j]) as i16;
-                }
-
-                nwritten[j] = encoders[j].encode(&source, &mut opus_result[j]).map_err(|err| Error::Opus(err))? as u16;
+                nwritten[j] = encoders[j].encode(&harmonics[j*RAW_BLOCK_SIZE..(j+1)*RAW_BLOCK_SIZE], &mut opus_result[j]).map_err(|err| Error::Opus(err))? as u16;
             }
 
             //println!("Loss: {:?}, Bitrate: {:?}, Bandwidth: {:?}, Written: {:?}", encoders[0].get_packet_loss_perc().unwrap(), encoders[0].get_bitrate().unwrap(), encoders[0].get_bandwidth().unwrap(), nwritten);
@@ -291,7 +272,7 @@ impl<T> Container<T>
             }
 
             if let Some(ref mut progress) = progress {
-                progress.try_send(i as f32 / steps as f32)
+                progress.try_send(i as f32 / (samples / RAW_BLOCK_SIZE) as f32)
                     .map_err(|_| Error::SendFailed)?;
             }
         }
@@ -300,7 +281,7 @@ impl<T> Container<T>
                 .map_err(|_| Error::SendFailed)?;
         }
 
-        Ok(Container::new(conf.sh_order(), samples, sh_scales, inner))
+        Ok(Container::new(conf.sh_order(), samples as u32, scales, inner))
     }
 }
 

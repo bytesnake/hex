@@ -19,6 +19,31 @@ pub enum Event {
     Quit
 }
 
+fn format_time(mut secs: f64) -> String {
+    let mut out = String::new();
+    let mut f = "s";
+
+    if secs >= 60.0*60.0 {
+        let hr = (secs / 60.0 / 60.0).floor();
+        secs -= hr * 60.0 * 60.0;
+        f = "h";
+
+        out.push_str(&format!("{}:", hr));
+    }
+    if secs >= 60.0 {
+        let min = (secs / 60.0).floor();
+        secs -= min * 60.0;
+        if f != "h" {
+            f = "m";
+        }
+
+        out.push_str(&format!("{}:", min));
+    }
+    out.push_str(&format!("{}{}", secs.floor(), f));
+
+    out
+}
+
 pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
     let mut device = AudioDevice::new();
     let width = match terminal_size() {
@@ -54,7 +79,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
         let file = File::open(data_path.join(tracks[idx].key.to_path())).unwrap();
         let mut container = Container::load(file).unwrap();
 
-        println!("{}", tracks[idx].title.clone().unwrap_or("Unknown".into()));
+        println!("{} ({}) by {}", tracks[idx].title.clone().unwrap_or("Unknown".into()), tracks[idx].album.clone().unwrap_or("Unknown".into()), tracks[idx].composer.clone().unwrap_or("Unknown".into()));
 
         let mut pos = 0.0;
         'inner: while let Ok(buf) = container.next_packet(Configuration::Stereo) {
@@ -68,7 +93,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
                     print!(" ");
                 }
             }
-            print!("]");
+            print!("] {} / {}", format_time(pos), format_time(container.samples() as f64 / 48000.0));
 
             io::stdout().flush().unwrap();
 
@@ -79,7 +104,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
                     break 'inner;
                 },
                 Ok(Event::Prev) => {
-                    if pos > 4.0 {
+                    if pos > 4.0 || idx == 0 {
                         idx -= 1;
                     } else {
                         idx -= 2;

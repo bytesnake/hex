@@ -12,6 +12,9 @@ cpal = "*"
 nix = "0.11.0"
 terminal_size = "0.1"
 hex-conf = { path = "../conf/" }
+walkdir = "*"
+id3 = "0.2"
+chromaprint = { git = "https://github.com/bytesnake/rust-chromaprint" }
 
 [dependencies.hex-music-container]
 path = "../music-container/"

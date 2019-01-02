@@ -20,8 +20,8 @@ pub enum Configuration {
 
 impl Configuration {
     /// Get the number of SH channels
-    pub fn num_harmonics(&self) -> u32 {
-        let order = self.sh_order() as u32;
+    pub fn num_harmonics(&self) -> usize {
+        let order = self.sh_order() as usize;
 
         (order+1)*(order+1)
     }
@@ -37,12 +37,12 @@ impl Configuration {
     }
 
     /// Get the number of loudspeaker channels
-    pub fn num_channels(&self) -> u32 {
+    pub fn num_channels(&self) -> usize {
         match *self {
             Configuration::Omnidirectional => 1,
             Configuration::Stereo => 2,
             Configuration::Binaural => 2,
-            Configuration::SphericalHarmonics(x) => (x as u32 +1)*(x as u32 +1)
+            Configuration::SphericalHarmonics(x) => (x as usize +1)*(x as usize +1)
         }
     }
 
@@ -60,38 +60,67 @@ pub struct Codec {
 }
 
 impl Codec {
-    /// Converts raw audio to SH representation
-    pub fn to_harmonics(&self, channels: &[i16]) -> Result<Vec<f32>> {
+    pub fn scales(&self, channels: &[i16]) -> Result<Vec<f32>> {
         let num_channels = self.conf.num_channels() as usize;
         let num_harmonics = self.conf.num_harmonics() as usize;
-        let samples = channels.len() / num_channels;
+
+        let mut scales = vec![32767.0; num_harmonics];
             
+        for sample in channels.chunks(num_channels) {
+            match self.conf {
+                Configuration::Omnidirectional => {
+                    if sample[0] as f32 * 0.2820948 > scales[0] {
+                        scales[0] = sample[0] as f32 * 0.2820948;
+                    }
+                },
+                Configuration::Stereo => {
+                    let val = 32767.0 / ((sample[0] as f32 + sample[1] as f32) * 0.5 * 0.2820948).abs();
+                    if val < scales[0] {
+                        scales[0] = val;
+                    }
 
-        if channels.len() % self.conf.num_channels() as usize != 0 {
-            return Err(Error::InvalidSize);
+                    let val = 32767.0 / ((sample[0] as f32 - sample[1] as f32) * 0.5 * 0.3454941).abs();
+                    if val < scales[1] {
+                        scales[1] = val;
+                    }
+
+                    let val = 32767.0 / ((sample[1] as f32 - sample[0] as f32) * 0.5 * 0.3454941).abs();
+                    if val < scales[3] {
+                        scales[3] = val;
+                    }
+
+                    scales[2] = 1.0;
+                },
+                _ => return Err(Error::NotSupported)
+            }
         }
+        
+        Ok(scales)
+    }
 
-        let mut harmonics = vec![0.0; samples * num_harmonics];
+    /// Converts raw audio to SH representation
+    pub fn to_harmonics(&self, scales: &[f32], channels: &[i16], harmonics: &mut [i16]) {
+        let num_channels = self.conf.num_channels() as usize;
+        let num_harmonics = self.conf.num_harmonics() as usize;
+        let block_length = harmonics.len() / num_harmonics;
 
         let mut i = 0;
         for sample in channels.chunks(num_channels) {
             match self.conf {
                 Configuration::Omnidirectional => {
-                    harmonics[i] = sample[0] as f32 * 0.2820948;
+                    harmonics[i] = (sample[0] as f32 * 0.2820948 / scales[0]) as i16;
                 },
                 Configuration::Stereo => {
-                    harmonics[i] = (sample[0] as f32 + sample[1] as f32) * 0.5 * 0.2820948;
-                    harmonics[i+1] = (sample[0] as f32 - sample[1] as f32) * 0.5 * 0.3454941;
-                    harmonics[i+2] = 0.0;
-                    harmonics[i+3] = (sample[1] as f32 - sample[0] as f32) * 0.5 * 0.3454941;
+                    harmonics[i] = ((sample[0] as f32 + sample[1] as f32) * 0.5 * 0.2820948 * scales[0]) as i16;
+                    harmonics[i + block_length] = ((sample[0] as f32 - sample[1] as f32) * 0.5 * 0.3454941 * scales[1]) as i16;
+                    harmonics[i + block_length*2] = 0;
+                    harmonics[i + block_length*3] = ((sample[1] as f32 - sample[0] as f32) * 0.5 * 0.3454941 * scales[3]) as i16;
                 },
-                _ => return Err(Error::NotSupported)
+                _ => {}
             }
 
-            i += self.conf.num_harmonics() as usize;
+            i += 1;
         }
-
-        Ok(harmonics)
     }
 
     /// Converts SH representation to loudspeaker dependent representation
