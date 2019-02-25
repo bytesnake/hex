@@ -18,6 +18,7 @@ pub trait Inspector {
     fn tips(&self) -> Vec<TransitionKey>;
     fn has(&self, key: &TransitionKey) -> bool;
     fn get_file(&self, key: &[u8]) -> Option<Vec<u8>>;
+    fn missing(&self) -> Vec<TransitionKey>;
 
     fn subgraph(&self, mut tips: Vec<Transition>) -> Vec<Transition> {
         // create a sample of the subgraph, starting by the given tips

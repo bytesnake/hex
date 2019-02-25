@@ -99,10 +99,22 @@ pub struct Storage {
 #[cfg(feature="rusqlite")]
 impl Storage {
     pub fn new<T: AsRef<Path>>(path: T) -> Storage {
-        Storage {
+        let storage = Storage {
             data_path: path.as_ref().parent().unwrap().join("data").to_path_buf(),
             socket: rusqlite::Connection::open(path).unwrap()
+        };
+
+        {
+            // check if we can apply any unfinished transitions
+            let mut stmt = storage.socket.prepare("SELECT Key FROM Transitions WHERE State=2").unwrap();
+            let transition_keys = stmt.query_map(&[], |row| TransitionKey::from_vec(&row.get::<usize, Vec<u8>>(0))).unwrap().filter_map(|x| x.ok()).collect();
+
+            for transition in storage.restore(transition_keys).unwrap() {
+                storage.apply(transition);
+            }
         }
+
+        storage
     }
 
     pub fn apply(&self, trans: Transition) {
@@ -114,6 +126,8 @@ impl Storage {
 
         // don't apply if at least one reference is not yet applied
         if !all_applied {
+            warn!("Cannot apply the transition {} because references are missing!", trans.key.to_string());
+
             return;
         }
 
@@ -255,6 +269,25 @@ impl Inspector for Storage {
         file.read_to_end(&mut content).unwrap();
 
         Some(content)
+    }
+
+    fn missing(&self) -> Vec<TransitionKey> {
+        // check if we can apply any unfinished transitions
+        let mut stmt = self.socket.prepare("SELECT * FROM Transitions WHERE State=2").unwrap();
+
+        let mut keys: Vec<TransitionKey> = stmt.query_map(&[], |row| transition_from_sql(&row)).unwrap().filter_map(|x| x.ok()).map(|x| x.refs).flatten().collect();
+
+        let stmt = format!("SELECT * FROM Transitions WHERE hex(key) IN ({});", keys.iter().map(|x| format!("\"{}\"", x.to_string())).collect::<Vec<String>>().join(","));
+
+        let mut stmt = self.socket.prepare(&stmt).unwrap();
+
+        let existing_keys: Vec<TransitionKey> = stmt.query_map(&[], |row| TransitionKey::from_vec(&row.get::<usize, Vec<u8>>(0))).unwrap().filter_map(|x| x.ok()).collect();
+
+        keys.retain(|x| !existing_keys.contains(&x));
+        
+        println!("Have {} missing keys!", keys.len());
+
+        keys
     }
 }
 

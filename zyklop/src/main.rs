@@ -66,7 +66,12 @@ fn main() {
 
             println!("Got file write ..!");
             let mut file = File::create(path).unwrap();
-            file.write(&buf).unwrap();
+
+            // direct write may be too slow, therefore write in 1M blocks
+            for block in buf.chunks(1000*1000) {
+                file.write(&block).unwrap();
+                file.sync_data().unwrap();
+            }
         }
     });
     

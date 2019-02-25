@@ -17,7 +17,7 @@ use bincode::{deserialize, serialize};
 use ring::{aead, rand, rand::SecureRandom};
 
 use crate::{PeerId, PeerPresence, Error, Result};
-use transition::Transition;
+use transition::{Transition, TransitionKey};
 
 /// The network key will be shared between all peers and contains 
 /// a 256bit key, encrypting and signing every transition send through the network
@@ -32,7 +32,7 @@ pub type NetworkKey = [u8; 32];
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Packet {
     /// We ask to join in the network with a identity and our tips of the data graph
-    Join(PeerPresence, Vec<Transition>),
+    Join(PeerPresence, Vec<Transition>, Vec<TransitionKey>),
     /// Ask for the current vector of peers
     GetPeers(Option<Vec<PeerPresence>>),
     /// Push a new packet into the network with reference to received transitions
@@ -60,11 +60,11 @@ impl ResolvePeers {
         self.awaiting.push(peer);
     }
 
-    pub fn poll(&mut self) -> Poll<Option<(PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>, PeerPresence, Vec<Transition>)>, io::Error> {
-        if let Some((read, write, presence, transitions)) = try_ready!(self.awaiting.poll()) {
+    pub fn poll(&mut self) -> Poll<Option<(PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>, PeerPresence, Vec<Transition>, Vec<TransitionKey>)>, io::Error> {
+        if let Some((read, write, presence, transitions, missing)) = try_ready!(self.awaiting.poll()) {
             self.ids.insert(presence.id.clone(), ());
 
-            Ok(Async::Ready(Some((read, write, presence, transitions))))
+            Ok(Async::Ready(Some((read, write, presence, transitions, missing))))
         } else {
             Ok(Async::Ready(None))
         }
@@ -82,7 +82,7 @@ impl ResolvePeers {
 /// gives the PeerCodec, the socket addr and the Join message.
 
 pub enum Peer {
-    Connecting((ConnectFuture, NetworkKey, PeerPresence, Vec<Transition>)),
+    Connecting((ConnectFuture, NetworkKey, PeerPresence, Vec<Transition>, Vec<TransitionKey>)),
     SendJoin((PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>)),
     WaitForJoin((PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>)),
     Ready
@@ -90,22 +90,22 @@ pub enum Peer {
 
 impl Peer {
     /// Initialise a full peer connection with just the address
-    pub fn connect(addr: &SocketAddr, key: NetworkKey, myself: PeerPresence, tips: Vec<Transition>) -> Peer {
+    pub fn connect(addr: &SocketAddr, key: NetworkKey, myself: PeerPresence, tips: Vec<Transition>, missing: Vec<TransitionKey>) -> Peer {
         let addr = addr.clone();
 
         trace!("Connect to {:?} with {} tips", addr, tips.len());
 
-        Peer::Connecting((TcpStream::connect(&addr), key, myself, tips))
+        Peer::Connecting((TcpStream::connect(&addr), key, myself, tips, missing))
     }
 
     /// Initialise a full peer connection with a connected TcpStream
-    pub fn send_join(socket: TcpStream, key: NetworkKey, myself: PeerPresence, tips: Vec<Transition>) -> Peer {
+    pub fn send_join(socket: TcpStream, key: NetworkKey, myself: PeerPresence, tips: Vec<Transition>, missing: Vec<TransitionKey>) -> Peer {
         let addr = socket.peer_addr().unwrap();
         let (read, mut write) = new(socket, key);
 
         trace!("Send JOIN to {:?} with {} tips", addr, tips.len());
 
-        write.buffer(Packet::Join(myself, tips));
+        write.buffer(Packet::Join(myself, tips, missing));
 
         Peer::SendJoin((read, write))
     }
@@ -116,7 +116,7 @@ impl Peer {
 /// This future will ensure that 1. the TcpStream has been established and 2. the Join
 /// message is received and valid. It is encoded as a state machine.
 impl Future for Peer {
-    type Item=(PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>, PeerPresence, Vec<Transition>);
+    type Item=(PeerCodecRead<TcpStream>, PeerCodecWrite<TcpStream>, PeerPresence, Vec<Transition>, Vec<TransitionKey>);
     type Error=io::Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
@@ -124,13 +124,13 @@ impl Future for Peer {
         let val = mem::replace(self, Peer::Ready);
 
         let new_val = match val {
-            Peer::Connecting((mut socket_future, key, myself, tips)) => {
+            Peer::Connecting((mut socket_future, key, myself, tips, missing)) => {
                 // We are here in the connecting state, the TcpStream has no connection yet. As
                 // soon as the connection is established we will send the join message and then
                 // poll again.
                 match socket_future.poll()? {
-                    Async::Ready(socket) => {poll_again = true; Peer::send_join(socket, key, myself, tips)},
-                    Async::NotReady => Peer::Connecting((socket_future, key, myself, tips))
+                    Async::Ready(socket) => {poll_again = true; Peer::send_join(socket, key, myself, tips, missing)},
+                    Async::NotReady => Peer::Connecting((socket_future, key, myself, tips, missing))
                 }
             },
 
@@ -145,7 +145,7 @@ impl Future for Peer {
                 // Poll the underlying socket through the PeerCodec for a Join message. If one
                 // arrives, we can resolve the future.
                 match read.poll()? {
-                    Async::Ready(Some(Packet::Join(presence, new_transitions))) => return Ok(Async::Ready((read, write, presence, new_transitions))),
+                    Async::Ready(Some(Packet::Join(presence, new_transitions, missing))) => return Ok(Async::Ready((read, write, presence, new_transitions, missing))),
                     Async::Ready(None) => return {
                         error!("Got an invalid connection attempt!");
                         

@@ -103,9 +103,6 @@ impl<T: Inspector> Clone for Spread<T> {
     }
 }
 
-//unsafe impl<T: Inspector> Send for Spread<T> {}
-//unsafe impl<T: Inspector> Sync for Spread<T> {}
-
 impl<T: Inspector> Spread<T> {
     pub fn new(my_id: PeerId, inspector: Arc<Mutex<T>>) -> Spread<T> {
         Spread { 
@@ -286,14 +283,15 @@ impl<T: Inspector> Gossip<T> {
 
         let tips = inspector.tips();
         let tips = inspector.restore(tips).unwrap();
+        let missing = inspector.missing();
 
         let peers = match contact {
             Some(addr) => {
-                vec![Peer::connect(&addr, key, myself.clone(), tips)]
+                vec![Peer::connect(&addr, key, myself.clone(), tips, missing)]
             },
             None => {
                 match Beacon::new(1, key, myself.addr.port()).wait(2) {
-                    Some(contact) => vec![Peer::connect(&contact, key, myself.clone(), tips)],
+                    Some(contact) => vec![Peer::connect(&contact, key, myself.clone(), tips, missing)],
                     _ => {
                         Vec::new()
                     }
@@ -345,10 +343,11 @@ impl<T: Inspector> Stream for Gossip<T> {
             Ok(Async::Ready(Some(socket))) => {
                 let tips = self.inspector.lock().unwrap().tips();
                 let tips = self.inspector.lock().unwrap().restore(tips).unwrap();
+                let missing = self.inspector.lock().unwrap().missing();
 
                 trace!("New connection from {}", socket.peer_addr().unwrap());
 
-                self.resolve.add_peer(Peer::send_join(socket, self.key, self.myself.clone(), tips));
+                self.resolve.add_peer(Peer::send_join(socket, self.key, self.myself.clone(), tips, missing));
             },
             Err(err) => {
                 println!("Listener err: {:?}", err);
@@ -361,7 +360,7 @@ impl<T: Inspector> Stream for Gossip<T> {
         // poll all connecting peers
         //
         match self.resolve.poll() {
-            Ok(Async::Ready(Some((reader, mut writer, mut presence, tips)))) => {
+            Ok(Async::Ready(Some((reader, mut writer, mut presence, tips, missing)))) => {
                 //if self.books.contains_key(&presence.id) || self.myself.id == presence.id {
                 if false {
                     warn!("Got already existing id {:?} from {:?}", presence.id, presence.addr);
@@ -378,20 +377,28 @@ impl<T: Inspector> Stream for Gossip<T> {
                         writer.poll_flush().unwrap();
                     }
 
-                    // if everything is fine, send new transitions for this peer
-                    for transition in self.inspector.lock().unwrap().subgraph(tips) {
-                        writer.buffer(Packet::Push(transition));
-
-                        // write everything to the peer
-                        writer.poll_flush().unwrap();
-
-                    }
-
                     self.books.insert(presence.id.clone(), presence.clone());
 
                     // empty a new log entry for our peer
                     let idx = self.writer.add_peer(&presence.id, writer);
                     presence.writer = Some(idx);
+
+                    for transition in self.inspector.lock().unwrap().restore(missing).unwrap() {
+                        self.writer.spread(Packet::Push(transition), SpreadTo::Peer(presence.id.clone()));
+                        //writer.buffer(Packet::Push(transition));
+
+                        //writer.poll_flush().unwrap();
+                    }
+
+                    // if everything is fine, send new transitions for this peer
+                    for transition in self.inspector.lock().unwrap().subgraph(tips) {
+                        self.writer.spread(Packet::Push(transition), SpreadTo::Peer(presence.id.clone()));
+                        //writer.buffer(Packet::Push(transition));
+
+                        // write everything to the peer
+                        //writer.poll_flush().unwrap();
+
+                    }
 
                     // the connection is established
                     //return Ok(Async::Ready(Some((presence.id, Vec::new()))));
@@ -428,7 +435,8 @@ impl<T: Inspector> Stream for Gossip<T> {
                         info!("Add peer {:?} in {:?}", presence.id, self.myself.id);
                         let tips = self.inspector.lock().unwrap().tips();
                         let tips = self.inspector.lock().unwrap().restore(tips).unwrap();
-                        self.resolve.add_peer(Peer::connect(&presence.addr, self.key, self.myself.clone(), tips));
+                        let missing = self.inspector.lock().unwrap().missing();
+                        self.resolve.add_peer(Peer::connect(&presence.addr, self.key, self.myself.clone(), tips, missing));
                     }
                 }
             },
@@ -437,6 +445,8 @@ impl<T: Inspector> Stream for Gossip<T> {
                     error!("Received wrong transition!");
                 } else if !self.inspector.lock().unwrap().has(&transition.key()) {
                     self.inspector.lock().unwrap().store(transition.clone());
+
+                    println!("Got transition {}", transition.key.to_string());
 
                     // forward to everyone else :(
                     self.writer.spread(Packet::Push(transition.clone()), SpreadTo::Everyone);

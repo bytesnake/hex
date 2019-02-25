@@ -174,13 +174,14 @@ impl<T> Container<T>
         let codec = conf.codec();
 
         let mut buf = vec![0u8; 256];
-        let mut harmonic_unscaled = vec![0i16; RAW_BLOCK_SIZE];
-        let mut harmonics = vec![0f32; RAW_BLOCK_SIZE * (self.sh_order as usize + 1) * (self.sh_order as usize + 1)];
+        let mut single_harmonic = vec![0i16; RAW_BLOCK_SIZE];
+        let mut harmonics = vec![0i16; RAW_BLOCK_SIZE * (self.sh_order as usize + 1) * (self.sh_order as usize + 1)];
 
         let mut i = 0;
         for size in sizes {
             let size = size.map_err(|_| Error::ReachedEnd)?;
 
+            // read single SH track with length size
             let nread = self.inner.read(&mut buf[0..size as usize])
                 .map_err(|_| Error::ReachedEnd)?;
 
@@ -188,23 +189,24 @@ impl<T> Container<T>
                 return Err(Error::CorruptedFile);
             }
 
-            //println!("Size: {}", size);
-            let nwritten = self.decoder[i].decode(&buf[0..nread], &mut harmonic_unscaled, false).unwrap();
-
-            let harmonic_scaled: Vec<f32> = harmonic_unscaled.iter().map(|x| *x as f32 / self.scales[i]).collect();
-
-            for j in 0..RAW_BLOCK_SIZE {
-                harmonics[j * self.num_harmonics() as usize + i] = harmonic_scaled[j];
-            }
+            // decode single harmonics
+            let nwritten = self.decoder[i].decode(&buf[0..nread], &mut single_harmonic, false).unwrap();
 
             if nwritten != RAW_BLOCK_SIZE {
                 return Err(Error::CorruptedFile);
             }
 
+            //let harmonic_scaled: Vec<f32> = harmonic_unscaled.iter().map(|x| *x as f32 / self.scales[i]).collect();
+
+            for j in 0..RAW_BLOCK_SIZE {
+                harmonics[i * RAW_BLOCK_SIZE as usize + j] = single_harmonic[j];
+            }
+
+
             i += 1;
         }
 
-        codec.to_channels(&harmonics, self.sh_order)
+        codec.to_channels(&self.scales, &harmonics, self.sh_order)
     }
 
     /// Converts raw audio with loudspeaker configuration to a new `Container`
@@ -217,9 +219,12 @@ impl<T> Container<T>
     
         // fill the audio signal encoded as channels up to multiple of RAW_BLOCK_SIZE
         let mut samples = pcm.len() / conf.num_channels() as usize;
-        let rem = RAW_BLOCK_SIZE - samples % RAW_BLOCK_SIZE;
-        pcm.extend(vec![0; rem * conf.num_channels()]);
-        samples += rem;
+
+        if samples % RAW_BLOCK_SIZE != 0 {
+            let rem = RAW_BLOCK_SIZE - samples % RAW_BLOCK_SIZE;
+            pcm.extend(vec![0; rem * conf.num_channels()]);
+            samples += rem;
+        }
 
         inner.write_u32::<LittleEndian>(samples as u32).map_err(|err| Error::File(err))?;
 
@@ -287,60 +292,47 @@ impl<T> Container<T>
 
 #[cfg(test)]
 mod tests {
+    use std::i16;
     use std::fs::File;
-    use std::io::{Read, Write};
+    use std::io::{Read, Write, Cursor};
     use std::slice;
+    use std::cmp::min;
 
     use super::{Container, Configuration, RAW_BLOCK_SIZE};
 
     #[test]
-    fn convert_pcm() {
-        let mut pcm_file = File::open("assets/crazy.raw").unwrap();
-        let mut pcm = vec![];
+    fn amplitute() {
+        let pcm: Vec<i16> = (0..3840).map(|x| ((x as f32 / 48000.0 * 2.0 * 3.1410 * 880.0).sin() * i16::MAX as f32) as i16).collect();
+        let buf = Cursor::new(Vec::new());
 
-        pcm_file.read_to_end(&mut pcm).unwrap();
+        let mut container = Container::save_pcm(Configuration::Stereo, pcm.clone(), buf, None).unwrap();
+        container.seek_to_data();
 
-        let pcm2: &[i16] = unsafe {
-            slice::from_raw_parts(
-                pcm.as_ptr() as *const i16,
-                pcm.len() / 2
-            )
-        };
+        let mut acq_pcm: Vec<i16> = Vec::new();
 
-        let opus_file = File::create("assets/crazy.opus").unwrap();
-        
-        Container::save_pcm(Configuration::Stereo, pcm2, opus_file).unwrap();
-    }
-
-    #[test]
-    fn read_opus() {
-        let mut opus_file = File::open("assets/crazy.opus").unwrap();
-
-        let mut file = Container::from_file(opus_file).unwrap();
-
-        //file.seek_to_sample(121 * 1000 * 1000);
-
-        file.seek_to_data();
-
-        let mut out_file = File::create("assets/crazy2.raw").unwrap();
-        //let mut buf = vec![0i16; RAW_BLOCK_SIZE];
-        let mut samples = 0;
-
-        while samples < file.samples {    
-            //file.next_packet(&mut buf);
-            let buf = file.next_packet(Configuration::Stereo).unwrap();
-
-            let pcm: &[u8] = unsafe {
-                slice::from_raw_parts(
-                    buf.as_ptr() as *const u8,
-                    buf.len() * 2
-                )
-            };
-
-            out_file.write(&pcm).unwrap();
-
-            samples += RAW_BLOCK_SIZE as u32;
+        while let Ok(mut data) = container.next_packet(Configuration::Stereo) {
+            acq_pcm.append(&mut data);
         }
+
+        assert!(pcm.len() < acq_pcm.len());
+
+        // find best approximation
+        let mut best_fit = 10000.0;
+        for i in 0..min(pcm.len(), acq_pcm.len()) {
+            let mut diff: f64 = 0.0;
+            for j in i..min(acq_pcm.len(), pcm.len() + i) {
+                diff += (acq_pcm[j] as f64 - pcm[j-i] as f64).abs();
+            }
+            //println!("{}", diff / (pcm.len() as f64));
+            diff /= pcm.len() as f64;
+            if diff < best_fit {
+                best_fit = diff;
+            }
+        }
+
+        //println!("Best fit {}", best_fit);
+
+        assert!(best_fit < 1.0);
 
     }
 }

@@ -64,7 +64,7 @@ impl Codec {
         let num_channels = self.conf.num_channels() as usize;
         let num_harmonics = self.conf.num_harmonics() as usize;
 
-        let mut scales = vec![32767.0; num_harmonics];
+        let mut scales = vec![std::f32::MAX; num_harmonics];
             
         for sample in channels.chunks(num_channels) {
             match self.conf {
@@ -74,17 +74,17 @@ impl Codec {
                     }
                 },
                 Configuration::Stereo => {
-                    let val = 32767.0 / ((sample[0] as f32 + sample[1] as f32) * 0.5 * 0.2820948).abs();
+                    let val = 32767.0 / ((sample[0] as f32 + sample[1] as f32) * 0.2820948).abs();
                     if val < scales[0] {
                         scales[0] = val;
                     }
 
-                    let val = 32767.0 / ((sample[0] as f32 - sample[1] as f32) * 0.5 * 0.3454941).abs();
+                    let val = 32767.0 / ((sample[0] as f32 - sample[1] as f32) * 0.3454941).abs();
                     if val < scales[1] {
                         scales[1] = val;
                     }
 
-                    let val = 32767.0 / ((sample[1] as f32 - sample[0] as f32) * 0.5 * 0.3454941).abs();
+                    let val = 32767.0 / ((sample[1] as f32 - sample[0] as f32) * 0.3454941).abs();
                     if val < scales[3] {
                         scales[3] = val;
                     }
@@ -101,20 +101,26 @@ impl Codec {
     /// Converts raw audio to SH representation
     pub fn to_harmonics(&self, scales: &[f32], channels: &[i16], harmonics: &mut [i16]) {
         let num_channels = self.conf.num_channels() as usize;
-        let num_harmonics = self.conf.num_harmonics() as usize;
-        let block_length = harmonics.len() / num_harmonics;
+        //let num_harmonics = self.conf.num_harmonics() as usize;
 
+        // calculate the number of samples per block
+        let block_length = channels.len() / num_channels;
+
+        let first = 1.0 / (4.0 * std::f64::consts::PI).sqrt();
+        let secon = (3.0 / 8.0 / std::f64::consts::PI).sqrt();
+
+        //println!("{} {} {}", num_channels, num_harmonics, block_length);
         let mut i = 0;
         for sample in channels.chunks(num_channels) {
             match self.conf {
                 Configuration::Omnidirectional => {
-                    harmonics[i] = (sample[0] as f32 * 0.2820948 / scales[0]) as i16;
+                    harmonics[i] = (sample[0] as f64 * first / scales[0] as f64) as i16;
                 },
                 Configuration::Stereo => {
-                    harmonics[i] = ((sample[0] as f32 + sample[1] as f32) * 0.5 * 0.2820948 * scales[0]) as i16;
-                    harmonics[i + block_length] = ((sample[0] as f32 - sample[1] as f32) * 0.5 * 0.3454941 * scales[1]) as i16;
+                    harmonics[i] = ((sample[0] as f64 + sample[1] as f64) * first * scales[0] as f64).round() as i16;
+                    harmonics[i + block_length] = ((sample[0] as f64 - sample[1] as f64) * secon * scales[1] as f64).round() as i16;
                     harmonics[i + block_length*2] = 0;
-                    harmonics[i + block_length*3] = ((sample[1] as f32 - sample[0] as f32) * 0.5 * 0.3454941 * scales[3]) as i16;
+                    harmonics[i + block_length*3] = ((sample[1] as f64 - sample[0] as f64) * secon * scales[3] as f64).round() as i16;
                 },
                 _ => {}
             }
@@ -124,27 +130,26 @@ impl Codec {
     }
 
     /// Converts SH representation to loudspeaker dependent representation
-    pub fn to_channels(&self, harmonics: &[f32], from_harmonics: u8) -> Result<Vec<i16>> {
+    pub fn to_channels(&self, scales: &[f32], harmonics: &[i16], from_harmonics: u8) -> Result<Vec<i16>> {
         let num_channels = self.conf.num_channels() as usize;
         let num_from_harmonics = (from_harmonics as usize + 1) * (from_harmonics as usize + 1);
         let samples = harmonics.len() / num_from_harmonics;
         
         let mut channels = vec![0; samples * num_channels];
+        let sample = harmonics;
+
+        let first = (4.0 * std::f64::consts::PI / 4.0).sqrt();
+        let secon = (8.0 * std::f64::consts::PI / 3.0 / 4.0).sqrt();
 
         let mut i = 0;
-        for sample in harmonics.chunks(num_from_harmonics) {
+        for j in 0..samples {
             match self.conf {
                 Configuration::Omnidirectional => {
-                    channels[i] = (sample[0] * 3.5449077) as i16;
+                    channels[i] = ((sample[j] as f64) / scales[0] as f64 * first) as i16;
                 },
                 Configuration::Stereo => {
-                    if sample.len() == 1 {
-                        channels[i] = (1.7724538 * sample[0]) as i16;
-                        channels[i+1] = (1.7724538 * sample[0]) as i16;
-                    } else {
-                        channels[i] = (1.4472025 * sample[1] + 1.7724538 * sample[0]) as i16;
-                        channels[i+1] = (1.4472025 * sample[3] + 1.7724538 * sample[0]) as i16;
-                    }
+                    channels[i] = (secon * (sample[j + samples] as f64 / scales[1] as f64) + first * (sample[j] as f64 / scales[0] as f64)).round() as i16;
+                    channels[i+1] = (secon * (sample[j + samples * 3] as f64 / scales[3] as f64) + first * (sample[j] as f64 / scales[0] as f64)).round() as i16;
                 },
                 _ => return Err(Error::NotSupported)
             }
@@ -162,15 +167,41 @@ mod test {
     use super::Configuration;
 
     #[test]
-    fn test_ambi() {
+    fn test_linear_sequence_stereo() {
         let conf = Configuration::Stereo;
         let codec = conf.codec();
 
         let buf: Vec<i16> = (-100..100).collect();
-        let buf_harmonics = codec.to_harmonics(&buf).unwrap();
-        let buf_channels = codec.to_channels(&buf_harmonics, 2).unwrap();
 
-        println!("{:?}", buf_channels);
+        let scales = codec.scales(&buf).unwrap();
 
+        let mut buf_harmonics = vec![0; buf.len() * 2];
+        codec.to_harmonics(&scales, &buf, &mut buf_harmonics);
+
+        let buf_channels = codec.to_channels(&scales, &buf_harmonics, 1).unwrap();
+
+        assert_eq!(buf_channels, buf);
+    }
+
+    #[test]
+    fn test_sine_sequence_stereo() {
+        let conf = Configuration::Stereo;
+        let codec = conf.codec();
+
+        let buf: Vec<i16> = (0..48000).map(|x| {
+            let arg = x as f64 / 48000.0 * 20.0;
+            let val = arg.sin();
+
+            (val * 4000.0) as i16
+        }).collect();
+
+        let scales = codec.scales(&buf).unwrap();
+
+        let mut buf_harmonics = vec![0; buf.len() * 2];
+
+        codec.to_harmonics(&scales, &buf, &mut buf_harmonics);
+        let buf_channels = codec.to_channels(&scales, &buf_harmonics, 1).unwrap();
+
+        assert_eq!(buf_channels, buf);
     }
 }

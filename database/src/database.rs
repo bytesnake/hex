@@ -266,9 +266,21 @@ impl View {
             .and_then(|x| x.map_err(|e| Error::Sqlite(e)))
             .and_then(|row| Playlist::from_row(&row).map_err(|e| Error::Sqlite(e)))?;
 
-        let query = format!("SELECT * FROM Tracks WHERE hex(key) in ({});", playlist.tracks.iter().map(|key| format!("\"{}\"", key.to_string())).collect::<Vec<String>>().join(","));
+        let idx_map : HashMap<TrackKey, usize>= playlist.tracks.iter().enumerate().map(|(a,b)| (b.clone(),a)).collect();
+
+        let query = format!("SELECT * FROM Tracks WHERE hex(key) in ({});", 
+                            playlist.tracks.iter().map(|key| format!("\"{}\"", key.to_string())).collect::<Vec<String>>().join(",")
+                        );
+
         let mut stmt = self.socket.prepare(&query).unwrap();
-        let res = self.search(&mut stmt).collect();
+        let mut res: Vec<Track> = self.search(&mut stmt).collect();
+
+        res.sort_by(|a,b| {
+            let idx_a = idx_map.get(&a.key).unwrap();
+            let idx_b = idx_map.get(&b.key).unwrap();
+
+            idx_a.cmp(idx_b)
+        });
 
         Ok((playlist, res))
     }

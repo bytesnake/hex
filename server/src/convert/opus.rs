@@ -41,7 +41,7 @@ fn worker(mut sender: Sender<State>, desc: String, samples: Vec<i16>, duration: 
         .map_err(|_| Error::ChannelFailed)?;
 
     // TODO realtime
-    Container::save_pcm(Configuration::Stereo, &samples, file, None)
+    Container::save_pcm(Configuration::Stereo, samples, file, None)
         .map_err(|err| Error::MusicContainer(err))?;
 
     Ok(track)
