@@ -1,5 +1,4 @@
 extern crate futures;
-extern crate tokio;
 extern crate getopts;
 extern crate cpal;
 extern crate rb;

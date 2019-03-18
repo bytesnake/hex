@@ -32,5 +32,5 @@ git = "https://github.com/bytesnake/rust-chromaprint"
 path = "protocol/"
 features = ["server"]
 
-[patch.crates-io]
-openssl-sys = "0.10"
+#[patch.crates-io]
+#openssl-sys = "0.10"

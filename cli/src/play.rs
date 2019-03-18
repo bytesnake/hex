@@ -14,6 +14,9 @@ use hex_music_container::{Container, Configuration};
 
 #[derive(Debug)]
 pub enum Event {
+    PauseContinue,
+    Forward,
+    Backward,
     Next,
     Prev,
     Quit
@@ -69,7 +72,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
                     continue 'outer;
                 },
                 Ok(Event::Quit) => return,
-                Err(_) => {}
+                _ => {}
             }
 
             println!("File {} not available", tracks[idx].key.to_string());
@@ -82,6 +85,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
         println!("{} ({}) by {}", tracks[idx].title.clone().unwrap_or("Unknown".into()), tracks[idx].album.clone().unwrap_or("Unknown".into()), tracks[idx].composer.clone().unwrap_or("Unknown".into()));
 
         let mut pos = 0.0;
+        let mut pause = false;
         'inner: while let Ok(buf) = container.next_packet(Configuration::Stereo) {
             pos += buf.len() as f64 / 48000.0 / 2.0;
 
@@ -97,23 +101,60 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
 
             io::stdout().flush().unwrap();
 
-            device.buffer(&buf);
+            let mut written = 0;
+            while written < buf.len() {
+                match device.buffer(&buf, written) {
+                    0 => {
+                        thread::sleep(Duration::from_millis(50));
+                    },
+                    x => written += x
+                }
 
-            match events.try_recv() {
-                Ok(Event::Next) => {
-                    break 'inner;
-                },
-                Ok(Event::Prev) => {
-                    if pos > 4.0 || idx == 0 {
-                        idx -= 1;
-                    } else {
-                        idx -= 2;
-                    }
-
-                    break 'inner;
-                },
-                Ok(Event::Quit) => return,
-                _ => {}
+                match events.try_recv() {
+                    Ok(Event::Forward) => {
+                        if pos + 10.0 < container.samples() as f64 / 48000.0 {
+                            pos += 10.0;
+                            container.seek_to_sample(pos as u32 * 48000);
+                            device.clear();
+                        }
+                    },
+                    
+                    Ok(Event::Backward) => {
+                        if pos - 10.0 >= 0.0 {
+                            pos -= 10.0;
+                            container.seek_to_sample(pos as u32 * 48000);
+                            device.clear();
+                        }
+                    },
+                    
+                    Ok(Event::PauseContinue) => {
+                        pause = !pause;
+                    
+                        if pause {
+                            device.pause();
+                        } else {
+                            device.cont();
+                        }
+                    },
+                    
+                    Ok(Event::Next) => {
+                        break 'inner;
+                    },
+                    Ok(Event::Prev) => {
+                        if pos > 4.0 || idx == 0 {
+                            idx -= 1;
+                        } else {
+                            idx -= 2;
+                        }
+                    
+                        break 'inner;
+                    },
+                    Ok(Event::Quit) => {
+                        device.shutdown();
+                        return;
+                    },
+                    _ => {}
+                }
             }
         }
 
@@ -142,17 +183,29 @@ pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
     termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &term).unwrap();
     let (sender, receiver) = channel();
 
-    let _handle = thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
+    let handle = thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
 
     for byte in io::stdin().bytes() {
-        match byte {
-            Ok(68) => sender.send(Event::Prev).unwrap(),
-            Ok(67) => sender.send(Event::Next).unwrap(),
+        println!("Got {:?}", byte);
+        let res = match byte {
+            Ok(32) => sender.send(Event::PauseContinue),
+            Ok(65) => sender.send(Event::Forward),
+            Ok(66) => sender.send(Event::Backward),
+            Ok(68) => sender.send(Event::Prev),
+            Ok(67) => sender.send(Event::Next),
             Ok(3) => {
                 sender.send(Event::Quit).unwrap();
-                break
+
+                handle.join().unwrap();
+                break;
             },
-            _ => {}
+            _ => Ok(())
+        };
+
+        println!("{:?}", res);
+        if let Err(_) = res {
+            println!("ERROR");
+            break;
         }
     }
 
