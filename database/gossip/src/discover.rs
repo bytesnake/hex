@@ -20,8 +20,8 @@ use net2::UdpBuilder;
 use bincode::{serialize, deserialize};
 use ring::digest;
 
-use local_ip;
-use protocol::NetworkKey;
+use crate::local_ip;
+use crate::protocol::NetworkKey;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct Packet {

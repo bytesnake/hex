@@ -3,7 +3,7 @@
 //! This module is used in `hex_music_container` to describe the loudspeaker configuration of raw
 //! audio. It can also be disabled in case the raw audio is already in SH format.
 
-use error::{Error, Result};
+use crate::error::{Error, Result};
 
 /// A loudspeaker configuration
 #[derive(Clone)]

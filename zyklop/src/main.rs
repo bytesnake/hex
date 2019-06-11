@@ -1,21 +1,8 @@
-extern crate mfrc522;
-extern crate sysfs_gpio;
-extern crate spidev;
-extern crate cpal;
-extern crate rb;
-extern crate rand;
-
-extern crate futures;
-extern crate hex_conf;
-extern crate hex_database;
-extern crate hex_music_container;
-
 mod error;
 mod audio;
 mod events;
 mod token;
 
-use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -24,8 +11,6 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use futures::Future;
 
 use events::Event;        
-
-use error::Error;
 
 use hex_database::{Instance, Token, GossipConf, TrackKey};
 

@@ -8,12 +8,12 @@ use rusqlite::{self, Statement, OpenFlags};
 use tokio;
 use std::thread;
 
-use error::{Error, Result};
-use search::SearchQuery;
-use objects::*;
+use crate::error::{Error, Result};
+use crate::search::SearchQuery;
+use crate::objects::*;
 
 use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo};
-use transition::{Storage, TransitionAction, transition_from_sql};
+use crate::transition::{Storage, TransitionAction, transition_from_sql};
 
 type Awaiting = Arc<Mutex<HashMap<Vec<u8>, Complete<Vec<u8>>>>>;
 /// Instance of the database

@@ -12,7 +12,7 @@ use tokio_core::reactor::Handle;
 use futures::{Future, Poll, Stream, IntoFuture};
 use bytes::BytesMut;
 
-use error::{Result, Error};
+use crate::error::{Result, Error};
 
 struct LineCodec;
 

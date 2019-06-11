@@ -13,12 +13,12 @@ use std::io::Read;
 use websocket::WebSocketError;
 use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
-use websocket::async::Server;
+use websocket::r#async::Server;
 
 use tokio_core::reactor::{Handle, Core};
 use futures::{Future, Sink, Stream, sync::mpsc::{Sender, channel}};
 
-use state::State;
+use crate::state::State;
 use hex_conf::Conf;
 
 use hex_server_protocol::{Answer, AnswerAction};

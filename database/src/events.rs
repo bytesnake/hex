@@ -8,7 +8,7 @@
 #[cfg(feature="rusqlite")]
 use rusqlite::{Error, Result};
 
-use objects::TrackKey;
+use crate::objects::TrackKey;
 
 /// An Event occurs from an origin and contains an action. The origin is most of the time an IP
 /// address.

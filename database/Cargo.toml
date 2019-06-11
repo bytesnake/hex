@@ -1,5 +1,6 @@
 [package]
 name = "hex-database"
+edition = "2018"
 version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 

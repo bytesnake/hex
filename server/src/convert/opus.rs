@@ -6,11 +6,11 @@ use futures::{IntoFuture, Future, Stream};
 use futures::sync::mpsc::{channel, Sender, Receiver};
 use tokio_core::reactor::Handle;
 
-use error::{Result, Error};
+use crate::error::{Result, Error};
 
 use hex_music_container::{Container, Configuration};
 
-use acousticid;
+use crate::acousticid;
 use hex_database::Track;
 
 pub struct State {

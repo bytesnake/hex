@@ -9,7 +9,7 @@ use bincode::{serialize, deserialize};
 #[cfg(feature="rusqlite")]
 use hex_gossip::{Inspector, Transition, TransitionKey};
 
-use objects::{self, Track, Playlist, Token, TrackKey, PlaylistKey, TokenId};
+use crate::objects::{self, Track, Playlist, Token, TrackKey, PlaylistKey, TokenId};
 
 #[cfg(feature="rusqlite")]
 static UPSERT_TRACK: &str = r#"

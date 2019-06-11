@@ -4,7 +4,7 @@ use std::fs::File;
 use std::time::Duration;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
-use audio::AudioDevice;
+use crate::audio::AudioDevice;
 use terminal_size::{Width, terminal_size};
 
 use nix::sys::termios;
@@ -186,7 +186,6 @@ pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
     let handle = thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
 
     for byte in io::stdin().bytes() {
-        println!("Got {:?}", byte);
         let res = match byte {
             Ok(32) => sender.send(Event::PauseContinue),
             Ok(65) => sender.send(Event::Forward),
@@ -202,7 +201,7 @@ pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
             _ => Ok(())
         };
 
-        println!("{:?}", res);
+        //println!("{:?}", res);
         if let Err(_) = res {
             println!("ERROR");
             break;

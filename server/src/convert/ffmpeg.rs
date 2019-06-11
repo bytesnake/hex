@@ -13,7 +13,7 @@ use tokio_core::reactor::Handle;
 use futures::{Future, Stream, IntoFuture};
 use bytes::BytesMut;
 
-use error::{Result, Error};
+use crate::error::{Result, Error};
 use tempfile::NamedTempFile;
 
 struct LineCodec;

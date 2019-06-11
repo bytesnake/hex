@@ -11,7 +11,7 @@ use futures::{IntoFuture, Future, Stream};
 use futures::sync::mpsc::{channel, Sender};
 use tokio_core::reactor::Handle;
 
-use error::{Result, Error};
+use crate::error::{Result, Error};
 
 use hex_music_container::{Container, Configuration, error::Error as MusicError};
 use hex_database::Track;

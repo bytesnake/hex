@@ -17,7 +17,7 @@ use bincode::{deserialize, serialize};
 use ring::{aead, rand, rand::SecureRandom};
 
 use crate::{PeerId, PeerPresence, Error, Result};
-use transition::{Transition, TransitionKey};
+use crate::transition::{Transition, TransitionKey};
 
 /// The network key will be shared between all peers and contains 
 /// a 256bit key, encrypting and signing every transition send through the network

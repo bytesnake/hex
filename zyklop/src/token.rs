@@ -8,7 +8,7 @@ use rand::{thread_rng, Rng};
 use hex_database::{Track, Token, TrackKey};
 use hex_music_container::{Container, Configuration};
 
-use error::{Error, Result};
+use crate::error::{Error, Result};
 
 pub struct Stream {
     pub track: Track,

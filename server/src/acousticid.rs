@@ -6,7 +6,7 @@ use serde_json;
 use serde_json::Value;
 use curl::easy::{Form,Easy};
 
-use error::{Error, Result};
+use crate::error::{Error, Result};
 
 /// Calculate a fingerprint to lookup music
 ///

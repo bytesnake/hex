@@ -13,10 +13,6 @@
 //! |-------|---------|----------|----------|------------------|----------------------------|
 //! | field | version | sh order | samples  | scales ..        | audio data ...             |
 //!
-extern crate byteorder;
-extern crate opus;
-extern crate futures;
-
 pub mod error;
 pub mod configuration;
 
@@ -28,8 +24,8 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use futures::sync::mpsc::Sender;
 use opus::{Channels, Application};
 
-use error::{Error, Result};
-pub use configuration::Configuration;
+use crate::error::{Error, Result};
+pub use crate::configuration::Configuration;
 
 /// Size of a single raw audio block
 const RAW_BLOCK_SIZE: usize = 1920;
@@ -240,6 +236,7 @@ impl<T> Container<T>
         let sh_codec = conf.codec();
         let scales = sh_codec.scales(&pcm)?;
 
+
         for scale in &scales {
             inner.write_f32::<LittleEndian>(*scale).map_err(|err| Error::File(err))?;
         }
@@ -264,6 +261,7 @@ impl<T> Container<T>
             for j in 0..conf.num_harmonics() as usize {
                 nwritten[j] = encoders[j].encode(&harmonics[j*RAW_BLOCK_SIZE..(j+1)*RAW_BLOCK_SIZE], &mut opus_result[j]).map_err(|err| Error::Opus(err))? as u16;
             }
+
 
             //println!("Loss: {:?}, Bitrate: {:?}, Bandwidth: {:?}, Written: {:?}", encoders[0].get_packet_loss_perc().unwrap(), encoders[0].get_bitrate().unwrap(), encoders[0].get_bandwidth().unwrap(), nwritten);
 

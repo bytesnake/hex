@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use ring::digest;
 
-use PeerId;
+use crate::PeerId;
 
 ///
 /// Inspector for incoming transitions. 

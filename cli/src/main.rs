@@ -1,4 +1,4 @@
-extern crate futures;
+/*extern crate futures;
 extern crate getopts;
 extern crate cpal;
 extern crate rb;
@@ -10,7 +10,7 @@ extern crate chromaprint;
 
 extern crate hex_conf;
 extern crate hex_database;
-extern crate hex_music_container;
+extern crate hex_music_container;*/
 
 mod audio;
 mod play;

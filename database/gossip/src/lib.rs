@@ -1,5 +1,4 @@
 #![feature(test)]
-#![feature(duration_as_u128)]
 //! Implements peer membership and gossip protocol to communicate in P2P fashion
 //!
 //! Every peer has a unique name and manages a certain number of open connections to other peers
@@ -22,15 +21,8 @@
 //!
 //! tokio::run(gossip);
 //! ```
-extern crate test;
 #[macro_use]
 extern crate log;
-extern crate nix;
-extern crate bytes;
-extern crate net2;
-extern crate ring;
-extern crate bincode;
-extern crate tokio;
 #[macro_use]
 extern crate futures;
 #[macro_use]
@@ -55,9 +47,9 @@ use tokio::io;
 use tokio::prelude::task::Task;
 use tokio::net::{TcpListener, TcpStream, tcp::Incoming};
 
-use self::protocol::{Peer, ResolvePeers, PeerCodecWrite, NetworkKey};
-pub use self::protocol::Packet;
-pub use self::discover::{Beacon, Discover};
+use protocol::{Peer, ResolvePeers, PeerCodecWrite, NetworkKey};
+pub use protocol::Packet;
+pub use discover::{Beacon, Discover};
 
 /// Identification of a peer. This is the public key (256bit) of a Schnorr signature using a
 /// twisted Edwards form of Curve25519. The key is used to verify that a message is signed by its
@@ -417,7 +409,7 @@ impl<T: Inspector> Stream for Gossip<T> {
         // and process it with some logic
         match packet {
             Packet::GetPeers(None) => {
-                let mut list: Vec<PeerPresence> = self.books.values().cloned()
+                let list: Vec<PeerPresence> = self.books.values().cloned()
                     .filter_map(|mut x| {
                         if x.id != id {
                             x.writer = None;

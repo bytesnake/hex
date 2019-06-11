@@ -11,15 +11,15 @@ use std::slice;
 
 use tokio_core::reactor::Handle;
 
-use error::{Result, Error};
+use crate::error::{Result, Error};
 
-use convert::{UploadState, download::{DownloadState}};
+use crate::convert::{UploadState, download::{DownloadState}};
 
 use hex_database::{self, Track, Token, View, Playlist};
 use hex_music_container::{self, Configuration, Container};
 use hex_server_protocol::{Request, Answer, RequestAction, AnswerAction, PacketId, objects::UploadProgress};
 
-use acousticid;
+use crate::acousticid;
 
 /// A pending request
 ///
