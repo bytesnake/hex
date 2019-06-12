@@ -1,0 +1,15 @@
+[package]
+name = "telegram"
+version = "0.1.0"
+authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+telebot = "0.3"
+hex-database = { path = "../database/" }
+hex-conf = { path = "../conf/" }
+hex-music-container = { path = "../music-container" }
+futures = {version = "0.1" }
+tokio = {version = "0.1", default-features = false, features = ["io", "reactor", "tcp"], optional = true }

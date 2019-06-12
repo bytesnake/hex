@@ -9,7 +9,8 @@ members = [
     "server/protocol",
     "zyklop",
     "cli",
-    "nightly-worker"
+    "nightly-worker",
+    "telegram"
 ]
 
 [profile.release]
