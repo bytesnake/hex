@@ -4,10 +4,7 @@ use std::slice;
 use std::thread;
 use std::fs::{self, File};
 use std::process::Command;
-use std::rc::Rc;
-use std::cell::RefCell;
 
-use futures::{IntoFuture, Future, Stream};
 use futures::sync::mpsc::{channel, Sender, Receiver};
 
 use crate::error::*;
@@ -22,12 +19,10 @@ pub struct DownloadProgress {
 }
 
 
-fn worker(mut sender: Sender<DownloadProgress>, tracks: Vec<Track>, num_channel: u32, data_path: PathBuf) -> Result<()> {
+fn worker(mut sender: Sender<DownloadProgress>, tracks: Vec<Track>, data_path: PathBuf) -> Result<()> {
     let download_path = data_path.join("download");
-    println!("start working at {:?}", data_path);
-
     for i in 0..tracks.len() {
-        println!("processing {}", i);
+        println!("Convert track {:?}", tracks[i].title);
         let file_path = data_path.join("data").join(&tracks[i].key.to_string());
 
         let file_path_out = download_path
@@ -90,11 +85,11 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(tracks: Vec<Track>, num_channel: u32, data_path: PathBuf) -> State {
+    pub fn new(tracks: Vec<Track>, data_path: PathBuf) -> State {
         let (sender, recv) = channel(10);
 
         let thread = thread::spawn(move || {
-            worker(sender, tracks, num_channel, data_path)
+            worker(sender, tracks, data_path)
                 .map_err(|e| {eprintln!("{:?}", e); e})
                 .map(|_| ())
         });

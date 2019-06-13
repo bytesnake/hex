@@ -12,4 +12,10 @@ hex-database = { path = "../database/" }
 hex-conf = { path = "../conf/" }
 hex-music-container = { path = "../music-container" }
 futures = {version = "0.1" }
-tokio = {version = "0.1", default-features = false, features = ["io", "reactor", "tcp"], optional = true }
+tokio = {version = "0.1", default-features = false, features = ["io", "reactor", "tcp"] }
+hyper = "0.12"
+failure = "0.1.1"
+
+[dependencies.chromaprint]
+git = "https://github.com/bytesnake/rust-chromaprint"
+

@@ -8,4 +8,6 @@ pub enum Error {
     MusicContainer(hex_music_container::error::Error),
     Database(hex_database::Error),
     Io(io::Error),
+    ChannelFailed,
+    AcousticID
 }
