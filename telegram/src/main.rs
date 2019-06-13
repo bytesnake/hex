@@ -1,3 +1,4 @@
+use std::env;
 use telebot::{Bot, functions::ParseMode, error::ErrorKind as ErrorTelegram};
 use futures::{Future, Stream};
 use hex_database::{Instance, GossipConf};
@@ -12,7 +13,7 @@ mod download;
 mod error;
 
 fn main() {
-    let mut bot = Bot::new("313847008:AAERHUi41dU6vviYu-kuBeAQaaaAz-b8w5I");
+    let mut bot = Bot::new(&env::var("TELEGRAM_BOT_KEY").unwrap());
 
     let (conf, path) = hex_conf::Conf::new().unwrap();
 

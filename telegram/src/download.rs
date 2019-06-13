@@ -95,19 +95,9 @@ impl State {
 
         let thread = thread::spawn(move || {
             worker(sender, tracks, num_channel, data_path)
-                .map_err(|e| eprintln!("{:?}", e));
-
-            Ok(())
+                .map_err(|e| {eprintln!("{:?}", e); e})
+                .map(|_| ())
         });
-
-        /*let progress2 = progress.clone();
-        let hnd = recv.map(move |x| {
-            *((*progress2).borrow_mut()) = x;
-
-            ()
-        }).for_each(|_| Ok(())).into_future().map(|_| ()).map_err(|_| ());
-
-        tokio::spawn(hnd);*/
 
         State {
             thread: thread,
