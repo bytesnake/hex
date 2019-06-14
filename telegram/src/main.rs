@@ -115,7 +115,6 @@ fn main() {
         .and_then(move |(bot, file_path, file_name, chat)| {
             let path2 = path2.clone();
             let download_link = format!("https://api.telegram.org/file/bot{}/{}", key, file_path).parse::<Uri>().unwrap();
-            //let view = view3.clone();
 
             let track = bot.inner.get(download_link)
                 .and_then(|x| {
@@ -137,12 +136,8 @@ fn main() {
             };
 
             bot.message(chat.id, answ).send()
-
-                //.map(move |x| { view3.add_track(x.clone()); x})
-                //.and_then(move |track| bot.message(chat.id, format!("Stored {:?}", track.title)).send())
         })
         .for_each(|_| Ok(()));
 
     tokio::run(stream.into_future().join(search.join(download)).map_err(|_| ()).map(|_| ()));
-    //bot.run_with(search.join(download));
 }
