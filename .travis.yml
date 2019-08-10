@@ -1,10 +1,4 @@
 language: rust
-addons:
-  apt:
-    packages:
-    - libasound2-dev
-    - libchromaprint-dev
-
 rust:
 - nightly
 
@@ -17,17 +11,19 @@ matrix:
             - NAME=hex
             - TARGET=arm-unknown-linux-gnueabihf
             - LINKER=arm-linux-gnueabihf-gcc
-            - PACKAGE=$NAME-rpi2.tar.gz
+            - HOST=arm-linux-gnueabihf
+            - SSL_HOST=linux-armv4
+            - PACKAGE=$NAME-arm.tar.gz
           addons:
             apt:
               packages: &armhf
                 - gcc-arm-linux-gnueabihf
                 - libc6-armhf-cross
                 - libc6-dev-armhf-cross
-        - env:
-            - NAME=hex
-            - TARGET=x86_64-unknown-linux-gnu
-            - PACKAGE=$NAME-x86_64.tar.gz
+          #- env:
+          #  - NAME=hex
+          #  - TARGET=x86_64-unknown-linux-gnu
+          #  - PACKAGE=$NAME-x86_64.tar.gz
 
 install:
   - export PATH="$PATH:$HOME/.cargo/bin"
@@ -39,12 +35,11 @@ install:
       echo "[target.$TARGET]" >> ~/.cargo/config
       echo "linker = \"$LINKER\"" >> ~/.cargo/config
     fi
+before_install:
+    - ./compile/compile_libraries.sh
+
 script:
-  - |
-    if [ $TARGET = "x86_64-unknown-linux-gnu" ]; then
-      cargo test
-    fi
-  - cargo build --target $TARGET --verbose --release
+    - ./compile/compile.sh
 
 before_deploy:
 - tar -czf $PACKAGE -C target/$TARGET/release/ $NAME

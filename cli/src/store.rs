@@ -5,7 +5,6 @@ use std::process::Command;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use id3::Tag;
-use chromaprint::Chromaprint;
 
 use hex_database::Track;
 use hex_music_container::{Configuration, Container};
@@ -56,14 +55,10 @@ pub fn store(view: &View, path: &Path, data_path: PathBuf) {
 
         println!("Finished converting with {} samples", data.len());
 
-        // calculate fingerprint
-        let mut ctx = Chromaprint::new();
-        ctx.start(48000, 2); 
-        ctx.feed(&data);
-        ctx.finish();
+        let fingerprint = hex_database::utils::get_fingerprint(2, &data).unwrap();
 
         let mut track = Track::empty(
-            ctx.raw_fingerprint().unwrap().into_iter().map(|x| x as u32).collect(),
+            fingerprint,
             data.len() as f64 / 48000.0 / 2.0
         );
 

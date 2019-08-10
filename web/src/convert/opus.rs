@@ -32,7 +32,10 @@ impl State {
 fn worker(mut sender: Sender<State>, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32, data_path: PathBuf) -> Result<Track> {
     //loop {
         // calculate the acousticid of the file
-    let fingerprint = acousticid::get_fingerprint(num_channel as u16, &samples)?;
+    
+    let fingerprint = hex_database::utils::get_fingerprint(num_channel as u16, &samples)
+        .map_err(|_| Error::AcousticID)?;
+
     let track = Track::empty(fingerprint, duration.into());
 
     let file = File::create(data_path.join(track.key.to_path())).unwrap();

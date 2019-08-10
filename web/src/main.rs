@@ -41,7 +41,6 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate serde;
 extern crate curl;
-extern crate chromaprint;
 extern crate base64;
 extern crate tempfile;
 

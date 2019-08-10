@@ -1,5 +1,5 @@
 [package]
-name = "hex-server"
+name = "hex-web"
 edition = "2018"
 version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
@@ -25,9 +25,6 @@ tempfile = "3"
 hex-conf = { path = "../conf/" }
 hex-database = { path = "../database/" }
 hex-music-container = { path = "../music-container/" }
-
-[dependencies.chromaprint]
-git = "https://github.com/bytesnake/rust-chromaprint"
 
 [dependencies.hex-server-protocol]
 path = "protocol/"

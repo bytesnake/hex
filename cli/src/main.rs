@@ -1,17 +1,3 @@
-/*extern crate futures;
-extern crate getopts;
-extern crate cpal;
-extern crate rb;
-extern crate nix;
-extern crate terminal_size;
-extern crate walkdir;
-extern crate id3;
-extern crate chromaprint;
-
-extern crate hex_conf;
-extern crate hex_database;
-extern crate hex_music_container;*/
-
 mod audio;
 mod play;
 mod modify;

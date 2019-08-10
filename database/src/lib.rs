@@ -45,6 +45,8 @@ pub mod error;
 pub mod objects;
 pub mod search;
 pub mod events;
+pub mod utils;
+
 #[cfg(feature="rusqlite")]
 mod database;
 mod transition;

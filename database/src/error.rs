@@ -14,5 +14,6 @@ pub enum Error {
     Gossip(hex_gossip::Error),
     AlreadyExists,
     NotFound,
-    ReadOnly
+    ReadOnly,
+    AcousticId
 }
