@@ -27,6 +27,7 @@ extern crate log;
 extern crate futures;
 #[macro_use]
 extern crate serde;
+extern crate test;
 
 pub mod local_ip;
 pub mod error;
@@ -377,7 +378,6 @@ impl<T: Inspector> Stream for Gossip<T> {
 
                     for transition in self.inspector.lock().unwrap().restore(missing).unwrap() {
                         self.writer.spread(Packet::Push(transition), SpreadTo::Peer(presence.id.clone()));
-                        //writer.buffer(Packet::Push(transition));
 
                         //writer.poll_flush().unwrap();
                     }
@@ -385,7 +385,6 @@ impl<T: Inspector> Stream for Gossip<T> {
                     // if everything is fine, send new transitions for this peer
                     for transition in self.inspector.lock().unwrap().subgraph(tips) {
                         self.writer.spread(Packet::Push(transition), SpreadTo::Peer(presence.id.clone()));
-                        //writer.buffer(Packet::Push(transition));
 
                         // write everything to the peer
                         //writer.poll_flush().unwrap();

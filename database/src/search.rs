@@ -4,6 +4,7 @@
 //! the database to search for tracks.
 
 /// Enum providing allowed tags in the search query, like 'title:Crazy'
+#[derive(Debug)]
 pub enum Tag {
     Any(String),
     Title(String),
@@ -52,17 +53,19 @@ impl Order {
 impl Tag {
     /// Create a new tag from a search query
     pub fn from_search_query(query: &str) -> Option<Tag> {
-        let elms = query.split(':').collect::<Vec<&str>>();
+        let elms = query.split(':').map(|x| x.into()).collect::<Vec<String>>();
 
         if elms.len() == 1 {
-            Some(Tag::Any(elms[0].into()))
+            Some(Tag::Any(elms[0].replace("'", "''")))
         } else {
-            match elms[0] {
-                "title" | "TITLE" => Some(Tag::Title(elms[1].into())),
-                "album" | "ALBUM" => Some(Tag::Album(elms[1].into())),
-                "interpret" | "INTERPRET" => Some(Tag::Interpret(elms[1].into())),
-                "people" | "performer" | "PEOPLE" | "PERFORMER" => Some(Tag::People(elms[1].into())),
-                "composer" | "COMPOSER" => Some(Tag::Composer(elms[1].into())),
+            let content = elms[1].replace("'", "''");
+
+            match elms[0].as_str() {
+                "title" | "TITLE" => Some(Tag::Title(content)),
+                "album" | "ALBUM" => Some(Tag::Album(content)),
+                "interpret" | "INTERPRET" => Some(Tag::Interpret(content)),
+                "people" | "performer" | "PEOPLE" | "PERFORMER" => Some(Tag::People(content)),
+                "composer" | "COMPOSER" => Some(Tag::Composer(content)),
                 _ => return None
             }
         }

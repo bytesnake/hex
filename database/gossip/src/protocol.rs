@@ -14,7 +14,7 @@ use tokio::{self, io, io::ReadHalf, io::WriteHalf};
 use tokio::net::{TcpStream, tcp::ConnectFuture};
 use bytes::{BytesMut, BufMut};
 use bincode::{deserialize, serialize};
-use ring::{aead, rand, rand::SecureRandom};
+use ring::{aead, rand, rand::SecureRandom, aead::Nonce, aead::Aad};
 
 use crate::{PeerId, PeerPresence, Error, Result};
 use crate::transition::{Transition, TransitionKey};
@@ -22,6 +22,14 @@ use crate::transition::{Transition, TransitionKey};
 /// The network key will be shared between all peers and contains 
 /// a 256bit key, encrypting and signing every transition send through the network
 pub type NetworkKey = [u8; 32];
+
+/// Some definitions to handle files
+/*type FileId = Vec<u8>;
+enum FilePacket {
+    HasFile,
+    HasFileResponse(bool),
+    File(Option<Vec<u8>>)
+}*/
 
 /// Peer-to-Peer message
 /// 
@@ -38,6 +46,7 @@ pub enum Packet {
     /// Push a new packet into the network with reference to received transitions
     Push(Transition),
     /// Ask for a file
+    //File(Vec<u8>),
     File(Vec<u8>, Option<Vec<u8>>),
     Close
 }
@@ -178,7 +187,7 @@ impl Future for Peer {
 pub struct PeerCodecRead<T: Debug + AsyncRead> {
     read: ReadHalf<T>,
     rd: BytesMut,
-    key: aead::OpeningKey
+    key: aead::LessSafeKey
 }
 
 /// Write half of the PeerCodec
@@ -188,7 +197,7 @@ pub struct PeerCodecRead<T: Debug + AsyncRead> {
 pub struct PeerCodecWrite<T: Debug + AsyncWrite> {
     write: WriteHalf<T>,
     wr: BytesMut,
-    key: aead::SealingKey,
+    key: aead::LessSafeKey,
     rng: rand::SystemRandom
 }
 
@@ -199,8 +208,12 @@ pub fn new<T: AsyncRead + AsyncWrite + Debug>(socket: T, key: NetworkKey) -> (Pe
     let (read, write) = socket.split();
 
     // create opening/sealing keys (128bit network key)
-    let read_key = aead::OpeningKey::new(&aead::AES_256_GCM, &key).unwrap();
-    let write_key = aead::SealingKey::new(&aead::AES_256_GCM, &key).unwrap();
+    let ukey = aead::UnboundKey::new(&aead::AES_256_GCM, &key).unwrap();
+    let read_key = aead::LessSafeKey::new(ukey);
+
+    let ukey = aead::UnboundKey::new(&aead::AES_256_GCM, &key).unwrap();
+    let write_key = aead::LessSafeKey::new(ukey);
+    //let write_key = aead::SealingKey::new(key, RandomNonce { rng: rand::SystemRandom::new() });
 
     (
         PeerCodecRead {
@@ -323,18 +336,17 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
         let mut buf = self.rd.split_to(required_length as usize + 14 + meta_length);
 
         // get once and create a copy
-        let nonce = Vec::from(&buf[0..12]);
+        let nonce = Nonce::try_assume_unique_for_key(&buf[0..12]).unwrap();
 
         //println!("Nonce {:?}", nonce);
         //println!("Read buf {:?}", buf.len());
 
         // decrypt and check signature
-        let buf = aead::open_in_place(
-            &self.key,
-            &nonce,
-            &[],
-            14+meta_length,
-            &mut buf
+        self.key.open_within(
+            nonce,
+            Aad::empty(),
+            &mut buf,
+            (14+meta_length)..
         ).map_err(|_| {
             error!("Cryptographic failure, probably connection attempt with wrong network key!");
 
@@ -382,22 +394,24 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
         if let Ok(mut buf) = serialize(&message) {
             // encrypt and sign our data with the network key
             // TODO generate nonce
-            let mut nonce = [0u8; 12];
+            let mut nonce_buf = [0u8; 12];
 
-            self.rng.fill(&mut nonce).unwrap();
+            self.rng.fill(&mut nonce_buf).unwrap();
+
+            let nonce = Nonce::assume_unique_for_key(nonce_buf);
 
             // enlarge buffer for additional 128bits
-            let tag_len = self.key.algorithm().tag_len() ;
+            //let tag_len = self.key.algorithm().tag_len() ;
 
-            buf.append(&mut vec![0u8; tag_len]);
+            //buf.append(&mut vec![0u8; tag_len]);
 
-            let buf_len = aead::seal_in_place(
-                &self.key, // our network key
-                &nonce, // a unique and random key created for each message
-                &[], // additional data to be signed, none here
+            self.key.seal_in_place_append_tag(
+                nonce, // a unique and random key created for each message
+                Aad::empty(),
                 &mut buf, // buffer which will be overwritten with the encrypted and signed message
-                tag_len // additional suffix capcity in the buffer, at least 128bit here
             ).unwrap();
+
+            let buf_len = buf.len();
 
             // calculate the value of the `additional` field by couting the zeros of the buffer
             // length
@@ -418,7 +432,7 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
             }
 
             // write the nonce 
-            self.wr.put(&nonce[..]);
+            self.wr.put(&nonce_buf[..]);
 
             // put the `version` and `additional` field to the write buffer
             self.wr.put_u8(VERSION << 2 | length);

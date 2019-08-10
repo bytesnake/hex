@@ -142,16 +142,29 @@ impl Storage {
 
         // parse the body to a transition action
         let res: TransitionAction = deserialize(&trans.body.unwrap()).unwrap();
-        trace!("Apply {:?}", res);
-
         // update database according to the change
         match res {
-            TransitionAction::UpsertTrack(track) => self.socket.execute(UPSERT_TRACK, 
+            TransitionAction::UpsertTrack(mut track) => {
+                if let Some(ref mut title) = track.title {
+                    *title = title.trim_matches(char::from(0)).to_string();
+                }
+                if let Some(ref mut album) = track.album {
+                    *album = album.trim_matches(char::from(0)).to_string();
+                }
+                if let Some(ref mut interpret) = track.interpret {
+                    *interpret = interpret.trim_matches(char::from(0)).to_string();
+                }
+                if let Some(ref mut composer) = track.composer {
+                    *composer = composer.trim_matches(char::from(0)).to_string();
+                }
+
+                self.socket.execute(UPSERT_TRACK, 
                 &[
                     &track.key.to_vec(), 
                     &objects::u32_into_u8(track.fingerprint.clone()), 
                     &track.title, &track.album, &track.interpret, &track.people, &track.composer, &track.duration, &track.favs_count
-                ]).unwrap(),
+                ]).unwrap()
+            },
 
             TransitionAction::UpsertPlaylist(playlist) => self.socket.execute(UPSERT_PLAYLIST, 
                 &[

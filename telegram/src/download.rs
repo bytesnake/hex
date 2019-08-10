@@ -22,7 +22,6 @@ pub struct DownloadProgress {
 fn worker(mut sender: Sender<DownloadProgress>, tracks: Vec<Track>, data_path: PathBuf) -> Result<()> {
     let download_path = data_path.join("download");
     for i in 0..tracks.len() {
-        println!("Convert track {:?}", tracks[i].title);
         let file_path = data_path.join("data").join(&tracks[i].key.to_string());
 
         let file_path_out = download_path
@@ -58,20 +57,21 @@ fn worker(mut sender: Sender<DownloadProgress>, tracks: Vec<Track>, data_path: P
                 Err(err) => { return Err(Error::MusicContainer(err)); }
             }
         }
-        println!("convert end");
 
-        let converted_file = file_path_out.with_extension("mp3");
+        let converted_file = file_path_out.with_extension("ogg");
 
         Command::new("ffmpeg")
-            .arg("-y")
+            .arg("-y")//.arg("-loglevel").arg("panic").arg("hide_banner")
             .arg("-ar").arg("48k")
             .arg("-ac").arg("2")
             .arg("-f").arg("s16le")
             .arg("-i").arg(file_path_out.to_str().unwrap())
+            .arg("-metadata").arg(&format!("title=\"{}\"", tracks[i].title.clone().unwrap_or(tracks[i].key.to_string())))
+            .arg("-metadata").arg(&format!("album=\"{}\"", tracks[i].album.clone().unwrap_or("Unknown".into())))
+            .arg("-metadata").arg(&format!("author=\"{}\"", tracks[i].interpret.clone().unwrap_or("Unknown".into())))
+            .arg("-metadata").arg(&format!("composer=\"{}\"", tracks[i].composer.clone().unwrap_or("Unknown".into())))
             .arg(converted_file.to_str().unwrap())
             .spawn().expect("Could not start ffmpeg!").wait().unwrap();
-
-        println!("ffmpeg end");
 
         sender.try_send(DownloadProgress { path: converted_file, track: tracks[i].clone() , num: i}).unwrap();
     }
@@ -80,22 +80,20 @@ fn worker(mut sender: Sender<DownloadProgress>, tracks: Vec<Track>, data_path: P
 }
 
 pub struct State {
-    thread: thread::JoinHandle<Result<()>>,
     pub recv: Receiver<DownloadProgress>
 }
 
 impl State {
     pub fn new(tracks: Vec<Track>, data_path: PathBuf) -> State {
-        let (sender, recv) = channel(10);
+        let (sender, recv) = channel(200);
 
-        let thread = thread::spawn(move || {
+        thread::spawn(move || {
             worker(sender, tracks, data_path)
                 .map_err(|e| {eprintln!("{:?}", e); e})
                 .map(|_| ())
         });
 
         State {
-            thread: thread,
             recv
         }
     }

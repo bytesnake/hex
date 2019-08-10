@@ -8,9 +8,9 @@ authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 futures = "0.1"
 tokio = { version = "0.1", default-features = false, features = ["io", "reactor", "tcp", "udp", "rt-full"] }
 serde = { features = ["derive"], version = "1.0" }
-bincode = "1.0"
+bincode = "1"
 bytes = "0.4"
-ring = "0.13"
+ring = "0.16"
 nix = "0.11"
 log = "0.4"
 net2 = "0.2"

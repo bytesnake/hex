@@ -1,15 +1,15 @@
+use std::str;
 use std::thread;
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process::Command;
+use std::ffi::OsStr;
 
-use futures::{Future, IntoFuture};
+use futures::IntoFuture;
 use futures::sync::oneshot::{channel, Sender, Receiver};
 use hex_database::Track;
 use hex_music_container::{Container, Configuration};
-
-use chromaprint::Chromaprint;
 
 use crate::error::*;
 
@@ -20,15 +20,19 @@ use crate::error::*;
 ///
 ///  * `num_channel`- Number of channel in `data`
 ///  * `data` - Raw audio data with succeeding channels
-pub fn get_fingerprint(num_channel: u16, data: &[i16]) -> Result<Vec<u32>> {
-    let mut ctx = Chromaprint::new();
-    ctx.start(48000, num_channel as i32);
+pub fn get_fingerprint(raw_path: PathBuf) -> Result<Vec<u32>> {
+    let cmd = Command::new("fpcalc")
+        .arg(raw_path.to_str().unwrap())
+        .arg("-rate").arg("48000")
+        .arg("-channels").arg("2")
+        .arg("-format").arg("s16le")
+        .arg("-plain").arg("-raw")
+        .output().expect("Could not start ffmpeg!");
 
-    ctx.feed(data);
-    ctx.finish();
+    let out = str::from_utf8(&cmd.stdout)
+        .map_err(|_| Error::AcousticID)?;
 
-    ctx.raw_fingerprint().ok_or(Error::AcousticID)
-        .map(|x| x.into_iter().map(|x| x as u32).collect())
+    out.trim().split(",").map(|x| x.parse::<u32>().map_err(|_| Error::AcousticID)).collect()
 }
 
 fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path: PathBuf) -> Result<()> {
@@ -42,7 +46,7 @@ fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path:
         .map_err(|x| Error::Io(x))?;
 
     Command::new("ffmpeg")
-        .arg("-y")
+        .arg("-y")//.arg("-loglevel").arg("panic").arg("hide_banner")
         .arg("-i").arg(encoded_path.to_str().unwrap())
         .arg("-ar").arg("48k")
         .arg("-ac").arg("2")
@@ -58,12 +62,13 @@ fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path:
     file.read_to_end(&mut samples)
         .map_err(|x| Error::Io(x))?;
 
-    let duration = (samples.len() as f64 / 48000.0 / 2.0);
+    let duration = samples.len() as f64 / 48000.0 / 2.0;
 
     let samples: &[i16] = unsafe { ::std::slice::from_raw_parts(samples.as_ptr() as *const i16, samples.len() / 2) };
 
 
-    let fingerprint = get_fingerprint(2, &samples)?;
+    let fingerprint = get_fingerprint(raw_path)?;
+
     let mut track = Track::empty(fingerprint, duration.into());
 
     let file = File::create(data_path.join("data").join(track.key.to_path())).unwrap();
@@ -72,7 +77,33 @@ fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path:
     Container::save_pcm(Configuration::Stereo, samples.to_vec(), file, None)
         .map_err(|err| Error::MusicContainer(err))?;
 
-    track.title = Some(file_name);
+    match encoded_path.extension().and_then(OsStr::to_str) {
+        Some("mp3") => {
+            if let Ok(metadata) = mp3_metadata::read_from_file(encoded_path) {
+                if let Some(metadata) = metadata.tag {
+
+                    track.title = Some(metadata.title);
+                    track.album = Some(metadata.album);
+                    track.composer = Some(metadata.artist.clone());
+                    track.interpret = Some(metadata.artist);
+                } else {
+                    for tag in metadata.optional_info {
+                        if let Some(title) = tag.title {
+                            track.title = Some(title);
+                        }
+                        if let Some(album) = tag.album_movie_show {
+                            track.album = Some(album);
+                        }
+                        if let Some(performer) = tag.performers.get(0) {
+                            track.composer = Some(performer.clone());
+                            track.interpret = Some(performer.clone());
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
 
     sender.send(track).map_err(|_| Error::ChannelFailed)
 }
@@ -85,7 +116,7 @@ impl Upload {
     pub fn new(file_name: String, content: Vec<u8>, data_path: PathBuf) -> Upload {
         let (sender, recv) = channel();
 
-        let thread = thread::spawn(move || {
+        thread::spawn(move || {
             worker(sender, file_name, content, data_path)
                 .map_err(|e| {eprintln!("{:?}", e); e})
                 .map(|_| ())

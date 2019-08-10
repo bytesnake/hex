@@ -117,10 +117,10 @@ impl Codec {
                     harmonics[i] = (sample[0] as f64 * first / scales[0] as f64) as i16;
                 },
                 Configuration::Stereo => {
-                    harmonics[i] = ((sample[0] as f64 + sample[1] as f64) * first * scales[0] as f64).round() as i16;
-                    harmonics[i + block_length] = ((sample[0] as f64 - sample[1] as f64) * secon * scales[1] as f64).round() as i16;
+                    harmonics[i] = ((sample[0] as f64 * 0.7 + sample[1] as f64 * 0.7) * first * scales[0] as f64).round() as i16;
+                    harmonics[i + block_length] = ((sample[0] as f64 * 0.7 - sample[1] as f64 * 0.7) * secon * scales[1] as f64).round() as i16;
                     harmonics[i + block_length*2] = 0;
-                    harmonics[i + block_length*3] = ((sample[1] as f64 - sample[0] as f64) * secon * scales[3] as f64).round() as i16;
+                    harmonics[i + block_length*3] = ((sample[1] as f64 * 0.7 - sample[0] as f64 * 0.7) * secon * scales[3] as f64).round() as i16;
                 },
                 _ => {}
             }

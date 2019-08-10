@@ -21,7 +21,7 @@ log = "0.4"
 [dev-dependencies]
 hex-conf = { path = "../conf/" }
 env_logger = "0.6.0"
-telebot = "0.2"
+telebot = "0.3"
 
 [features]
 default = ["rusqlite", "serde", "hex-gossip", "sha2", "bincode", "futures", "tokio"]

@@ -553,9 +553,9 @@ mod tests {
 
     use super::Instance;
     use hex_gossip::{GossipConf, PeerId};
-    use objects::{Playlist, Track, Token};
-    use search::SearchQuery;
-    use transition::TransitionAction;
+    use crate::objects::{Playlist, Track, Token};
+    use crate::search::SearchQuery;
+    use crate::transition::TransitionAction;
     use futures::{Stream, IntoFuture, Future, Async};
 
     fn gen_track() -> Track {
@@ -567,7 +567,7 @@ mod tests {
     }
 
     fn gossip() -> GossipConf {
-        GossipConf::new().id(PeerId(vec![0; 16]))
+        GossipConf::new().id(vec![0; 16])
     }
 
     #[test]
@@ -580,7 +580,7 @@ mod tests {
         view.add_track(track.clone()).unwrap();
 
         // create a new search query
-        let query = SearchQuery::new("title:Blue");
+        let query = SearchQuery::new("title:Blue't");
 
         // initiate the search
         let mut stmt = view.search_prep(query).unwrap();
@@ -598,7 +598,7 @@ mod tests {
             title: "My very own playlist".into(),
             desc: Some("".into()),
             tracks: vec![],
-            origin: PeerId(vec![0; 16])
+            origin: vec![0; 16]
         };
 
         // check if there are no playlists in the database
@@ -673,7 +673,7 @@ mod tests {
             title: "My very own playlist".into(),
             desc: Some("".into()),
             tracks: vec![],
-            origin: PeerId(vec![0u8; 16])
+            origin: vec![0u8; 16]
         };
 
         // setup up track and plalist
