@@ -4,6 +4,9 @@ use std::panic;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rb::{SpscRb, RB, RbProducer, RbConsumer, Producer, Consumer};
+use cpal::traits::HostTrait;
+use cpal::traits::EventLoopTrait;
+use cpal::traits::DeviceTrait;
 
 pub struct AudioDevice {
     rb: SpscRb<i16>,
@@ -17,7 +20,8 @@ impl AudioDevice {
         let rb = SpscRb::new(48000 * 3);
         let (prod, cons) = (rb.producer(), rb.consumer());
 
-        let device = cpal::default_output_device().expect("Failed to get default output device");
+        let host = cpal::default_host();
+        let device = host.default_output_device().expect("Failed to get default output device");
 
         if device.supported_output_formats().unwrap().filter(|x| x.channels == 2 && x.data_type == cpal::SampleFormat::I16).count() == 0 {
             panic!("No suitable device found!");
@@ -34,7 +38,7 @@ impl AudioDevice {
 
         let is_running = Arc::new(AtomicUsize::new(2));
         let tmp = is_running.clone();
-        let thread = thread::spawn(move || Self::run(cons, device, format, tmp));
+        let thread = thread::spawn(move || Self::run(cons, host, device, format, tmp));
 
         AudioDevice {
             rb: rb,
@@ -66,8 +70,8 @@ impl AudioDevice {
         self.is_running.store(2, Ordering::Relaxed);
     }
 
-    pub fn run(consumer: Consumer<i16>, device: cpal::Device, format: cpal::Format, is_running: Arc<AtomicUsize>) {
-        let event_loop = cpal::EventLoop::new();
+    pub fn run(consumer: Consumer<i16>, host: cpal::Host, device: cpal::Device, format: cpal::Format, is_running: Arc<AtomicUsize>) {
+        let event_loop = host.event_loop();
 
         let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
         event_loop.play_stream(stream_id.clone());
@@ -80,7 +84,7 @@ impl AudioDevice {
             }
 
             match data {
-                cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer) } => {
+                Ok(cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer) }) => {
                     if is_running.load(Ordering::Relaxed) == 1 {
                         for sample in buffer.chunks_mut(format.channels as usize) {
                             for out in sample.iter_mut() {

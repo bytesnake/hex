@@ -1,6 +1,9 @@
 use cpal;
 use std::thread;
 use rb::{SpscRb, RB, RbProducer, RbConsumer, Producer, Consumer};
+use cpal::traits::HostTrait;
+use cpal::traits::EventLoopTrait;
+use cpal::traits::DeviceTrait;
 
 pub struct AudioDevice {
     rb: SpscRb<i16>,
@@ -13,7 +16,8 @@ impl AudioDevice {
         let rb = SpscRb::new(48000 * 3);
         let (prod, cons) = (rb.producer(), rb.consumer());
 
-        let device = cpal::default_output_device().expect("Failed to get default output device");
+        let host = cpal::default_host();
+        let device = host.default_output_device().expect("Failed to get default output device");
 
         if device.supported_output_formats().unwrap().filter(|x| x.channels == 2 && x.data_type == cpal::SampleFormat::I16).count() == 0 {
             panic!("No suitable device found!");
@@ -25,7 +29,7 @@ impl AudioDevice {
             data_type: cpal::SampleFormat::I16
         };
 
-        let thread = thread::spawn(move || Self::run(cons, device, format));
+        let thread = thread::spawn(move || Self::run(cons, host, device, format));
 
         AudioDevice {
             rb: rb,
@@ -55,8 +59,8 @@ impl AudioDevice {
         self.format.clone()
     }*/
 
-    pub fn run(consumer: Consumer<i16>, device: cpal::Device, format: cpal::Format) {
-        let event_loop = cpal::EventLoop::new();
+    pub fn run(consumer: Consumer<i16>, host: cpal::Host, device: cpal::Device, format: cpal::Format) {
+        let event_loop = host.event_loop();
 
         let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
         event_loop.play_stream(stream_id.clone());
@@ -65,7 +69,7 @@ impl AudioDevice {
 
         event_loop.run(move |_, data| {
             match data {
-                cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer) } => {
+                Ok(cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer) }) => {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let _ = consumer.read_blocking(&mut buf);
 

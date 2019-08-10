@@ -1,10 +1,6 @@
-extern crate chrono;
-extern crate hex_conf;
-extern crate hex_database;
-
 use std::env;
-use std::path::Path;
-use hex_database::{Collection, Event, events::Action};
+use std::path::{PathBuf, Path};
+use hex_database::{Instance, Event, events::Action, GossipConf};
 use chrono::{TimeZone, Utc, Date, Duration};
 
 fn main() {
@@ -42,9 +38,9 @@ fn main() {
     let num_tracks = view.get_num_tracks();
 
     for day in 0..num_days {
-        let num_transitions = view.get_num_transitions(day);
+        let num_transitions = view.get_num_transitions(day as u32);
 
-        days[day] = (num_tracks, num_transitions);
+        days[day as usize] = (num_tracks as u32, num_transitions as u32);
     }
 
     for i in 0..days.len() {
@@ -52,7 +48,7 @@ fn main() {
         let datestamp = datestamp.format("%Y-%m-%d");
 
         
-        db.summarise_day(datestamp.to_string(), days[i].0, days[i].1).unwrap();
+        view.summarise_day(datestamp.to_string(), days[i].0, days[i].1).unwrap();
     }
 
     println!("{:#?}", days);
