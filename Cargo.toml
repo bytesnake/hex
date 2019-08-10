@@ -10,7 +10,7 @@ members = [
     "zyklop",
     "cli",
     "nightly-worker",
-    "telegram"
+#    "telegram"
 ]
 
 [profile.release]
