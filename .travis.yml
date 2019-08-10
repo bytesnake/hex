@@ -3,7 +3,9 @@ rust:
 - nightly
 
 cache:
-- apt
+  apt: true
+  directories:
+      - ./compile/libraries/
 
 matrix:
     include:
