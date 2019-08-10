@@ -16,11 +16,11 @@ matrix:
                 - gcc-arm-linux-gnueabihf
                 - libc6-armhf-cross
                 - libc6-dev-armhf-cross
-        - env: NAME=hex TARGET=x86_64-unknown-linux-musl LINKER=musl-gcc HOST=x86_64-linux-musl SSL_HOST=linux-x86_64 PACKAGE=$NAME-musl.tar.gz
+        - env: NAME=hex TARGET=x86_64-unknown-linux-gnu LINKER=gcc HOST= SSL_HOST= PACKAGE=$NAME-linux.tar.gz
           addons:
              apt:
                packages:
-                 - musl
+                 - gcc
         #- env:
           #  - NAME=hex
           #  - TARGET=x86_64-unknown-linux-gnu
