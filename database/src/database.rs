@@ -59,8 +59,9 @@ impl Instance {
                                 let action = TransitionAction::from_vec(&x.body.unwrap());
 
                                 let tmp = sender.clone();
-                                tmp.send(action)
-                                    .map_err(|_| ()).map(|_| ());
+                                if let Err(err) = tmp.send(action) {
+                                    eprintln!("Could not push packet to sender!");
+                                }
                             },
                             Packet::File(id, data) => {
                                 if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
