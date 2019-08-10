@@ -59,8 +59,8 @@ impl Instance {
                                 let action = TransitionAction::from_vec(&x.body.unwrap());
 
                                 let tmp = sender.clone();
-                                if let Err(err) = tmp.send(action) {
-                                    eprintln!("Could not push packet to sender!");
+                                if let Err(err) = tmp.send(action).wait() {
+                                    eprintln!("Sender err = {:?}", err);
                                 }
                             },
                             Packet::File(id, data) => {

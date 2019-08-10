@@ -4,15 +4,57 @@ addons:
     packages:
     - libasound2-dev
     - libchromaprint-dev
+
 rust:
 - nightly
+
+cache:
+- apt
+
 matrix:
-  allow_failures:
-  - rust: nightly
+    include:
+        - env:
+            - NAME=hex
+            - TARGET=arm-unknown-linux-gnueabihf
+            - LINKER=arm-linux-gnueabihf-gcc
+            - PACKAGE=$NAME-rpi2.tar.gz
+          addons:
+            apt:
+              packages: &armhf
+                - gcc-arm-linux-gnueabihf
+                - libc6-armhf-cross
+                - libc6-dev-armhf-cross
+        - env:
+            - NAME=hex
+            - TARGET=x86_64-unknown-linux-gnu
+            - PACKAGE=$NAME-x86_64.tar.gz
+
+install:
+  - export PATH="$PATH:$HOME/.cargo/bin"
+  - rustup target add $TARGET || true
+  - |
+    if [ -n "$LINKER" ]; then
+      mkdir -p ~/.cargo
+      echo >> ~/.cargo/config
+      echo "[target.$TARGET]" >> ~/.cargo/config
+      echo "linker = \"$LINKER\"" >> ~/.cargo/config
+    fi
+script:
+  - |
+    if [ $TARGET = "x86_64-unknown-linux-gnu" ]; then
+      cargo test
+    fi
+  - cargo build --target $TARGET --verbose --release
+
+before_deploy:
+- tar -czf $PACKAGE -C target/$TARGET/release/ $NAME
+
 deploy:
   provider: releases
   api_key:
     secure: fOg8sbu5scUE/A5bxkbeNE/1HNRKHxJRSQF2ZqXEO6I4Zquzjtijyod8cIXnjuHMhzjHvhSGWW99VE7Ypa2P7kDVol0AoqQdKUaFiBXlPmtxBFtlJnMDQi1uuTdC4cA3k7H3p15Bk/yZQIlcirBO0jcajo049Ki3Vnwvol1tYBhzoHkzYhN507kQ65k+iOhRGNlIj1I9K4twFO292mKkF0ZVGqgDMDege/KhyVET+pxEFUVJVbumLNUF7Kdfs3ogfRo/IIhv0lZv7k5k35I1K1qJBofHfSlL7FMXYQHAPh/IGEW++nUEzu5c5J3Vv0Lrci6AOLLBD2UTGTmr3s4vcZn004ebvdd+8gDi1NZITsAKi6t8Fb7/hBubgEy1O2bi54bfyWhSurVAsXmJqkfAaqCpq8P4ddvsDZRlVAD67INcWPjAeKggtvWtA6DXDIsxnFxTBg0NOvVKMHXdJoE5+M9iU85YJQKoXJSAn74nFq5D9oGqZQn30thevpmIKCXyf5mVTZcCr5inDx5H6EGv6zMgllvs5T8lu7KweFXPoOuvQqbkf14foWScel8vk2Zc/yCP5g+FhJPeOjhZfqfgYlSxWdw+qZSOrhd8fhEf9xol/GXa8Ij2t96ehDpWoNinvGZt1pl4moROeCyUHsh5px+MfHRolKtXG0V1B0wsZJo=
-  file: target/release/hex-cli
+  file: ${PACKAGE}
+  skip_cleanup: true
   on:
+      tags: true
     repo: bytesnake/hex
