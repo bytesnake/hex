@@ -20,7 +20,7 @@ matrix:
           addons:
              apt:
                packages:
-                 - musl-gcc
+                 - musl
         #- env:
           #  - NAME=hex
           #  - TARGET=x86_64-unknown-linux-gnu
@@ -43,7 +43,7 @@ script:
     - ./compile/compile.sh
 
 before_deploy:
-- tar -czf $PACKAGE -C target/$TARGET/release/ $NAME
+- tar -czf $PACKAGE -C target/$TARGET/release/ hex-cli hex-zyklop hex-web
 
 deploy:
   provider: releases
