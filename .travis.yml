@@ -1,14 +1,18 @@
 language: rust
-
 addons:
   apt:
     packages:
     - libasound2-dev
-    - libchromaprint1
-
+    - libchromaprint-dev
 rust:
-  - nightly
+- nightly
 matrix:
   allow_failures:
-    - rust: nightly
-
+  - rust: nightly
+deploy:
+  provider: releases
+  api_key:
+    secure: fOg8sbu5scUE/A5bxkbeNE/1HNRKHxJRSQF2ZqXEO6I4Zquzjtijyod8cIXnjuHMhzjHvhSGWW99VE7Ypa2P7kDVol0AoqQdKUaFiBXlPmtxBFtlJnMDQi1uuTdC4cA3k7H3p15Bk/yZQIlcirBO0jcajo049Ki3Vnwvol1tYBhzoHkzYhN507kQ65k+iOhRGNlIj1I9K4twFO292mKkF0ZVGqgDMDege/KhyVET+pxEFUVJVbumLNUF7Kdfs3ogfRo/IIhv0lZv7k5k35I1K1qJBofHfSlL7FMXYQHAPh/IGEW++nUEzu5c5J3Vv0Lrci6AOLLBD2UTGTmr3s4vcZn004ebvdd+8gDi1NZITsAKi6t8Fb7/hBubgEy1O2bi54bfyWhSurVAsXmJqkfAaqCpq8P4ddvsDZRlVAD67INcWPjAeKggtvWtA6DXDIsxnFxTBg0NOvVKMHXdJoE5+M9iU85YJQKoXJSAn74nFq5D9oGqZQn30thevpmIKCXyf5mVTZcCr5inDx5H6EGv6zMgllvs5T8lu7KweFXPoOuvQqbkf14foWScel8vk2Zc/yCP5g+FhJPeOjhZfqfgYlSxWdw+qZSOrhd8fhEf9xol/GXa8Ij2t96ehDpWoNinvGZt1pl4moROeCyUHsh5px+MfHRolKtXG0V1B0wsZJo=
+  file: target/release/hex-cli
+  on:
+    repo: bytesnake/hex
