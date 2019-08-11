@@ -52,7 +52,7 @@ script:
     - ./compile/compile.sh
 
 before_deploy:
-- tar -czf $PACKAGE -C target/$TARGET/release/ hex-cli hex-zyklop hex-web
+- tar -czf $PACKAGE -C target/$TARGET/release/ hex-cli hex-zyklop hex-web hex-telegram
 
 deploy:
   provider: releases
