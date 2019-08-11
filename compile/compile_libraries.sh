@@ -46,7 +46,7 @@ if [ ! -d "$PATH_OUT/openssl/" ] ; then
     cd openssl-OpenSSL_1_1_1c
 
     if [ "$HOST" = "x86_64-pc-linux-gnu" ] ; then
-        ./Configure $SSL_HOST --prefix=$PATH_OUT/openssl/ --openssldir=$PATH_OUT/openssl/ --cross-compile-prefix=$HOST-gcc- shared 
+        ./Configure $SSL_HOST --prefix=$PATH_OUT/openssl/ --openssldir=$PATH_OUT/openssl/ shared 
     else 
         ./Configure $SSL_HOST --prefix=$PATH_OUT/openssl/ --openssldir=$PATH_OUT/openssl/ --cross-compile-prefix=$HOST- shared 
     fi
