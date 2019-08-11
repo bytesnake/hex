@@ -9,7 +9,6 @@ use telebot::functions::FunctionSendMessage;
 use telebot::functions::FunctionSendAudio;
 use telebot::functions::FunctionEditMessageText;
 use telebot::functions::FunctionGetFile;
-use telebot::objects::Document;
 use telebot::objects::Message;
 use telebot::objects::Audio;
 
@@ -21,7 +20,7 @@ use crate::download::DownloadProgress;
 
 mod download;
 mod upload;
-mod spotify;
+mod external;
 mod error;
 
 fn main() {
@@ -44,7 +43,7 @@ fn main() {
     let view3 = instance.view();
     let view4 = instance.view();
 
-    let spotify = spotify::Spotify::new(view4, path.clone());
+    let external = external::ExternalMusic::new(view4, path.clone(), conf.spotify.clone().unwrap());
     //let spotify2 = spotify.clone();
 
     let path2 = path.clone();
@@ -72,18 +71,18 @@ fn main() {
         })
         .for_each(|_| Ok(()));
 
-    let spotify = bot.new_cmd("/spotify")
+    let external = bot.new_cmd("/external")
         .and_then(move |(bot, msg)| {
             let Message { text, chat, .. } = msg;
 
             match text {
                 Some(ref x) if !x.is_empty() => {
-                    spotify.add_playlist(&x);
+                    external.add_playlist(&x);
 
                     bot.message(chat.id, "Habe playlist hinzugefügt!".into()).send()
                 },
                 _ => {
-                    let current_playlist = spotify.current_playlist();
+                    let current_playlist = external.current_playlist();
 
                     if let Some(current_playlist) = current_playlist {
                         bot.message(chat.id, format!("Nehme den Song {} in der Playlist {} auf", current_playlist.1, current_playlist.0)).send()
@@ -193,5 +192,5 @@ fn main() {
         })
         .for_each(|_| Ok(()));
 
-    tokio::run(stream.into_future().join(search.join(download.join(spotify))).map_err(|_| ()).map(|_| ()));
+    tokio::run(stream.into_future().join(search.join(download.join(external))).map_err(|_| ()).map(|_| ()));
 }

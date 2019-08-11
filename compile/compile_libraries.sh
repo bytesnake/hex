@@ -44,7 +44,13 @@ if [ ! -d "$PATH_OUT/openssl/" ] ; then
     fi
 
     cd openssl-OpenSSL_1_1_1c
-    ./Configure $SSL_HOST --prefix=$PATH_OUT/openssl/ --openssldir=$PATH_OUT/openssl/ --cross-compile-prefix=$HOST- shared 
+
+    if [ "$HOST" = "x86_64-pc-linux-gnu" ] ; then
+        ./Configure $SSL_HOST --prefix=$PATH_OUT/openssl/ --openssldir=$PATH_OUT/openssl/ --cross-compile-prefix=$HOST-gcc- shared 
+    else 
+        ./Configure $SSL_HOST --prefix=$PATH_OUT/openssl/ --openssldir=$PATH_OUT/openssl/ --cross-compile-prefix=$HOST- shared 
+    fi
+
     make CC=$COMPILER
     make install
 

@@ -45,6 +45,12 @@ impl Default for Server {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct SpotifyAPI {
+    pub id: String,
+    pub secret: String
+}
+
 /// Webserver configuration
 #[derive(Deserialize, Debug, Clone)]
 pub struct WebServer {
@@ -109,8 +115,8 @@ pub struct Conf {
     #[serde(default)]
     pub server: Server,
     pub webserver: Option<WebServer>,
-    pub peer: Option<DatabasePeer>
-
+    pub peer: Option<DatabasePeer>,
+    pub spotify: Option<SpotifyAPI>
 }
 
 impl Default for Conf {
@@ -119,7 +125,8 @@ impl Default for Conf {
             host: default_host(),
             server: Server::default(),
             webserver: None,
-            peer: None
+            peer: None,
+            spotify: None
         }
     }
 }
