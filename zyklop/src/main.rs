@@ -15,6 +15,8 @@ use events::Event;
 use hex_database::{Instance, Token, GossipConf, TrackKey};
 
 fn main() {
+    env_logger::init();
+
     let (conf, path) = match hex_conf::Conf::new() {
         Ok(x) => x,
         Err(err) => {

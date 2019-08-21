@@ -11,6 +11,7 @@ rb = "0.3"
 cpal = "*"
 rand = "0.5"
 futures = "0.1"
+env_logger = "0.6"
 
 hex-conf = { path = "../conf" }
 hex-music-container = { path = "../music-container" }

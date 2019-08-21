@@ -25,29 +25,10 @@
 
 #[macro_use]
 extern crate log;
-extern crate websocket;
 #[macro_use]
 extern crate futures;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_codec;
-extern crate tokio_process;
-extern crate bytes;
-extern crate hyper;
-extern crate hyper_staticfile;
-extern crate http;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_json;
-extern crate serde;
-extern crate curl;
-extern crate base64;
-extern crate tempfile;
-
-extern crate hex_conf;
-extern crate hex_database;
-extern crate hex_music_container;
-extern crate hex_server_protocol;
 
 mod error;
 mod webserver;
@@ -62,6 +43,8 @@ use std::net::SocketAddr;
 
 /// Main function spinning up all server
 fn main() {
+    env_logger::init();
+
     let (conf, path) = match hex_conf::Conf::new() {
         Ok(x) => x,
         Err(err) => {

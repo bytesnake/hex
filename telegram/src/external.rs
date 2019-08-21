@@ -14,9 +14,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use rspotify::spotify::client::Spotify as SpotifyAPI;
 use rspotify::spotify::oauth2::SpotifyClientCredentials;
 
-use crate::upload::get_fingerprint;
-
-use hex_database::Track;
+use hex_database::{Track, utils::fingerprint_from_file};
 use hex_music_container::{Configuration, Container};
 
 type PseudoTrack = (String, String, String, String);
@@ -96,7 +94,7 @@ impl ExternalMusic {
                     let mut buf = Vec::new();
                     file.read_to_end(&mut buf).unwrap();
                     
-                    let fingerprint = get_fingerprint(path).unwrap();
+                    let fingerprint = fingerprint_from_file(2, path).unwrap();
                     
                     let mut track = Track::empty(fingerprint, buf.len() as f64 / 48000.0 / 2.0);
                     track.title = Some(metadata.0);

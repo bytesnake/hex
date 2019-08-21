@@ -8,32 +8,10 @@ use std::ffi::OsStr;
 
 use futures::IntoFuture;
 use futures::sync::oneshot::{channel, Sender, Receiver};
-use hex_database::Track;
+use hex_database::{Track, utils::fingerprint_from_file};
 use hex_music_container::{Container, Configuration};
 
 use crate::error::*;
-
-/// Calculate a fingerprint to lookup music
-///
-/// This function takes a raw audio and number of channels and calculates the corresponding
-/// fingerprint, strongly connected to the content.
-///
-///  * `num_channel`- Number of channel in `data`
-///  * `data` - Raw audio data with succeeding channels
-pub fn get_fingerprint(raw_path: PathBuf) -> Result<Vec<u32>> {
-    let cmd = Command::new("fpcalc")
-        .arg(raw_path.to_str().unwrap())
-        .arg("-rate").arg("48000")
-        .arg("-channels").arg("2")
-        .arg("-format").arg("s16le")
-        .arg("-plain").arg("-raw")
-        .output().expect("Could not start ffmpeg!");
-
-    let out = str::from_utf8(&cmd.stdout)
-        .map_err(|_| Error::AcousticID)?;
-
-    out.trim().split(",").map(|x| x.parse::<u32>().map_err(|_| Error::AcousticID)).collect()
-}
 
 fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path: PathBuf) -> Result<()> {
     let encoded_path = data_path.join("download").join(&file_name);
@@ -67,7 +45,8 @@ fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path:
     let samples: &[i16] = unsafe { ::std::slice::from_raw_parts(samples.as_ptr() as *const i16, samples.len() / 2) };
 
 
-    let fingerprint = get_fingerprint(raw_path)?;
+    let fingerprint = fingerprint_from_file(2, raw_path)
+        .map_err(|x| Error::Database(x))?;
 
     let mut track = Track::empty(fingerprint, duration.into());
 
@@ -117,9 +96,9 @@ impl Upload {
         let (sender, recv) = channel();
 
         thread::spawn(move || {
-            worker(sender, file_name, content, data_path)
-                .map_err(|e| {eprintln!("{:?}", e); e})
-                .map(|_| ())
+            if let Err(err) = worker(sender, file_name, content, data_path) {
+                eprintln!("Upload thread crashed: {:?}", err);
+            }
         });
 
         Upload { recv }

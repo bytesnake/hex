@@ -14,6 +14,8 @@ use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf, Track
 use futures::Future;
 
 fn main() {
+    env_logger::init();
+
     let (conf, path) = match hex_conf::Conf::new() {
         Ok(x) => x,
         Err(err) => {

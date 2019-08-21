@@ -24,6 +24,8 @@ mod external;
 mod error;
 
 fn main() {
+    env_logger::init();
+
     let key = env::var("TELEGRAM_BOT_KEY").unwrap();
 
     let mut bot = Bot::new(&key);
@@ -161,7 +163,6 @@ fn main() {
 
             let file_name = format!("{}.{}", file_id, ext);
 
-            println!("GET FILE {}", file_name);
             bot.get_file(file_id).send().map(|(bot, y)| (bot, y, file_name, chat))
         })
         .filter_map(|(bot, msg, file_name, chat)| msg.file_path.map(|x| (bot, x, file_name, chat)))
