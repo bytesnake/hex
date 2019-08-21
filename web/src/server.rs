@@ -30,7 +30,7 @@ pub fn start(conf: Conf, path: PathBuf) {
 	let handle = core.handle();
 
 	// bind to the server
-    let addr = ("127.0.0.1", conf.server.port);
+    let addr = ("0.0.0.0", conf.server.port);
 
     let incoming = Server::bind(addr, &handle).unwrap().incoming();
 
