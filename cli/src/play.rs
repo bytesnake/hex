@@ -7,7 +7,10 @@ use std::sync::mpsc::{Receiver, channel};
 use crate::audio::AudioDevice;
 use terminal_size::{Width, terminal_size};
 use futures::future::Future;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use tokio;
 use nix::sys::termios;
 
 use hex_database::{Track, View};
@@ -48,7 +51,7 @@ fn format_time(mut secs: f64) -> String {
     out
 }
 
-pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiver<Event>) {
+pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiver<Event>, working: Arc<AtomicBool>) {
     let mut device = AudioDevice::new();
     let width = match terminal_size() {
         Some((Width(w),_)) => w,
@@ -61,27 +64,8 @@ pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiv
             break;
         }
 
-        // wait till file available
-        /*
-        while !data_path.join(tracks[idx].key.to_path()).exists() {
-            match events.try_recv() {
-                Ok(Event::Next) => {
-                    continue 'outer;
-                },
-                Ok(Event::Prev) => {
-                    idx -= 2;
-
-                    continue 'outer;
-                },
-                Ok(Event::Quit) => return,
-                _ => {}
-            }
-
-            println!("File {} not available", tracks[idx].key.to_string());
-            thread::sleep(Duration::from_millis(500));
-        }*/
         if !data_path.join(tracks[idx].key.to_path()).exists() {
-            if let Err(_) = view.ask_for_file(tracks[idx].key.to_vec()).wait() {
+            if let Err(_) = tokio::runtime::current_thread::block_on_all(view.ask_for_file(tracks[idx].key.to_vec())) {
                 println!("File {} not available", tracks[idx].key.to_string());
 
                 idx += 1;
@@ -175,6 +159,7 @@ pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiv
         println!(" Finished!\n");
     }
 
+    working.store(false, Ordering::Relaxed);
     device.shutdown();
 }
 
@@ -193,9 +178,17 @@ pub fn play_tracks(data_path: PathBuf, view: View, tracks: Vec<Track>) {
     termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &term).unwrap();
     let (sender, receiver) = channel();
 
-    let handle = thread::spawn(move || player(data_path.to_path_buf(), view, tracks, receiver));
+    let working = Arc::new(AtomicBool::new(true));
+    let working2 = working.clone();
+
+    let handle = thread::spawn(move || player(data_path.to_path_buf(), view, tracks, receiver, working));
 
     for byte in io::stdin().bytes() {
+        // check first if thread is still there
+        if !working2.load(Ordering::Relaxed) {
+            break;
+        }
+
         let res = match byte {
             Ok(32) => sender.send(Event::PauseContinue),
             Ok(65) => sender.send(Event::Forward),
@@ -205,7 +198,7 @@ pub fn play_tracks(data_path: PathBuf, view: View, tracks: Vec<Track>) {
             Ok(3) => {
                 sender.send(Event::Quit).unwrap();
 
-                handle.join().unwrap();
+                //handle.join().unwrap();
                 break;
             },
             _ => Ok(())
