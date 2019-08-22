@@ -3,7 +3,7 @@ extern crate failure;
 
 use std::env;
 use telebot::{Bot, functions::ParseMode, error::ErrorKind as ErrorTelegram};
-use futures::{Future, Stream, IntoFuture};
+use futures::{Future, Stream, IntoFuture, future::Either};
 use hex_database::{Instance, GossipConf};
 use telebot::functions::FunctionSendMessage;
 use telebot::functions::FunctionSendAudio;
@@ -28,7 +28,7 @@ fn main() {
 
     let key = env::var("TELEGRAM_BOT_KEY").unwrap();
 
-    let mut bot = Bot::new(&key);
+    let mut bot = Bot::new(&key).timeout(90000);
 
     let (conf, path) = hex_conf::Conf::new().unwrap();
 
@@ -114,18 +114,27 @@ fn main() {
             let tmp = download.recv
                 .map_err(|_| ErrorTelegram::Unknown.into())
                 .and_then(move |x| {
-                    let DownloadProgress { path, track, num } = x;
+                    let DownloadProgress { result, num } = x;
 
-                    bot
-                        .audio(chat_id)
-                        .duration(track.duration as i64)
-                        .file(file::File::Disk { path: path })
-                        .performer(track.interpret.unwrap_or("unbekannt".into()))
-                        .title(track.title.unwrap_or("unbekannt".into()))
-                        .send()
-                        .map_err(|x| { eprintln!("{:?}", x); x }).map(move |_| num)
-                }
-                )
+                    match result {
+                        Ok((path, track)) => {
+                            Either::A(bot
+                                .audio(chat_id)
+                                .duration(track.duration as i64)
+                                .file(file::File::Disk { path: path })
+                                .performer(track.interpret.unwrap_or("unbekannt".into()))
+                                .title(track.title.unwrap_or("unbekannt".into()))
+                                .send()
+                                .map_err(|x| { eprintln!("{:?}", x); x }).map(move |_| num)
+                            )
+                        },
+                        Err(err) => {
+                            Either::B(
+                                bot.message(chat_id, format!("Konnte Song nicht laden = {:?}", err)).send().map_err(|x| { eprintln!("{:?}", x); x }).map(move |_| num)
+                            )
+                        }
+                    }
+                })
                 .and_then(move |num| bot2.edit_message_text(format!("download {}/{}", num+1, result_len)).chat_id(chat_id).message_id(message_id).send())
 
                 .for_each(|_| Ok(()));
