@@ -6,10 +6,11 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use crate::audio::AudioDevice;
 use terminal_size::{Width, terminal_size};
+use futures::future::Future;
 
 use nix::sys::termios;
 
-use hex_database::Track;
+use hex_database::{Track, View};
 use hex_music_container::{Container, Configuration};
 
 #[derive(Debug)]
@@ -47,7 +48,7 @@ fn format_time(mut secs: f64) -> String {
     out
 }
 
-pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
+pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiver<Event>) {
     let mut device = AudioDevice::new();
     let width = match terminal_size() {
         Some((Width(w),_)) => w,
@@ -61,6 +62,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
         }
 
         // wait till file available
+        /*
         while !data_path.join(tracks[idx].key.to_path()).exists() {
             match events.try_recv() {
                 Ok(Event::Next) => {
@@ -77,6 +79,14 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
 
             println!("File {} not available", tracks[idx].key.to_string());
             thread::sleep(Duration::from_millis(500));
+        }*/
+        if !data_path.join(tracks[idx].key.to_path()).exists() {
+            if let Err(_) = view.ask_for_file(tracks[idx].key.to_vec()).wait() {
+                println!("File {} not available", tracks[idx].key.to_string());
+
+                idx += 1;
+                continue 'outer;
+            }
         }
 
         let file = File::open(data_path.join(tracks[idx].key.to_path())).unwrap();
@@ -168,7 +178,7 @@ pub fn player(data_path: PathBuf, tracks: Vec<Track>, events: Receiver<Event>) {
     device.shutdown();
 }
 
-pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
+pub fn play_tracks(data_path: PathBuf, view: View, tracks: Vec<Track>) {
 
     // setup terminal to pass arrows
     // Querying original as a separate, since `Termios` does not implement copy
@@ -183,7 +193,7 @@ pub fn play_tracks(data_path: PathBuf, tracks: Vec<Track>) {
     termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &term).unwrap();
     let (sender, receiver) = channel();
 
-    let handle = thread::spawn(move || player(data_path.to_path_buf(), tracks, receiver));
+    let handle = thread::spawn(move || player(data_path.to_path_buf(), view, tracks, receiver));
 
     for byte in io::stdin().bytes() {
         let res = match byte {

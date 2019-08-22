@@ -38,6 +38,7 @@ fn main() {
     let view = instance.view();
     let mut view2 = instance.view();
 
+    /*
     let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
     let path_copy = data_path.clone();
     thread::spawn(move || {
@@ -46,7 +47,7 @@ fn main() {
                 view2.ask_for_file(key.to_vec()).wait().unwrap();
             }
         }
-    });
+    });*/
 
     'outer: loop {
         print!(" > ");
@@ -83,7 +84,6 @@ fn main() {
         let tracks: Vec<Track> = view.search(&mut query).collect();
 
         let data_path = data_path.clone();
-        let sender = sender.clone();
         match args[0] {
             "" => {
                 print_overview(&view);
@@ -98,14 +98,12 @@ fn main() {
                 add_playlist(&view, tracks);
             },
             "sync" => {
-                sync::sync_tracks(tracks, sender, data_path);
+                //sync::sync_tracks(tracks, sender, data_path);
             },
             "play" => {
-                for key in tracks.iter().map(|x| x.key.clone()) {
-                    sender.send(key).unwrap();
-                }
+                let view = instance.view();
 
-                play::play_tracks(data_path.clone(), tracks);
+                play::play_tracks(data_path.clone(), view, tracks);
             },
             "modify" => {
                 modify::modify_tracks(&view, tracks);

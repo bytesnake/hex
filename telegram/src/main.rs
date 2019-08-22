@@ -44,6 +44,7 @@ fn main() {
     let view2 = instance.view();
     let view3 = instance.view();
     let view4 = instance.view();
+    let view6 = instance.view();
 
     let external = external::ExternalMusic::new(view4, path.clone(), conf.spotify.clone().unwrap());
     //let spotify2 = spotify.clone();
@@ -105,7 +106,7 @@ fn main() {
         })
         .and_then(move |(result, bot, msg)| {
             let result_len = result.len();
-            let download = download::State::new(result, path.clone());
+            let download = download::State::new(&view6, result, path.clone());
             let bot2 = bot.clone();
             let Message {chat, message_id, ..} = msg;
             let chat_id = chat.id;

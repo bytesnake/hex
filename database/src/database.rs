@@ -168,7 +168,7 @@ impl View {
         self.peer_id.clone().unwrap()
     }
 
-    pub fn ask_for_file(&mut self, file_id: Vec<u8>) -> impl Future<Item = Vec<u8>, Error = tokio::timer::timeout::Error<futures::Canceled>> {//Timeout<impl Future<Item = Vec<u8>, Error = futures::Canceled>> {
+    pub fn ask_for_file(&self, file_id: Vec<u8>) -> impl Future<Item = Vec<u8>, Error = tokio::timer::timeout::Error<futures::Canceled>> {//Timeout<impl Future<Item = Vec<u8>, Error = futures::Canceled>> {
         match &self.writer {
             Some(spread) => {
                 let (c, p) = oneshot();
