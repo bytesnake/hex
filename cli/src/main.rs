@@ -36,13 +36,14 @@ fn main() {
 
     let mut instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
+    let mut view2 = instance.view();
 
     let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
     let path_copy = data_path.clone();
     thread::spawn(move || {
         while let Ok(key) = receiver.recv() {
             if !path_copy.join(key.to_string()).exists() {
-                instance.ask_for_file(key.to_vec()).wait().unwrap();
+                view2.ask_for_file(key.to_vec()).wait().unwrap();
             }
         }
     });

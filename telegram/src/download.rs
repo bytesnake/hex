@@ -1,13 +1,12 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::slice;
-use std::thread;
 use std::fs::{self, File};
 use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use futures::sync::mpsc::{channel, Sender, Receiver};
+use futures::sync::mpsc::{channel, Receiver};
 
 use crate::error::*;
 
@@ -62,7 +61,7 @@ fn worker(track: Track, data_path: PathBuf) -> Result<(PathBuf, Track)> {
 
     let converted_file = file_path_out.with_extension("ogg");
 
-    Command::new("ffmpeg")
+    let output = Command::new("ffmpeg")
         .arg("-y").arg("-loglevel").arg("0").arg("-nostats")
         .arg("-ar").arg("48k")
         .arg("-ac").arg("2")
@@ -71,13 +70,18 @@ fn worker(track: Track, data_path: PathBuf) -> Result<(PathBuf, Track)> {
         .arg("-metadata").arg(&format!("title=\"{}\"", track.title.clone().unwrap_or(track.key.to_string())))
         .arg("-metadata").arg(&format!("album=\"{}\"", track.album.clone().unwrap_or("Unknown".into())))
         .arg("-metadata").arg(&format!("author=\"{}\"", track.interpret.clone().unwrap_or("Unknown".into())))
+        .arg("-metadata").arg(&format!("artist=\"{}\"", track.interpret.clone().unwrap_or("Unknown".into())))
         .arg("-metadata").arg(&format!("composer=\"{}\"", track.composer.clone().unwrap_or("Unknown".into())))
         .arg(converted_file.to_str().unwrap())
-        .spawn().expect("Could not start ffmpeg!").wait().unwrap();
+        .output().expect("Could not start ffmpeg!");
 
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
 
-
-    Ok((converted_file, track))
+        Err(Error::Ffmpeg(err.to_string()))
+    } else {
+        Ok((converted_file, track))
+    }
 }
 
 pub struct State {

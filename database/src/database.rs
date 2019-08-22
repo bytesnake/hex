@@ -2,10 +2,12 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use futures::{Sink, Stream, Future, IntoFuture, oneshot, Oneshot, Complete};
+use futures::{Sink, Stream, Future, IntoFuture, oneshot, Complete};
 use futures::sync::mpsc::{channel, Sender, Receiver};
+use tokio::prelude::FutureExt;
 use rusqlite::{self, Statement, OpenFlags};
 use tokio;
+use std::time::Duration;
 use std::thread;
 
 use crate::error::{Error, Result};
@@ -103,20 +105,6 @@ impl Instance {
         self.receiver.take().unwrap()
     }
 
-    pub fn ask_for_file(&mut self, file_id: Vec<u8>) -> Oneshot<Vec<u8>> {
-        match self.gossip {
-            Some((ref spread, _, _)) => {
-                let (c, p) = oneshot();
-
-                self.awaiting.lock().unwrap().insert(file_id.clone(), c);
-
-                spread.spread(Packet::File(file_id, None), SpreadTo::Everyone);
-
-                return p;
-            },
-            _ => panic!("I'm not in p2p mode!")
-        }
-    }
 
     pub fn view(&self) -> View {
         let socket = rusqlite::Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
@@ -128,14 +116,15 @@ impl Instance {
                     writer: Some(writer.clone()), 
                     peer_id: Some(peer_id.clone()), 
                     storage: None,
-                    sender: Some(sender.clone())
+                    sender: Some(sender.clone()),
+                    awaiting: self.awaiting.clone()
                 }
             },
             (None, Some((ref storage, ref peer_id, ref sender))) => {
-                View { socket, writer: None, peer_id: Some(peer_id.clone()), storage: Some(storage.clone()), sender: Some(sender.clone()) }
+                View { socket, writer: None, peer_id: Some(peer_id.clone()), storage: Some(storage.clone()), sender: Some(sender.clone()), awaiting: self.awaiting.clone() }
             },
             _ => {
-                View { socket, writer: None, peer_id: None, storage: None, sender: None }
+                View { socket, writer: None, peer_id: None, storage: None, sender: None, awaiting: self.awaiting.clone() }
             }
         }
     }
@@ -147,8 +136,8 @@ pub struct View {
     peer_id: Option<PeerId>,
     writer: Option<Spread<Storage>>,
     storage: Option<Arc<Mutex<Storage>>>,
-    sender: Option<Sender<TransitionAction>>
-
+    sender: Option<Sender<TransitionAction>>,
+    awaiting: Awaiting
 }
 
 impl View {
@@ -179,6 +168,25 @@ impl View {
         self.peer_id.clone().unwrap()
     }
 
+    pub fn ask_for_file(&mut self, file_id: Vec<u8>) -> impl Future<Item = Vec<u8>, Error = tokio::timer::timeout::Error<futures::Canceled>> {//Timeout<impl Future<Item = Vec<u8>, Error = futures::Canceled>> {
+        match &self.writer {
+            Some(spread) => {
+                let (c, p) = oneshot();
+
+                self.awaiting.lock().unwrap().insert(file_id.clone(), c);
+
+                spread.spread(Packet::File(file_id.clone(), None), SpreadTo::Everyone);
+
+                let awaiting = self.awaiting.clone();
+                p.timeout(Duration::from_millis(500)).then(move |x| {
+                    awaiting.lock().unwrap().remove(&file_id.clone());
+
+                    x
+                })
+            },
+            _ => panic!("I'm not in p2p mode!")
+        }
+    }
     /// Prepare a search with a provided query and translate it to SQL. This method fails in case
     /// of an invalid query.
     pub fn search_prep(&self, query: SearchQuery) -> Result<Statement> {

@@ -1,4 +1,3 @@
-use std::str;
 use std::thread;
 use std::path::PathBuf;
 use std::fs::File;
