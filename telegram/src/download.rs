@@ -106,7 +106,7 @@ impl State {
                 let c1 = counter.clone();
                 let c2 = counter.clone();
 
-                let res = view.ask_for_file(track.key.to_vec())
+                let res = view.ask_for_file(track.key.clone())
                     .and_then(move |x| {
                         pool.execute(move || {
                             let item = worker(track, data_path);

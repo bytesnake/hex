@@ -1,3 +1,5 @@
+use std::io::Write;
+use std::fs::File;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -17,7 +19,7 @@ use crate::objects::*;
 use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo};
 use crate::transition::{Storage, TransitionAction, transition_from_sql};
 
-type Awaiting = Arc<Mutex<HashMap<Vec<u8>, Complete<Vec<u8>>>>>;
+type Awaiting = Arc<Mutex<HashMap<TrackKey, Complete<()>>>>;
 /// Instance of the database
 pub struct Instance {
     gossip: Option<(Spread<Storage>, PeerId, Sender<TransitionAction>)>,
@@ -30,6 +32,7 @@ pub struct Instance {
 impl Instance {
     pub fn from_file<T: AsRef<Path>>(path: T, conf: GossipConf) -> Instance {
         let path = path.as_ref();
+        let data_path = PathBuf::from(path.parent().unwrap());
 
         // try to create the database, if not existing
         {
@@ -66,9 +69,23 @@ impl Instance {
                                 }
                             },
                             Packet::File(id, data) => {
-                                if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
-                                    if let Err(err) = shot.send(data.unwrap()) {
-                                        eprintln!("Oneshot err = {:?}", err);
+                                if let Some(data) = data {
+                                    let id = TrackKey::from_vec(&id);
+
+                                    if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
+                                        let path = data_path.join(id.to_path());
+
+                                        if !path.exists() {
+                                            let mut file = File::create(path).unwrap();
+
+                                            if let Err(err) = file.write(&data) {
+                                                eprintln!("File write err = {:?}", err);
+                                            }
+                                        }
+
+                                        if let Err(err) = shot.send(()) {
+                                            eprintln!("Oneshot err = {:?}", err);
+                                        }
                                     }
                                 }
                             },
@@ -168,18 +185,18 @@ impl View {
         self.peer_id.clone().unwrap()
     }
 
-    pub fn ask_for_file(&self, file_id: Vec<u8>) -> impl Future<Item = Vec<u8>, Error = tokio::timer::timeout::Error<futures::Canceled>> {//Timeout<impl Future<Item = Vec<u8>, Error = futures::Canceled>> {
+    pub fn ask_for_file(&self, track_id: TrackKey) -> impl Future<Item = (), Error = tokio::timer::timeout::Error<futures::Canceled>> {//Timeout<impl Future<Item = Vec<u8>, Error = futures::Canceled>> {
         match &self.writer {
             Some(spread) => {
                 let (c, p) = oneshot();
 
-                self.awaiting.lock().unwrap().insert(file_id.clone(), c);
+                self.awaiting.lock().unwrap().insert(track_id.clone(), c);
 
-                spread.spread(Packet::File(file_id.clone(), None), SpreadTo::Everyone);
+                spread.spread(Packet::File(track_id.to_vec(), None), SpreadTo::Everyone);
 
                 let awaiting = self.awaiting.clone();
-                p.timeout(Duration::from_millis(500)).then(move |x| {
-                    awaiting.lock().unwrap().remove(&file_id.clone());
+                p.timeout(Duration::from_millis(3000)).then(move |x| {
+                    awaiting.lock().unwrap().remove(&track_id.clone());
 
                     x
                 })

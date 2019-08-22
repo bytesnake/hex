@@ -65,7 +65,7 @@ pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiv
         }
 
         if !data_path.join(tracks[idx].key.to_path()).exists() {
-            if let Err(_) = tokio::runtime::current_thread::block_on_all(view.ask_for_file(tracks[idx].key.to_vec())) {
+            if let Err(_) = tokio::runtime::current_thread::block_on_all(view.ask_for_file(tracks[idx].key.clone())) {
                 println!("File {} not available", tracks[idx].key.to_string());
 
                 idx += 1;

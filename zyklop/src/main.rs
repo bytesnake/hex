@@ -37,27 +37,17 @@ fn main() {
 
     let mut instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
+    let view2 = instance.view();
 
     let data_path_2 = data_path.clone();
     let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
 
     thread::spawn(move || loop {
         if let Ok(key) = receiver.recv() {
-            let path = data_path_2.join(key.to_path());
-            if path.exists() {
-                continue;
-            }
-
             println!("Ask for file {}", key.to_string());
-            let buf = instance.ask_for_file(key.to_vec()).wait().unwrap();
-
-            println!("Got file write ..!");
-            let mut file = File::create(path).unwrap();
-
-            // direct write may be too slow, therefore write in 1M blocks
-            for block in buf.chunks(1000*1000) {
-                file.write(&block).unwrap();
-                file.sync_data().unwrap();
+            
+            if let Err(err) = view2.ask_for_file(key).wait() {
+                eprintln!("Could not find file = {:?}", err);
             }
         }
     });
