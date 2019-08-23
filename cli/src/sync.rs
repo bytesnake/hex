@@ -1,21 +1,21 @@
-use std::io::{self, Write};
-use std::path::PathBuf;
-use std::sync::mpsc::Sender;
+use tokio;
+use futures::future::Future;
+use futures::stream;
+use futures::stream::Stream;
 
-use hex_database::{Track, TrackKey};
+use hex_database::{Track, View};
 
-pub fn sync_tracks(tracks: Vec<Track>, sender: Sender<TrackKey>, data_path: PathBuf) {
+pub fn sync_tracks(tracks: Vec<Track>, view: &View) {
     let length = tracks.len();
-    for track in tracks {
-        print!("Syncing track: {}", track.key.to_string());
-        io::stdout().flush().unwrap();
 
-        sender.send(track.key.clone()).unwrap();
+    let futures = tracks.into_iter()
+        .map(|track| view.ask_for_file(track.key.clone()).map(move |_| track.title.clone()));
 
-        while !data_path.join(track.key.to_path()).exists() {}
+    let stream = stream::futures_unordered(futures)
+        .map(|title| println!("Synchronized {:?}", title))
+        .map_err(|err| println!("Could not synchronize {:?}", err));
 
-        println!(" ok");
-    }
+    tokio::run(stream.into_future().map(|_| ()).map_err(|_| ()));
 
     println!("Finished - {} tracks synchronised!", length);
 }

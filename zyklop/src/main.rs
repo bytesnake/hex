@@ -3,8 +3,6 @@ mod audio;
 mod events;
 mod token;
 
-use std::fs::File;
-use std::io::Write;
 use std::path::PathBuf;
 use std::thread;
 use std::sync::mpsc::{Sender, Receiver, channel};
@@ -35,11 +33,10 @@ fn main() {
         gossip = gossip.network_key(peer.network_key());
     }
 
-    let mut instance = Instance::from_file(&db_path, gossip);
+    let instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
     let view2 = instance.view();
 
-    let data_path_2 = data_path.clone();
     let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
 
     thread::spawn(move || loop {

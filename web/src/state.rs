@@ -141,7 +141,7 @@ impl State {
                         }
                     });
                 
-                let mut container = match prior_state {
+                let container = match prior_state {
                     &mut RequestState::Stream { ref mut container, .. } => container,
                     _ => panic!("blub")
                 };
@@ -190,7 +190,7 @@ impl State {
             },
 
             RequestAction::StreamSeek { sample } => {
-                let (mut container, track) = match self.reqs.get_mut(&id).unwrap() {
+                let (container, track) = match self.reqs.get_mut(&id).unwrap() {
                     &mut RequestState::Stream { ref mut container, ref mut track } => (container, track),
                     _ => panic!("blub")
                 };

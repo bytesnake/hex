@@ -11,7 +11,6 @@ use cpal::traits::DeviceTrait;
 pub struct AudioDevice {
     rb: SpscRb<i16>,
     producer: Producer<i16>,
-    thread_handle: thread::JoinHandle<()>,
     is_running: Arc<AtomicUsize>
 }
 
@@ -33,17 +32,16 @@ impl AudioDevice {
             data_type: cpal::SampleFormat::I16
         };
 
-        panic::set_hook(Box::new(|msg| {
+        panic::set_hook(Box::new(|_| {
         }));
 
         let is_running = Arc::new(AtomicUsize::new(2));
         let tmp = is_running.clone();
-        let thread = thread::spawn(move || Self::run(cons, host, device, format, tmp));
+        thread::spawn(move || Self::run(cons, host, device, format, tmp));
 
         AudioDevice {
             rb: rb,
             producer: prod,
-            thread_handle: thread,
             is_running
         }
     }
@@ -58,8 +56,6 @@ impl AudioDevice {
 
     pub fn shutdown(self) {
         self.is_running.store(0, Ordering::Relaxed);
-
-        self.thread_handle.join();
     }
 
     pub fn pause(&self) {
@@ -74,13 +70,13 @@ impl AudioDevice {
         let event_loop = host.event_loop();
 
         let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
-        event_loop.play_stream(stream_id.clone());
+        event_loop.play_stream(stream_id.clone()).unwrap();
 
         let mut buf = vec![0i16; format.channels as usize];
 
         event_loop.run(move |_, data| {
             if is_running.load(Ordering::Relaxed) == 0 {
-                panic!("LALA");
+                panic!("");
             }
 
             match data {

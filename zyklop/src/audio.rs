@@ -8,7 +8,6 @@ use cpal::traits::DeviceTrait;
 pub struct AudioDevice {
     rb: SpscRb<i16>,
     producer: Producer<i16>,
-    thread_handle: thread::JoinHandle<()>
 }
 
 impl AudioDevice {
@@ -29,12 +28,11 @@ impl AudioDevice {
             data_type: cpal::SampleFormat::I16
         };
 
-        let thread = thread::spawn(move || Self::run(cons, host, device, format));
+        thread::spawn(move || Self::run(cons, host, device, format));
 
         AudioDevice {
             rb: rb,
-            producer: prod,
-            thread_handle: thread
+            producer: prod
         }
     }
 
@@ -63,7 +61,7 @@ impl AudioDevice {
         let event_loop = host.event_loop();
 
         let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
-        event_loop.play_stream(stream_id.clone());
+        event_loop.play_stream(stream_id.clone()).unwrap();
 
         let mut buf = vec![0i16; format.channels as usize];
 

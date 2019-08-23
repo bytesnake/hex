@@ -350,7 +350,7 @@ impl View {
         rows
     }
 
-    pub fn get_num_transitions(&self, days: u32) -> u64 {
+    pub fn get_num_transitions(&self, _days: u32) -> u64 {
         0
     }
 

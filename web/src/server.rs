@@ -7,8 +7,6 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::path::PathBuf;
-use std::fs::File;
-use std::io::Read;
 
 use websocket::WebSocketError;
 use websocket::message::OwnedMessage;

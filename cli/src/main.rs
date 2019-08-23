@@ -5,13 +5,9 @@ mod sync;
 mod store;
 
 use std::io::{self, Write, BufRead};
-use std::sync::mpsc::{channel, Sender, Receiver};
-use std::thread;
 use std::fs;
 use std::path::{Path, PathBuf};
-use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf, TrackKey, Playlist};
-
-use futures::Future;
+use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf, Playlist};
 
 fn main() {
     env_logger::init();
@@ -34,20 +30,8 @@ fn main() {
         gossip = gossip.network_key(peer.network_key());
     }
 
-    let mut instance = Instance::from_file(&db_path, gossip);
+    let instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
-    let mut view2 = instance.view();
-
-    /*
-    let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
-    let path_copy = data_path.clone();
-    thread::spawn(move || {
-        while let Ok(key) = receiver.recv() {
-            if !path_copy.join(key.to_string()).exists() {
-                view2.ask_for_file(key.to_vec()).wait().unwrap();
-            }
-        }
-    });*/
 
     'outer: loop {
         print!(" > ");
@@ -88,7 +72,7 @@ fn main() {
             "" => {
                 print_overview(&view);
             },
-            "show" => {
+            "search" => {
                 show_tracks(&args[1], tracks);
             },
             "delete" => {
@@ -98,7 +82,7 @@ fn main() {
                 add_playlist(&view, tracks);
             },
             "sync" => {
-                //sync::sync_tracks(tracks, sender, data_path);
+                sync::sync_tracks(tracks, &view);
             },
             "play" => {
                 let view = instance.view();
@@ -116,7 +100,7 @@ fn main() {
                 return;
             },
             _ => {
-                println!("Unsupported action!");
+                println!("Unsupported action, use with <search|delete|add-playlist|sync|play|modify|store|quit>");
             }
         }
     }

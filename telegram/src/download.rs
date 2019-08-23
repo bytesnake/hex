@@ -107,7 +107,7 @@ impl State {
                 let c2 = counter.clone();
 
                 let res = view.ask_for_file(track.key.clone())
-                    .and_then(move |x| {
+                    .and_then(move |_| {
                         pool.execute(move || {
                             let item = worker(track, data_path);
                             let cnt = c1.fetch_add(1, Ordering::Relaxed);

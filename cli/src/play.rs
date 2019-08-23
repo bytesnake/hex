@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use crate::audio::AudioDevice;
 use terminal_size::{Width, terminal_size};
-use futures::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -144,8 +143,7 @@ pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiv
                         break 'inner;
                     },
                     Ok(Event::Quit) => {
-                        device.shutdown();
-                        return;
+                        break 'outer;
                     },
                     _ => {}
                 }
@@ -160,6 +158,7 @@ pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiv
     }
 
     working.store(false, Ordering::Relaxed);
+
     device.shutdown();
 }
 
@@ -181,7 +180,7 @@ pub fn play_tracks(data_path: PathBuf, view: View, tracks: Vec<Track>) {
     let working = Arc::new(AtomicBool::new(true));
     let working2 = working.clone();
 
-    let handle = thread::spawn(move || player(data_path.to_path_buf(), view, tracks, receiver, working));
+    thread::spawn(move || player(data_path.to_path_buf(), view, tracks, receiver, working));
 
     for byte in io::stdin().bytes() {
         // check first if thread is still there
@@ -196,15 +195,14 @@ pub fn play_tracks(data_path: PathBuf, view: View, tracks: Vec<Track>) {
             Ok(68) => sender.send(Event::Prev),
             Ok(67) => sender.send(Event::Next),
             Ok(3) => {
+                println!(" Quitted!\n");
                 sender.send(Event::Quit).unwrap();
 
-                //handle.join().unwrap();
                 break;
             },
             _ => Ok(())
         };
 
-        //println!("{:?}", res);
         if let Err(_) = res {
             println!("ERROR");
             break;

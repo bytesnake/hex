@@ -10,7 +10,6 @@ use crate::error::{Result, Error};
 
 use hex_music_container::{Container, Configuration};
 
-use crate::acousticid;
 use hex_database::Track;
 
 pub struct State {
@@ -52,28 +51,24 @@ fn worker(mut sender: Sender<State>, desc: String, samples: Vec<i16>, duration: 
 
 pub struct Converter {
     pub handle: Handle,
-    recv: Option<Receiver<State>>,
-    thread: thread::JoinHandle<Result<()>>
+    recv: Option<Receiver<State>>
 }
 
 impl Converter {
     pub fn new(handle: Handle, desc: String, samples: Vec<i16>, duration: f32, num_channel: u32, data_path: PathBuf) -> Converter {
         let (sender, recv) = channel(10);
 
-        let thread = thread::spawn(move || {
+        thread::spawn(move || {
             let mut sender2 = sender.clone();
-            let res = worker(sender, desc.clone(), samples, duration, num_channel, data_path)?;
+            let res = worker(sender, desc.clone(), samples, duration, num_channel, data_path).unwrap();
 
             sender2.try_send(State { progress: 1.0, desc: desc, data: Some(res) })
-                .map_err(|_| Error::ChannelFailed)?;
-
-            Ok(())
+                .map_err(|_| Error::ChannelFailed).unwrap();
         });
 
         Converter {
             handle: handle,
             recv: Some(recv),
-            thread: thread
         }
     }
 

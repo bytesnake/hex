@@ -104,7 +104,6 @@ fn worker(mut sender: Sender<DownloadProgress>, id: PacketId, format: String, tr
 
 pub struct DownloadState {
     pub handle: Handle,
-    thread: thread::JoinHandle<Result<()>>,
     progress: Rc<RefCell<DownloadProgress>>
 }
 
@@ -112,10 +111,8 @@ impl DownloadState {
     pub fn new(handle: Handle, id: PacketId, format: String, tracks: Vec<Track>, num_channel: u32, data_path: PathBuf) -> DownloadState {
         let (sender, recv) = channel(10);
 
-        let thread = thread::spawn(move || {
-            worker(sender, id, format, tracks, num_channel, data_path)?;
-
-            Ok(())
+        thread::spawn(move || {
+            worker(sender, id, format, tracks, num_channel, data_path).unwrap();
         });
 
         let progress = Rc::new(RefCell::new(DownloadProgress::empty()));
@@ -131,7 +128,6 @@ impl DownloadState {
 
         DownloadState {
             handle: handle,
-            thread: thread,
             progress: progress
             
         }

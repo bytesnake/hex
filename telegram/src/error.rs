@@ -10,6 +10,5 @@ pub enum Error {
     Io(io::Error),
     Ffmpeg(String),
     ChannelFailed,
-    AcousticID,
     FileNotFound
 }
