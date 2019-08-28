@@ -40,7 +40,6 @@ fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
     let view6 = instance.view();
 
     let external = external::ExternalMusic::new(view4, path.clone(), conf.spotify.clone().unwrap());
-    //let spotify2 = spotify.clone();
 
     let path2 = path.clone();
     let search = bot.new_cmd("/suche")
