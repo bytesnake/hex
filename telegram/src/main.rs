@@ -2,6 +2,9 @@
 extern crate failure;
 
 use std::env;
+use std::thread;
+use std::path::PathBuf;
+use std::time::Duration;
 use telebot::{Bot, functions::ParseMode, error::ErrorKind as ErrorTelegram};
 use futures::{Future, Stream, IntoFuture, future::Either};
 use hex_database::{Instance, GossipConf};
@@ -16,6 +19,8 @@ use telebot::file;
 use hyper::Uri;
 use failure::{Fail, Error};
 
+use hex_conf::Conf;
+
 use crate::download::DownloadProgress;
 
 mod download;
@@ -23,22 +28,10 @@ mod upload;
 mod external;
 mod error;
 
-fn main() {
-    env_logger::init();
-
+fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
     let key = env::var("TELEGRAM_BOT_KEY").unwrap();
 
-    let mut bot = Bot::new(&key).timeout(900000);
-
-    let (conf, path) = hex_conf::Conf::new().unwrap();
-
-    let mut gossip = GossipConf::new();
-
-    if let Some(ref peer) = conf.peer {
-        gossip = gossip.addr((conf.host, peer.port)).id(peer.id()).network_key(peer.network_key());
-    }
-
-    let instance = Instance::from_file(path.join("music.db"), gossip);
+    let mut bot = Bot::new(&key).timeout(200);
 
     let view = instance.view();
     let view2 = instance.view();
@@ -203,5 +196,28 @@ fn main() {
         })
         .for_each(|_| Ok(()));
 
-    tokio::run(stream.into_future().join(search.join(download.join(external))).map_err(|_| ()).map(|_| ()));
+    let chain = stream.into_future().join(search.join(download.join(external)))
+        .inspect(|err| eprintln!("Eventloop crashed = {:?}", err))
+        .map_err(|_| ()).map(|_| ());
+
+    tokio::run(chain);
+}
+
+fn main() {
+    env_logger::init();
+
+    let (conf, path) = hex_conf::Conf::new().unwrap();
+
+    let mut gossip = GossipConf::new();
+
+    if let Some(ref peer) = conf.peer {
+        gossip = gossip.addr((conf.host, peer.port)).id(peer.id()).network_key(peer.network_key());
+    }
+
+    let instance = Instance::from_file(path.join("music.db"), gossip);
+
+    loop {
+        run_bot(&instance, conf.clone(), path.clone());
+        thread::sleep(Duration::from_millis(2000));
+    }
 }

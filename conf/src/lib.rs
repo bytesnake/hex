@@ -22,7 +22,7 @@ pub use self::error::*;
 use std::default::Default;
 
 /// The websocket server configuration
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Server {
     #[serde(default = "default_port")]
     pub port: u16,
@@ -108,7 +108,7 @@ impl DatabasePeer {
 }
 
 /// Global configuration
-#[derive(Deserialize,Debug)]
+#[derive(Deserialize,Debug, Clone)]
 pub struct Conf {
     #[serde(default = "default_host")]
     pub host: IpAddr,
