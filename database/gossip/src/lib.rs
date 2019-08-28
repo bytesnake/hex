@@ -152,6 +152,12 @@ impl<T: Inspector> Spread<T> {
         return len;
     }
 
+    pub fn num_peers(&self) -> usize {
+        let num_peers = self.peers.lock().unwrap().len();
+
+        num_peers
+    }
+
     pub fn spread(&self, packet: Packet, dest: SpreadTo) {
         match dest {
             SpreadTo::Everyone => {

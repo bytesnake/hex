@@ -17,5 +17,7 @@ failure = "0.1.1"
 rspotify = "0.6"
 mp3-metadata = "0.3"
 env_logger = "0.6"
-telebot = { git = "https://github.com/bytesnake/telebot" }
+#telebot = { git = "https://github.com/bytesnake/telebot" }
+telebot = { path = "/home/lorenz/Documents/projects/telebot/" }
 threadpool = "1.7"
+

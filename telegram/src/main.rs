@@ -28,7 +28,7 @@ fn main() {
 
     let key = env::var("TELEGRAM_BOT_KEY").unwrap();
 
-    let mut bot = Bot::new(&key).timeout(90000);
+    let mut bot = Bot::new(&key).timeout(900000);
 
     let (conf, path) = hex_conf::Conf::new().unwrap();
 

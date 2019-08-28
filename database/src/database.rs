@@ -185,24 +185,32 @@ impl View {
         self.peer_id.clone().unwrap()
     }
 
-    pub fn ask_for_file(&self, track_id: TrackKey) -> impl Future<Item = (), Error = tokio::timer::timeout::Error<futures::Canceled>> {//Timeout<impl Future<Item = Vec<u8>, Error = futures::Canceled>> {
+    pub fn ask_for_file(&self, track_id: TrackKey) -> impl Future<Item = (), Error = Error> {
+        let (c, p) = oneshot();
+
         match &self.writer {
             Some(spread) => {
-                let (c, p) = oneshot();
-
-                self.awaiting.lock().unwrap().insert(track_id.clone(), c);
-
-                spread.spread(Packet::File(track_id.to_vec(), None), SpreadTo::Everyone);
-
-                let awaiting = self.awaiting.clone();
-                p.timeout(Duration::from_millis(3000)).then(move |x| {
-                    awaiting.lock().unwrap().remove(&track_id.clone());
-
-                    x
-                })
+                if spread.num_peers() == 0 {
+                    drop(c);
+                } else {
+                    self.awaiting.lock().unwrap().insert(track_id.clone(), c);
+                    spread.spread(Packet::File(track_id.to_vec(), None), SpreadTo::Everyone);
+                }
             },
-            _ => panic!("I'm not in p2p mode!")
+            None => {
+                //c.send(Err(Error::NotFound));
+                drop(c)
+            }
         }
+
+        let awaiting = self.awaiting.clone();
+        p.timeout(Duration::from_millis(3000)).then(move |x| {
+            if let Ok(ref mut map) = awaiting.lock() {
+                (*map).remove(&track_id.clone());
+            }
+
+            x
+        }).map_err(|_| Error::NotFound)
     }
     /// Prepare a search with a provided query and translate it to SQL. This method fails in case
     /// of an invalid query.
