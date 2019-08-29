@@ -23,7 +23,7 @@ fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path:
         .map_err(|x| Error::Io(x))?;
 
     Command::new("ffmpeg")
-        .arg("-y")//.arg("-loglevel").arg("panic").arg("hide_banner")
+        .arg("-y").arg("-loglevel").arg("0").arg("-nostats")
         .arg("-i").arg(encoded_path.to_str().unwrap())
         .arg("-ar").arg("48k")
         .arg("-ac").arg("2")

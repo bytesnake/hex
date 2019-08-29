@@ -32,6 +32,7 @@ fn main() {
 
     let instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
+    let mut prev_lines = Vec::new();
 
     'outer: loop {
         print!(" > ");
@@ -55,6 +56,10 @@ fn main() {
                 }
             }
         }
+
+        prev_lines.push(line.clone());
+
+        println!("|{}|", line);
 
         let mut args: Vec<&str> = line.splitn(2, ' ').collect();
         if args.len() == 0 {
@@ -82,12 +87,10 @@ fn main() {
                 add_playlist(&view, tracks);
             },
             "sync" => {
-                sync::sync_tracks(tracks, &view);
+                sync::sync_tracks(data_path.clone(), tracks, &view);
             },
             "play" => {
-                let view = instance.view();
-
-                play::play_tracks(data_path.clone(), view, tracks);
+                play::play_tracks(data_path.clone(), &view, tracks);
             },
             "modify" => {
                 modify::modify_tracks(&view, tracks);
@@ -95,8 +98,8 @@ fn main() {
             "store" => {
                 store::store(&view, Path::new(args[1]), data_path.clone());
             },
-            "quit" => {
-                println!("Exit ..");
+            "quit" | "q" | "exit" | "bye" => {
+                println!("Bye, have a nice day!");
                 return;
             },
             _ => {

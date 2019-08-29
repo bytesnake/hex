@@ -1,16 +1,13 @@
 mod error;
 mod audio;
 mod events;
+//mod events_term;
 mod token;
 
 use std::path::PathBuf;
-use std::thread;
-use std::sync::mpsc::{Sender, Receiver, channel};
-use futures::Future;
 
-use events::Event;        
-
-use hex_database::{Instance, Token, GossipConf, TrackKey};
+use events::Event;
+use hex_database::{Instance, Token, GossipConf};
 
 fn main() {
     env_logger::init();
@@ -35,20 +32,9 @@ fn main() {
 
     let instance = Instance::from_file(&db_path, gossip);
     let view = instance.view();
-    let view2 = instance.view();
 
-    let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
+    //let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
 
-    thread::spawn(move || loop {
-        if let Ok(key) = receiver.recv() {
-            println!("Ask for file {}", key.to_string());
-            
-            if let Err(err) = view2.ask_for_file(key).wait() {
-                eprintln!("Could not find file = {:?}", err);
-            }
-        }
-    });
-    
     let (events, push_new) = events::events();
     let mut audio = audio::AudioDevice::new();
 
@@ -84,13 +70,10 @@ fn main() {
 
                         match view.get_token(num as i64) {
                             Ok((a, Some((_, b)))) => {
-                                let sender = sender.clone();
-                                token = Some(token::Current::new(a, b, data_path.clone(), sender));
+                                token = Some(token::Current::new(a, b, instance.view(), data_path.clone()));
                             },
                             Ok((a, None)) => {
-                                let sender = sender.clone();
-                                
-                                token = Some(token::Current::new(a, Vec::new(), data_path.clone(), sender));
+                                token = Some(token::Current::new(a, Vec::new(), instance.view(), data_path.clone()));
                             },
                             Err(hex_database::Error::NotFound) => {
                                 println!("Not found!");

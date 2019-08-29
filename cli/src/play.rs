@@ -50,7 +50,7 @@ fn format_time(mut secs: f64) -> String {
     out
 }
 
-pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiver<Event>, working: Arc<AtomicBool>) {
+pub fn player(data_path: PathBuf, view: &View, tracks: Vec<Track>, events: Receiver<Event>, working: Arc<AtomicBool>) {
     let mut device = AudioDevice::new();
     let width = match terminal_size() {
         Some((Width(w),_)) => w,
@@ -162,7 +162,7 @@ pub fn player(data_path: PathBuf, view: View, tracks: Vec<Track>, events: Receiv
     device.shutdown();
 }
 
-pub fn play_tracks(data_path: PathBuf, view: View, tracks: Vec<Track>) {
+pub fn play_tracks(data_path: PathBuf, view: &View, tracks: Vec<Track>) {
 
     // setup terminal to pass arrows
     // Querying original as a separate, since `Termios` does not implement copy
@@ -180,34 +180,37 @@ pub fn play_tracks(data_path: PathBuf, view: View, tracks: Vec<Track>) {
     let working = Arc::new(AtomicBool::new(true));
     let working2 = working.clone();
 
-    thread::spawn(move || player(data_path.to_path_buf(), view, tracks, receiver, working));
-
-    for byte in io::stdin().bytes() {
-        // check first if thread is still there
-        if !working2.load(Ordering::Relaxed) {
-            break;
-        }
-
-        let res = match byte {
-            Ok(32) => sender.send(Event::PauseContinue),
-            Ok(65) => sender.send(Event::Forward),
-            Ok(66) => sender.send(Event::Backward),
-            Ok(68) => sender.send(Event::Prev),
-            Ok(67) => sender.send(Event::Next),
-            Ok(3) => {
-                println!(" Quitted!\n");
-                sender.send(Event::Quit).unwrap();
-
+    thread::spawn(move || {
+        for byte in io::stdin().bytes() {
+            // check first if thread is still there
+            if !working2.load(Ordering::Relaxed) {
+                println!("Ended \n");
                 break;
-            },
-            _ => Ok(())
-        };
+            }
 
-        if let Err(_) = res {
-            println!("ERROR");
-            break;
+            let res = match byte {
+                Ok(32) => sender.send(Event::PauseContinue),
+                Ok(65) => sender.send(Event::Forward),
+                Ok(66) => sender.send(Event::Backward),
+                Ok(68) => sender.send(Event::Prev),
+                Ok(67) => sender.send(Event::Next),
+                Ok(3) => {
+                    println!(" Quitted!\n");
+                    sender.send(Event::Quit).unwrap();
+
+                    break;
+                },
+                _ => Ok(())
+            };
+
+            if let Err(_) = res {
+                println!("ERROR");
+                break;
+            }
         }
-    }
+    });
+
+    player(data_path.to_path_buf(), &view, tracks, receiver, working);
 
     termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &orig_term).unwrap();
 }

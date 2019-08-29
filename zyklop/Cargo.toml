@@ -12,6 +12,7 @@ cpal = "*"
 rand = "0.5"
 futures = "0.1"
 env_logger = "0.6"
+tokio = {version = "0.1", default-features = false, features = ["io", "reactor", "tcp"] }
 
 hex-conf = { path = "../conf" }
 hex-music-container = { path = "../music-container" }

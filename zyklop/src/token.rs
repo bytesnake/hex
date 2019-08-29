@@ -1,11 +1,8 @@
 use std::fs::File;
-use std::thread;
-use std::time::Duration;
-use std::sync::mpsc::Sender;
 use std::path::{Path, PathBuf};
 use rand::{thread_rng, Rng};
 
-use hex_database::{Track, Token, TrackKey};
+use hex_database::{Track, Token, TrackKey, View};
 use hex_music_container::{Container, Configuration};
 
 use crate::error::{Error, Result};
@@ -16,12 +13,16 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn new(track: Track, data_path: &Path) -> Result<Stream> {
+    pub fn new(track: Track, data_path: &Path, view: &View) -> Result<Stream> {
+        println!("New Stream: {:?}", track.title);
         let path = data_path.join(track.key.to_path());
         
-        while !path.exists() {
-            println!("Wait for file ..");
-            thread::sleep(Duration::from_millis(500));
+        if !path.exists() {
+            if let Err(_) = tokio::runtime::current_thread::block_on_all(view.ask_for_file(track.key.clone())) {
+                println!("File {} not available", track.key.to_string());
+
+                return Err(Error::NotAvailable);
+            }
         }
 
         let file = File::open(data_path.join(track.key.to_path()))
@@ -55,11 +56,11 @@ pub struct Current {
     not_played: Vec<Track>,
     played: Vec<Track>,
     data_path: PathBuf,
-    sender: Sender<TrackKey>
+    view: View
 }
 
 impl Current {
-    pub fn new(mut token: Token, mut tracks: Vec<Track>, data_path: PathBuf, sender: Sender<TrackKey>) -> Current {
+    pub fn new(mut token: Token, mut tracks: Vec<Track>, view: View, data_path: PathBuf) -> Current {
         let current_track_key = token.played.pop();
         let current_track = current_track_key.and_then(|track_key| {
             tracks.iter().position(|x| x.key == track_key)
@@ -70,29 +71,33 @@ impl Current {
             token.played.contains(&x.key)
         });
         
-        let stream = match current_track {
-            Some(track) => {
-                let mut stream = Stream::new(track, &data_path).unwrap();
-
-                println!("Load current track: {:?}", token.pos);
-
-                if let Some(pos) = token.pos {
-                    stream.goto(pos);
-                }
-
-                Some(stream)
-            },
-            None => None
-        };
-
-        Current {
-            stream,
-            token,
+        let mut current = Current {
+            stream: None,
+            token: token.clone(),
             played,
             not_played,
-            data_path,
-            sender
+            data_path: data_path.clone(),
+            view
+        };
+
+        match current_track {
+            Some(track) => {
+                if let Ok(mut stream) = Stream::new(track, &data_path, &current.view) {
+                    println!("Load current track: {:?}", token.pos);
+
+                    if let Some(pos) = token.pos {
+                        stream.goto(pos);
+                    }
+
+                    current.stream = Some(stream);
+                } else {
+                    current.next_track();
+                }
+            },
+            _ => {}
         }
+
+        current
     }
 
     pub fn data(&self) -> Token {
@@ -147,17 +152,20 @@ impl Current {
         return self.next_packet();
     }
 
-    pub fn create_stream(&self, elm: Track, path: &Path) -> Option<Stream> {
-        // TODO acquire file if not existing
-        Some(Stream::new(elm, path).unwrap())
+    pub fn create_stream(&self, elm: Track, path: &Path) -> Result<Stream> {
+        Stream::new(elm, path, &self.view)
     }
 
     pub fn next_track(&mut self) {
         // if all tracks are played, begin again
         if self.not_played.is_empty() {
-            self.not_played = self.played.clone();
-        }
+            self.not_played.clear();
+            if let Some(track) = self.track() {
+                self.not_played.push(track);
+            }
 
+            self.not_played.append(&mut self.played);
+        }
 
         // push the last track to played
         if let Some(ref stream) = self.stream {
@@ -168,11 +176,20 @@ impl Current {
         if self.not_played.len() > 0 {
             // ask for the next three tracks
             for key in self.not_played.iter().take(2).map(|x| x.key.clone()) {
-                self.sender.send(key).unwrap();
+                if !self.data_path.join(key.to_path()).exists() {
+                    self.view.ask_for_file(key);
+                }
             }
 
             let elm = self.not_played.remove(0);
-            self.stream = self.create_stream(elm, &self.data_path);
+            match self.create_stream(elm, &self.data_path) {
+                Ok(stream) => self.stream = Some(stream),
+                Err(err) => {
+                    eprintln!("Skipping track = {:?}", err);
+                    self.next_track();
+                }
+            }
+
             self.token.pos = Some(0.0);
         }
     }
@@ -186,11 +203,23 @@ impl Current {
         // if there are no tracks left, play the first not_played
         if self.played.is_empty() {
             let elm = self.not_played.remove(0);
-            self.stream = self.create_stream(elm, &self.data_path);
+            match self.create_stream(elm, &self.data_path) {
+                Ok(stream) => self.stream = Some(stream),
+                Err(err) => {
+                    eprintln!("Skipping track = {:?}", err);
+                    self.next_track();
+                }
+            }
             self.token.pos = Some(0.0);
         } else {
             let elm = self.played.pop().unwrap();
-            self.stream = self.create_stream(elm, &self.data_path);
+            match self.create_stream(elm, &self.data_path) {
+                Ok(stream) => self.stream = Some(stream),
+                Err(err) => {
+                    eprintln!("Skipping track = {:?}", err);
+                    self.prev_track();
+                }
+            }
             self.token.pos = Some(0.0);
         }
     }
