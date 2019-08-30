@@ -13,10 +13,11 @@ pub fn sync_tracks(path: PathBuf, tracks: Vec<Track>, view: &View) {
             continue;
         }
 
+        let (t1, t2) = (track.title.clone(), track.title.clone());
         tokio::run(
             view.ask_for_file(track.key.clone())
-                .map(|title| println!("Synchronized {:?}", title))
-                .map_err(|err| println!("Could not synchronize {:?}", err))
+                .map(move |_| println!("Synchronized {:?}", t1))
+                .map_err(move |err| println!("Could not synchronize {:?}, because {:?}", t2, err))
         );
     }
 

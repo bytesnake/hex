@@ -32,7 +32,7 @@ pub struct Instance {
 impl Instance {
     pub fn from_file<T: AsRef<Path>>(path: T, conf: GossipConf) -> Instance {
         let path = path.as_ref();
-        let data_path = PathBuf::from(path.parent().unwrap());
+        let data_path = PathBuf::from(path.parent().unwrap()).join("data");
 
         // try to create the database, if not existing
         {

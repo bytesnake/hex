@@ -1,6 +1,4 @@
-use std::env;
-use std::cmp;
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
 use hex_database::{Instance, Event, events::Action, GossipConf, objects::Fingerprint};
 use chrono::{TimeZone, Utc, Date, Duration};
 
