@@ -1,7 +1,7 @@
 use std::io::{Write, BufRead, BufReader};
 use std::fs::{self, File};
 use std::process::Command;
-use hex_database::{Track, View, TrackKey};
+use hex_database::{Track, View};
 
 pub fn modify_tracks(view: &View, tracks: Vec<Track>) {
     {

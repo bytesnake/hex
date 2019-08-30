@@ -361,12 +361,14 @@ impl<T: Inspector> Stream for Gossip<T> {
         match self.resolve.poll() {
             Ok(Async::Ready(Some((reader, mut writer, mut presence, tips, missing)))) => {
                 //if self.books.contains_key(&presence.id) || self.myself.id == presence.id {
-                if false {
-                    warn!("Got already existing id {:?} from {:?}", presence.id, presence.addr);
+                // skip connection if its on the same machine with the same music instance
+                if self.myself.id == presence.id && self.myself.addr.ip() == presence.addr.ip() {
+                //if false {
+                    warn!("Got already existing id {:?} from {:?} same network addr!", presence.id, presence.addr);
 
                     writer.shutdown().unwrap();
                 } else {
-                    info!("New peer connected with {:?} tips from {:?}", tips.len(), presence.addr);
+                    trace!("New peer connected with {:?} tips from {:?}", tips.len(), presence.addr);
 
                     // hook up the packet output to us
                     reader.redirect_to(self.sender.clone(), presence.id.clone(), task::current());
@@ -429,7 +431,7 @@ impl<T: Inspector> Stream for Gossip<T> {
             Packet::GetPeers(Some(peers)) => {
                 for presence in peers {
                     if !self.books.contains_key(&presence.id) && !self.resolve.has_peer(&presence.id) {
-                        info!("Add peer {:?} in {:?}", presence.id, self.myself.id);
+                        trace!("Add peer {:?} in {:?}", presence.id, self.myself.id);
                         let tips = self.inspector.lock().unwrap().tips();
                         let tips = self.inspector.lock().unwrap().restore(tips).unwrap();
                         let missing = self.inspector.lock().unwrap().missing();
@@ -443,7 +445,7 @@ impl<T: Inspector> Stream for Gossip<T> {
                 } else if !self.inspector.lock().unwrap().has(&transition.key()) {
                     self.inspector.lock().unwrap().store(transition.clone());
 
-                    println!("Got transition {}", transition.key.to_string());
+                    trace!("Got transition {}", transition.key.to_string());
 
                     // forward to everyone else :(
                     self.writer.spread(Packet::Push(transition.clone()), SpreadTo::Everyone);
@@ -466,7 +468,7 @@ impl<T: Inspector> Stream for Gossip<T> {
             Packet::Close => {
                 self.books.remove(&id);
 
-                info!("Connection to {:?} closed", id);
+                trace!("Connection to {:?} closed", id);
             },
             _ => {}
         }

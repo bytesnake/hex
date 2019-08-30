@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use tokio;
 use futures::future::Future;
-use futures::stream;
-use futures::stream::Stream;
 
 use hex_database::{Track, View};
 

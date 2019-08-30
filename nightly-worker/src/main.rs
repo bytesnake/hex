@@ -1,6 +1,7 @@
 use std::env;
+use std::cmp;
 use std::path::{PathBuf, Path};
-use hex_database::{Instance, Event, events::Action, GossipConf};
+use hex_database::{Instance, Event, events::Action, GossipConf, objects::Fingerprint};
 use chrono::{TimeZone, Utc, Date, Duration};
 
 fn main() {
@@ -43,7 +44,35 @@ fn main() {
         days[day as usize] = (num_tracks as u32, num_transitions as u32);
     }
 
-    for i in 0..days.len() {
+    println!("{:?}", days);
+
+    /*let tracks = view.get_tracks();
+    let fps: Vec<Fingerprint> = tracks.iter().map(|x| x.fingerprint.clone()).collect();
+    for i in 0..fps.len() {
+        for j in 0..fps.len() {
+            if i == j {
+                continue;
+            }
+            if fps[i].iter().map(|x| *x as u64).sum::<u64>() == 0 {
+                continue;
+            }
+
+            //println!("{}", cmp::min(fps[i].len(), fps[j].len()));
+            let mut sum = 0.0;
+            for k in 0..cmp::min(fps[i].len(), fps[j].len()) {
+                let n = (fps[i][k] - fps[j][k]) as f64;
+                sum += n*n;
+            }
+
+            if sum < 50000000.0 {
+                println!("{:?} similar to {:?}", tracks[i].title, tracks[j].title);
+                //println!("{:?}", fps[i]);
+            }
+        }
+    }*/
+
+
+    /*for i in 0..days.len() {
         let datestamp = Utc::today().checked_sub_signed(Duration::days(i as i64 + 1)).unwrap();
         let datestamp = datestamp.format("%Y-%m-%d");
 
@@ -51,5 +80,5 @@ fn main() {
         view.summarise_day(datestamp.to_string(), days[i].0, days[i].1).unwrap();
     }
 
-    println!("{:#?}", days);
+    println!("{:#?}", days);*/
 }

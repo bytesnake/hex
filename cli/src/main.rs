@@ -59,8 +59,6 @@ fn main() {
 
         prev_lines.push(line.clone());
 
-        println!("|{}|", line);
-
         let mut args: Vec<&str> = line.splitn(2, ' ').collect();
         if args.len() == 0 {
             continue;

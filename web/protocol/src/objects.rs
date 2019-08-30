@@ -8,7 +8,7 @@ use error::{Error, Result};
 
 use bincode::{serialize, deserialize};
 
-use hex_database::{Track, Playlist, Token, Event, TrackKey, PlaylistKey, TokenId, TransitionAction, Transition};
+use hex_database::{Track, Playlist, Token, TrackKey, PlaylistKey, TokenId, TransitionAction, Transition};
 
 /// Identification of a packet
 ///
