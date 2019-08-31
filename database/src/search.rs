@@ -11,7 +11,8 @@ pub enum Tag {
     Album(String),
     Interpret(String),
     People(String),
-    Composer(String)
+    Composer(String),
+    Playlist(String)
 }
 
 /// Order by certain field
@@ -66,6 +67,7 @@ impl Tag {
                 "interpret" | "INTERPRET" => Some(Tag::Interpret(content)),
                 "people" | "performer" | "PEOPLE" | "PERFORMER" => Some(Tag::People(content)),
                 "composer" | "COMPOSER" => Some(Tag::Composer(content)),
+                "playlist"  | "PLAYLIST" | "pl" => Some(Tag::Playlist(content)),
                 _ => return None
             }
         }
@@ -79,7 +81,15 @@ impl Tag {
             Tag::Album(x) => format!("Album LIKE '%{}%'", x),
             Tag::Interpret(x) => format!("Interpret LIKE '%{}%'", x),
             Tag::People(x) => format!("People LIKE '%{}%'", x),
-            Tag::Composer(x) => format!("Composer LIKE '%{}%'", x)
+            Tag::Composer(x) => format!("Composer LIKE '%{}%'", x),
+            Tag::Playlist(x) => format!("INSTR((SELECT hex(tracks) FROM Playlists WHERE title='{}'),hex(key))>0", x)
+        }
+    }
+
+    pub fn is_playlist_query(&self) -> Option<String> {
+        match self {
+            Tag::Playlist(ref x) => Some(x.clone()),
+            _ => None
         }
     }
 }
@@ -87,14 +97,14 @@ impl Tag {
 /// A search query consists of serveral tags and an ordering
 pub struct SearchQuery {
     tags: Vec<Tag>,
-    order: Order
+    order: Option<Order>
 }
 
 impl SearchQuery {
     /// Create a new search query
     pub fn new(input: &str) -> SearchQuery {
         let tags = input.split(',').filter_map(Tag::from_search_query).collect();
-        let order = input.split(',').filter_map(Order::from_search_query).next().unwrap_or(Order::ByDate);
+        let order = input.split(',').filter_map(Order::from_search_query).next();
 
         SearchQuery { tags: tags, order: order }
     }
@@ -107,15 +117,30 @@ impl SearchQuery {
     /// Converts the search query to SQL
     pub fn to_sql_query(self) -> String {
         let mut tmp: String = "SELECT * FROM Tracks".into();
+        let mut found_playlist_query = None;
         
         if !self.tags.is_empty() {
+            found_playlist_query = self.tags.iter().filter_map(|x| x.is_playlist_query()).next();
+
             tmp.push_str(" WHERE ");
             tmp.push_str(&self.tags.into_iter().map(|x| x.to_sql_query()).collect::<Vec<String>>().join(" AND "));
         }
 
-        tmp.push_str(" ORDER BY ");
-        tmp.push_str(&self.order.name());
-        tmp.push_str(" DESC");
+        if let Some(playlist) = found_playlist_query {
+            if self.order.is_none() {
+                tmp.push_str(" ORDER BY INSTR((SELECT hex(tracks) FROM Playlists WHERE title='");
+                tmp.push_str(&playlist);
+                tmp.push_str("'),hex(key)) ASC");
+            } else {
+                tmp.push_str(" ORDER BY ");
+                tmp.push_str(&self.order.unwrap_or(Order::ByDate).name());
+                tmp.push_str(" DESC");
+            }
+        } else {
+            tmp.push_str(" ORDER BY ");
+            tmp.push_str(&self.order.unwrap_or(Order::ByDate).name());
+            tmp.push_str(" DESC");
+        }
 
         tmp
     }

@@ -1,3 +1,5 @@
+#[macro_use] extern crate log;
+
 mod audio;
 mod play;
 mod modify;

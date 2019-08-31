@@ -1,4 +1,5 @@
 use std::thread;
+use std::panic;
 use std::io::{self, Write, Read};
 use std::fs::File;
 use std::time::Duration;
@@ -143,7 +144,8 @@ pub fn player(data_path: PathBuf, view: &View, tracks: Vec<Track>, events: Recei
                         break 'inner;
                     },
                     Ok(Event::Quit) => {
-                        break 'outer;
+                        device.shutdown();
+                        return;
                     },
                     _ => {}
                 }
@@ -179,12 +181,29 @@ pub fn play_tracks(data_path: PathBuf, view: &View, tracks: Vec<Track>) {
 
     let working = Arc::new(AtomicBool::new(true));
     let working2 = working.clone();
+    let working3 = working.clone();
 
-    thread::spawn(move || {
+    panic::set_hook(Box::new(|err| {
+        let mut term = termios::tcgetattr(0).unwrap();
+        term.local_flags.insert(termios::LocalFlags::ECHO);
+        term.local_flags.insert(termios::LocalFlags::ISIG);
+        term.local_flags.insert(termios::LocalFlags::ICANON);
+        
+        if let Some(loc) = err.location(){
+            if loc.file() == "cli/src/audio.rs" {
+                debug!("Audio thread exited!");
+            } else {
+                error!("Crashed with payload {:?}", err);
+            }
+        } else {
+            error!("Crashed with payload {:?}", err);
+        }
+    })); 
+
+    let thread = thread::spawn(move || {
         for byte in io::stdin().bytes() {
             // check first if thread is still there
             if !working2.load(Ordering::Relaxed) {
-                println!("Ended \n");
                 break;
             }
 
@@ -204,7 +223,6 @@ pub fn play_tracks(data_path: PathBuf, view: &View, tracks: Vec<Track>) {
             };
 
             if let Err(_) = res {
-                println!("ERROR");
                 break;
             }
         }
@@ -213,4 +231,12 @@ pub fn play_tracks(data_path: PathBuf, view: &View, tracks: Vec<Track>) {
     player(data_path.to_path_buf(), &view, tracks, receiver, working);
 
     termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &orig_term).unwrap();
+
+    if !working3.load(Ordering::Relaxed) {
+        println!("Please press enter");
+    }
+
+    if let Err(err) = thread.join() {
+        error!("Could not join input thread = {:?}", err);
+    }
 }

@@ -32,9 +32,6 @@ impl AudioDevice {
             data_type: cpal::SampleFormat::I16
         };
 
-        panic::set_hook(Box::new(|_| {
-        }));
-
         let is_running = Arc::new(AtomicUsize::new(2));
         let tmp = is_running.clone();
         thread::spawn(move || Self::run(cons, host, device, format, tmp));
@@ -76,7 +73,7 @@ impl AudioDevice {
 
         event_loop.run(move |_, data| {
             if is_running.load(Ordering::Relaxed) == 0 {
-                panic!("");
+                panic!("ignore");
             }
 
             match data {
