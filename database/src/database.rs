@@ -115,7 +115,7 @@ impl Instance {
 
 
     pub fn view(&self) -> View {
-        let data_path = self.path.join("data");
+        let data_path = self.path.parent().unwrap().join("data");
         let socket = rusqlite::Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
         match (&self.gossip, &self.storage) {
