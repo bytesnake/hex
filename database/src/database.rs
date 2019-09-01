@@ -19,7 +19,7 @@ use crate::objects::*;
 use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo};
 use crate::transition::{Storage, TransitionAction, transition_from_sql};
 
-type Awaiting = Arc<Mutex<HashMap<TrackKey, Complete<()>>>>;
+type Awaiting = Arc<Mutex<HashMap<TrackKey, Complete<(TrackKey, Vec<u8>)>>>>;
 /// Instance of the database
 pub struct Instance {
     gossip: Option<(Spread<Storage>, PeerId, Sender<TransitionAction>)>,
@@ -73,17 +73,7 @@ impl Instance {
                                     let id = TrackKey::from_vec(&id);
 
                                     if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
-                                        let path = data_path.join(id.to_path());
-
-                                        if !path.exists() {
-                                            let mut file = File::create(path).unwrap();
-
-                                            if let Err(err) = file.write(&data) {
-                                                eprintln!("File write err = {:?}", err);
-                                            }
-                                        }
-
-                                        if let Err(err) = shot.send(()) {
+                                        if let Err(err) = shot.send((id, data)) {
                                             eprintln!("Oneshot err = {:?}", err);
                                         }
 
@@ -125,6 +115,7 @@ impl Instance {
 
 
     pub fn view(&self) -> View {
+        let data_path = self.path.join("data");
         let socket = rusqlite::Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
         match (&self.gossip, &self.storage) {
@@ -135,14 +126,15 @@ impl Instance {
                     peer_id: Some(peer_id.clone()), 
                     storage: None,
                     sender: Some(sender.clone()),
-                    awaiting: self.awaiting.clone()
+                    awaiting: self.awaiting.clone(),
+                    data_path
                 }
             },
             (None, Some((ref storage, ref peer_id, ref sender))) => {
-                View { socket, writer: None, peer_id: Some(peer_id.clone()), storage: Some(storage.clone()), sender: Some(sender.clone()), awaiting: self.awaiting.clone() }
+                View { socket, writer: None, peer_id: Some(peer_id.clone()), storage: Some(storage.clone()), sender: Some(sender.clone()), awaiting: self.awaiting.clone(), data_path }
             },
             _ => {
-                View { socket, writer: None, peer_id: None, storage: None, sender: None, awaiting: self.awaiting.clone() }
+                View { socket, writer: None, peer_id: None, storage: None, sender: None, awaiting: self.awaiting.clone(), data_path }
             }
         }
     }
@@ -155,7 +147,8 @@ pub struct View {
     writer: Option<Spread<Storage>>,
     storage: Option<Arc<Mutex<Storage>>>,
     sender: Option<Sender<TransitionAction>>,
-    awaiting: Awaiting
+    awaiting: Awaiting,
+    data_path: PathBuf
 }
 
 impl View {
@@ -205,13 +198,28 @@ impl View {
         }
 
         let awaiting = self.awaiting.clone();
-        p.timeout(Duration::from_millis(3000)).then(move |x| {
-            if let Ok(ref mut map) = awaiting.lock() {
-                (*map).remove(&track_id.clone());
-            }
+        let data_path = self.data_path.clone();
+        p
+            .timeout(Duration::from_millis(6000))
+            .and_then(move |(id, buf)| {
+                let path = data_path.join(id.to_path());
+                if !path.exists() {
+                    let mut file = File::create(path).unwrap();
 
-            x
-        }).map_err(|_| Error::NotFound)
+                    if let Err(err) = file.write(&buf) {
+                        eprintln!("File write err = {:?}", err);
+                    }
+                }
+
+                Ok(())
+            })
+            .then(move |x| {
+                if let Ok(ref mut map) = awaiting.lock() {
+                    (*map).remove(&track_id.clone());
+                }
+
+                x
+            }).map_err(|_| Error::NotFound)
     }
     /// Prepare a search with a provided query and translate it to SQL. This method fails in case
     /// of an invalid query.
