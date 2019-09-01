@@ -195,13 +195,14 @@ impl<T: Inspector> Spread<T> {
 pub struct GossipConf {
     pub addr: Option<SocketAddr>,
     pub key: Option<NetworkKey>,
-    contact: Option<SocketAddr>,
-    pub id: Option<PeerId>
+    pub contact: Vec<SocketAddr>,
+    pub id: Option<PeerId>,
+    pub discover: bool
 }
 
 impl GossipConf {
     pub fn new() -> GossipConf {
-        GossipConf { addr: None, key: None, contact: None, id: None }
+        GossipConf { addr: None, key: None, contact: Vec::new(), id: None, discover: true }
     }
 
     pub fn addr<T: Into<SocketAddr>>(mut self, addr: T) -> GossipConf {
@@ -216,8 +217,14 @@ impl GossipConf {
         self
     }
 
-    pub fn contact<T: Into<SocketAddr>>(mut self, contact: T) -> GossipConf {
-        self.contact = Some(contact.into());
+    pub fn contacts<T: Into<SocketAddr>>(mut self, contact: Vec<T>) -> GossipConf {
+        self.contact = contact.into_iter().map(|x| x.into()).collect();
+
+        self
+    }
+
+    pub fn discover(mut self, val: bool) -> GossipConf {
+        self.discover = val;
 
         self
     }
@@ -228,12 +235,13 @@ impl GossipConf {
         self
     }
 
-    pub fn retrieve(self) -> (SocketAddr, NetworkKey, Option<SocketAddr>, PeerId) {
+    pub fn retrieve(self) -> (SocketAddr, NetworkKey, Vec<SocketAddr>, PeerId, bool) {
         (
             self.addr.expect("Missing binding addr!"),
             self.key.expect("Network key is missing!"),
             self.contact,
-            self.id.expect("Peer identification is missing!")
+            self.id.expect("Peer identification is missing!"),
+            self.discover
         )
     }
 }
@@ -258,7 +266,7 @@ pub struct Gossip<T: Inspector> {
 
 impl<T: Inspector> Gossip<T> {
     pub fn new(conf: GossipConf, inspector: T) -> Gossip<T> {
-        let (mut addr, key, contact, id) = conf.retrieve();
+        let (mut addr, key, contact, id, shall_discover) = conf.retrieve();
 
         let (sender, receiver) = channel(1024);
 
@@ -284,19 +292,15 @@ impl<T: Inspector> Gossip<T> {
         let tips = inspector.restore(tips).unwrap();
         let missing = inspector.missing();
 
-        let peers = match contact {
-            Some(addr) => {
-                vec![Peer::connect(&addr, key, myself.clone(), tips, missing)]
-            },
-            None => {
-                match Beacon::new(1, key, myself.addr.port()).wait(2) {
-                    Some(contact) => vec![Peer::connect(&contact, key, myself.clone(), tips, missing)],
-                    _ => {
-                        Vec::new()
-                    }
-                }
+        let mut peers: Vec<Peer> = contact.into_iter()
+            .map(|addr| Peer::connect(&addr, key.clone(), myself.clone(), tips.clone(), missing.clone()))
+            .collect();
+
+        if shall_discover {
+            if let Some(contact) = Beacon::new(1, key, myself.addr.port()).wait(2) {
+                peers.push(Peer::connect(&contact, key, myself.clone(), tips, missing));
             }
-        };
+        }
 
         let inspector = Arc::new(Mutex::new(inspector));
 

@@ -15,7 +15,7 @@ use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 pub use self::error::*;
 
@@ -36,6 +36,7 @@ fn default_port() -> u16 { 2798 }
 fn default_port_web() -> u16 { 80 }
 /// Default port of the database peer is 8004
 fn default_port_dbpeer() -> u16 { 8004 }
+fn default_discover() -> bool { true }
 
 impl Default for Server {
     fn default() -> Self {
@@ -74,7 +75,11 @@ pub struct DatabasePeer {
     pub network: String,
     /// The sync server port is optional and defaults to 8004
     #[serde(default = "default_port_dbpeer")]
-    pub port: u16
+    pub port: u16,
+    #[serde(default)]
+    pub contacts: Vec<SocketAddr>,
+    #[serde(default = "default_discover")]
+    pub discover: bool
 }
 
 impl DatabasePeer {

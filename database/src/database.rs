@@ -320,6 +320,37 @@ impl View {
         Ok((playlist, res))
     }
 
+    /// Get a playlist by title
+    pub fn get_playlist_by_title(&self, title: &str) -> Result<(Playlist, Vec<Track>)> {
+        let query = format!("SELECT * FROM Playlists WHERE Title LIKE '%{}%';", title);
+        let mut stmt = self.socket.prepare(&query).unwrap();
+
+        let mut query = stmt.query(&[]).unwrap();
+        let playlist = query.next()
+            .ok_or(Error::NotFound)
+            .and_then(|x| x.map_err(|e| Error::Sqlite(e)))
+            .and_then(|row| Playlist::from_row(&row).map_err(|e| Error::Sqlite(e)))?;
+
+        let idx_map : HashMap<TrackKey, usize>= playlist.tracks.iter().enumerate().map(|(a,b)| (b.clone(),a)).collect();
+
+        let query = format!("SELECT * FROM Tracks WHERE hex(key) in ({});", 
+                            playlist.tracks.iter().map(|key| format!("\"{}\"", key.to_string())).collect::<Vec<String>>().join(",")
+                        );
+
+        let mut stmt = self.socket.prepare(&query).unwrap();
+        let mut res: Vec<Track> = self.search(&mut stmt).collect();
+
+        res.sort_by(|a,b| {
+            let idx_a = idx_map.get(&a.key).unwrap();
+            let idx_b = idx_map.get(&b.key).unwrap();
+
+            idx_a.cmp(idx_b)
+        });
+
+        Ok((playlist, res))
+        
+    }
+
     /// Get the last used token
     pub fn get_last_used_token(&self) -> Result<(Token, Option<(Playlist, Vec<Track>)>)> {
         let mut stmt = self.socket.prepare("SELECT * FROM Tokens ORDER BY lastuse DESC Limit 1").unwrap();
@@ -410,7 +441,7 @@ impl View {
         }
     }
 
-    pub fn update_playlist(&self, key: PlaylistKey, title: Option<String>, desc: Option<String>) -> Result<()> {
+    pub fn update_playlist(&self, key: PlaylistKey, title: Option<String>, desc: Option<String>, tracks: Option<Vec<TrackKey>>) -> Result<()> {
         let (mut playlist, _) = self.get_playlist(key).unwrap();
 
         if let Some(title) = title {
@@ -419,6 +450,10 @@ impl View {
 
         if let Some(desc) = desc {
             playlist.desc = Some(desc);
+        }
+
+        if let Some(tracks) = tracks {
+            playlist.tracks = tracks;
         }
 
         self.commit(TransitionAction::UpsertPlaylist(playlist))

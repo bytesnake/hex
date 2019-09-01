@@ -205,12 +205,17 @@ fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
 fn main() {
     env_logger::init();
 
-    let (conf, path) = hex_conf::Conf::new().unwrap();
+    let (mut conf, path) = hex_conf::Conf::new().unwrap();
 
     let mut gossip = GossipConf::new();
 
-    if let Some(ref peer) = conf.peer {
-        gossip = gossip.addr((conf.host, peer.port)).id(peer.id()).network_key(peer.network_key());
+    if let Some(peer) = conf.peer.take() {
+        gossip = gossip
+            .addr((conf.host, peer.port))
+            .id(peer.id())
+            .network_key(peer.network_key())
+            .discover(peer.discover)
+            .contacts(peer.contacts);
     }
 
     let instance = Instance::from_file(path.join("music.db"), gossip);

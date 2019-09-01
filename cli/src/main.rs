@@ -30,6 +30,8 @@ fn main() {
         gossip = gossip.addr((conf.host, peer.port));
         gossip = gossip.id(peer.id());
         gossip = gossip.network_key(peer.network_key());
+        gossip = gossip.discover(peer.discover);
+        gossip = gossip.contacts(peer.contacts.clone());
     }
 
     let instance = Instance::from_file(&db_path, gossip);
@@ -94,6 +96,13 @@ fn main() {
             },
             "modify" => {
                 modify::modify_tracks(&view, tracks);
+            },
+            "modify-playlist" => {
+                if let Ok((playlist,tracks)) = view.get_playlist_by_title(&args[1]) {
+                    modify::modify_playlist(&view, playlist, tracks);
+                } else {
+                    println!("Playlist {} not found!", args[1]);
+                }
             },
             "store" => {
                 store::store(&view, Path::new(args[1]), data_path.clone());

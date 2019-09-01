@@ -38,6 +38,8 @@ pub fn start(conf: Conf, path: PathBuf) {
         gossip = gossip.addr((conf.host, peer.port));
         gossip = gossip.id(peer.id());
         gossip = gossip.network_key(peer.network_key());
+        gossip = gossip.contacts(peer.contacts.clone());
+        gossip = gossip.discover(peer.discover);
     }
 
     let mut instance = Instance::from_file(&path.join("music.db"), gossip);

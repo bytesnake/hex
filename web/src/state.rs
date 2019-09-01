@@ -244,7 +244,7 @@ impl State {
             },
 
             RequestAction::UpdatePlaylist { key, title, desc } => {
-                self.collection.update_playlist(key, title, desc)
+                self.collection.update_playlist(key, title, desc, None)
                     .map(|_| AnswerAction::UpdatePlaylist)
                     .map_err(|err| Error::Database(err))
             },

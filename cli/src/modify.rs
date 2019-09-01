@@ -1,7 +1,8 @@
 use std::io::{Write, BufRead, BufReader};
 use std::fs::{self, File};
+use std::collections::HashMap;
 use std::process::Command;
-use hex_database::{Track, View};
+use hex_database::{Track, View, Playlist};
 
 pub fn modify_tracks(view: &View, tracks: Vec<Track>) {
     {
@@ -55,6 +56,85 @@ pub fn modify_tracks(view: &View, tracks: Vec<Track>) {
                 if params[4] == "None" { None } else { Some(&params[4]) },
             ).unwrap();
         }
+    }
+
+    fs::remove_file("/tmp/cli_modify").unwrap();
+}
+
+pub fn modify_playlist(view: &View, mut playlist: Playlist, tracks: Vec<Track>) {
+    let mut map = HashMap::new();
+
+    {
+        let mut file = File::create("/tmp/cli_modify").unwrap();
+
+        file.write(&format!("Playlist title: {}\n", playlist.title).as_bytes()).unwrap();
+        file.write(&format!("Playlist description: {}\n", playlist.desc.unwrap_or("None".into())).as_bytes()).unwrap();
+
+        file.write("Tracks:\n".as_bytes()).unwrap();
+        for track in tracks.clone() {
+            let line = format!(" => {} - {} ({})", track.key.to_string(), track.title.unwrap_or("".into()), track.album.unwrap_or("".into()));
+
+            file.write(&format!("{}\n", line).as_bytes()).unwrap();
+            map.insert(line, track.key.clone());
+        }
+    }
+
+    // open vim and edit all tracks
+    Command::new("vim")
+        .arg("-c").arg(":set wrap!")
+        .arg("/tmp/cli_modify")
+        .status().expect("Could not open file!");
+
+    // apply changes to the database
+    {
+        let file = File::open("/tmp/cli_modify").unwrap();
+        let mut reader = BufReader::new(file).lines();
+
+        if let Some(Ok(title)) = reader.next() {
+            let mut splitted = title.split(":");
+            if splitted.next() != Some("Playlist title") {
+                println!("Playlist title not found!");
+                return;
+            }
+
+            playlist.title = title.split(":").skip(1).next().unwrap_or("New Playlist").trim().to_string();
+        } else {
+            println!("Playlist file too short!");
+            return;
+        }
+
+        if let Some(Ok(desc)) = reader.next() {
+            let mut splitted = desc.split(":");
+            if splitted.next() != Some("Playlist description") {
+                println!("Playlist description not found!");
+                return;
+            }
+
+            playlist.desc = splitted.next().map(|x| x.trim().to_string());
+        } else {
+            println!("Playlist file too short!");
+            return;
+        }
+
+        if let Some(Ok(title)) = reader.next() {
+            if title != "Tracks:" {
+                println!("Track header not found!");
+                return;
+            }
+
+            playlist.tracks.clear();
+            while let Some(Ok(track)) = reader.next() {
+                if let Some(key) = map.get(&track) {
+                    playlist.tracks.push(*key);
+                }
+            }
+
+            if let Err(err) = view.update_playlist(playlist.key, Some(playlist.title), playlist.desc, Some(playlist.tracks)) {
+                eprintln!("Could not update playlist = {:?}", err);
+            }
+        }
+
+
     }
 
     fs::remove_file("/tmp/cli_modify").unwrap();
