@@ -29,7 +29,7 @@ type FileId = Vec<u8>;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum FileBody {
     AskForFile,
-    HasFile,
+    HasFile(bool),
     GetFile(Option<Vec<u8>>)
 }
 

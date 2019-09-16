@@ -201,7 +201,7 @@ impl View {
         let awaiting = self.awaiting.clone();
         let data_path = self.data_path.clone();
         p
-            .timeout(Duration::from_millis(6000))
+            //.timeout(Duration::from_millis(6000))
             .and_then(move |(id, buf)| {
                 let path = data_path.join(id.to_path());
                 if !path.exists() {

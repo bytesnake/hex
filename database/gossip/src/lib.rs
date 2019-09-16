@@ -478,13 +478,11 @@ impl<T: Inspector> Stream for Gossip<T> {
                 match state {
                     FileBody::AskForFile => {
                         let has_file = self.inspector.lock().unwrap().has_file(&file_id);
-                        if has_file {
-                            self.writer.spread(Packet::File(file_id, FileBody::HasFile), SpreadTo::Peer(id));
-                        }
+                        self.writer.spread(Packet::File(file_id, FileBody::HasFile(has_file)), SpreadTo::Peer(id));
                     },
-                    FileBody::HasFile => {
+                    FileBody::HasFile(has_file_remote) => {
                         let has_file = self.inspector.lock().unwrap().has_file(&file_id);
-                        if !has_file {
+                        if !has_file && has_file_remote {
                             self.writer.spread(Packet::File(file_id, FileBody::GetFile(None)), SpreadTo::Peer(id));
                         }
                     },
