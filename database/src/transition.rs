@@ -284,6 +284,19 @@ impl Inspector for Storage {
         Some(content)
     }
 
+    fn has_file(&self, id: &[u8]) -> bool {
+        if id.len() != 16 {
+            return false;
+        }
+
+        let mut tmp = String::new();
+        for i in 0..16 {
+            tmp.push_str(&format!("{:02X}", id[i]));
+        }
+
+        self.data_path.join(&tmp).exists()
+    }
+
     fn missing(&self) -> Vec<TransitionKey> {
         // check if we can apply any unfinished transitions
         let mut stmt = self.socket.prepare("SELECT * FROM Transitions WHERE State=2").unwrap();

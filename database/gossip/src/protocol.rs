@@ -24,12 +24,14 @@ use crate::transition::{Transition, TransitionKey};
 pub type NetworkKey = [u8; 32];
 
 /// Some definitions to handle files
-/*type FileId = Vec<u8>;
-enum FilePacket {
+type FileId = Vec<u8>;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum FileBody {
+    AskForFile,
     HasFile,
-    HasFileResponse(bool),
-    File(Option<Vec<u8>>)
-}*/
+    GetFile(Option<Vec<u8>>)
+}
 
 /// Peer-to-Peer message
 /// 
@@ -47,7 +49,7 @@ pub enum Packet {
     Push(Transition),
     /// Ask for a file
     //File(Vec<u8>),
-    File(Vec<u8>, Option<Vec<u8>>),
+    File(FileId, FileBody),
     Close
 }
 
@@ -202,7 +204,7 @@ pub struct PeerCodecWrite<T: Debug + AsyncWrite> {
 }
 
 /// The version field to prevent incompatible peer protocols
-const VERSION: u8 = 2;
+const VERSION: u8 = 3;
 
 pub fn new<T: AsyncRead + AsyncWrite + Debug>(socket: T, key: NetworkKey) -> (PeerCodecRead<T>, PeerCodecWrite<T>) {
     let (read, write) = socket.split();
@@ -360,12 +362,14 @@ impl<T: Debug + AsyncRead> PeerCodecRead<T> {
     /// Try to read in some data from the byte stream
     fn fill_read_buf(&mut self) -> Poll<(), io::Error> {
         loop {
-            self.rd.reserve(8192);
+            self.rd.reserve(8192*2);
             let read = self.read.read_buf(&mut self.rd);
 
-            //println!("read {:?}", read);
             let n = match read {
-                Ok(Async::Ready(n)) => n,
+                Ok(Async::Ready(n)) => {
+                    trace!("Read {} bytes into buffer", n);
+                    n
+                },
                 Ok(Async::NotReady) => return Ok(Async::NotReady),
                 Err(err) => {
                     if err.kind() == ErrorKind::WouldBlock {
@@ -392,6 +396,7 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
     pub fn buffer(&mut self, message: Packet) {
         //println!("Buffer: {:?}", message);
         if let Ok(mut buf) = serialize(&message) {
+            trace!("Buffer {} bytes", buf.len());
             // encrypt and sign our data with the network key
             // TODO generate nonce
             let mut nonce_buf = [0u8; 12];
@@ -455,7 +460,7 @@ impl<T: Debug + AsyncWrite> PeerCodecWrite<T> {
         while !self.wr.is_empty() {
             let n = try_ready!(self.write.poll_write(&self.wr));
 
-            //println!("Wrote {} left {}", n, self.wr.len());
+            trace!("Flushed {} left {}", n, self.wr.len());
 
             assert!(n > 0);
 

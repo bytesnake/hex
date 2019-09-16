@@ -16,7 +16,7 @@ use crate::error::{Error, Result};
 use crate::search::SearchQuery;
 use crate::objects::*;
 
-use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo};
+use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo, FileBody};
 use crate::transition::{Storage, TransitionAction, transition_from_sql};
 
 type Awaiting = Arc<Mutex<HashMap<TrackKey, Complete<(TrackKey, Vec<u8>)>>>>;
@@ -69,7 +69,7 @@ impl Instance {
                                 }
                             },
                             Packet::File(id, data) => {
-                                if let Some(data) = data {
+                                if let FileBody::GetFile(Some(data)) = data {
                                     let id = TrackKey::from_vec(&id);
 
                                     if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
@@ -188,7 +188,8 @@ impl View {
                     drop(c);
                 } else {
                     self.awaiting.lock().unwrap().insert(track_id.clone(), c);
-                    spread.spread(Packet::File(track_id.to_vec(), None), SpreadTo::Everyone);
+                    spread.spread(Packet::File(track_id.to_vec(), FileBody::AskForFile), SpreadTo::Everyone);
+                    spread.flush_all();
                 }
             },
             None => {
