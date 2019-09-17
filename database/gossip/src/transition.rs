@@ -17,8 +17,6 @@ pub trait Inspector {
     fn restore(&self, keys: Vec<TransitionKey>) -> Option<Vec<Transition>>;
     fn tips(&self) -> Vec<TransitionKey>;
     fn has(&self, key: &TransitionKey) -> bool;
-    fn get_file(&self, key: &[u8]) -> Option<Vec<u8>>;
-    fn has_file(&self, key: &[u8]) -> bool;
     fn missing(&self) -> Vec<TransitionKey>;
 
     fn subgraph(&self, mut tips: Vec<Transition>) -> Vec<Transition> {

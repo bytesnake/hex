@@ -1,6 +1,4 @@
-use std::io::Read;
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[cfg(feature="rusqlite")]
 use rusqlite::Row;
@@ -93,14 +91,12 @@ pub fn transition_from_sql(row: &Row) -> Transition {
 #[cfg(feature="rusqlite")]
 pub struct Storage {
     socket: rusqlite::Connection,
-    data_path: PathBuf
 }
 
 #[cfg(feature="rusqlite")]
 impl Storage {
     pub fn new<T: AsRef<Path>>(path: T) -> Storage {
         let storage = Storage {
-            data_path: path.as_ref().parent().unwrap().join("data").to_path_buf(),
             socket: rusqlite::Connection::open(path).unwrap()
         };
 
@@ -267,35 +263,6 @@ impl Inspector for Storage {
         stream.next().is_some()
     }
 
-    fn get_file(&self, id: &[u8]) -> Option<Vec<u8>> {
-        if id.len() != 16 {
-            return None;
-        }
-
-        let mut tmp = String::new();
-        for i in 0..16 {
-            tmp.push_str(&format!("{:02X}", id[i]));
-        }
-
-        let mut file = File::open(self.data_path.join(&tmp)).ok()?;
-        let mut content = vec![];
-        file.read_to_end(&mut content).unwrap();
-
-        Some(content)
-    }
-
-    fn has_file(&self, id: &[u8]) -> bool {
-        if id.len() != 16 {
-            return false;
-        }
-
-        let mut tmp = String::new();
-        for i in 0..16 {
-            tmp.push_str(&format!("{:02X}", id[i]));
-        }
-
-        self.data_path.join(&tmp).exists()
-    }
 
     fn missing(&self) -> Vec<TransitionKey> {
         // check if we can apply any unfinished transitions

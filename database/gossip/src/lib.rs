@@ -49,7 +49,7 @@ use tokio::prelude::task::Task;
 use tokio::net::{TcpListener, TcpStream, tcp::Incoming};
 
 use protocol::{Peer, ResolvePeers, PeerCodecWrite, NetworkKey};
-pub use protocol::{Packet, FileBody};
+pub use protocol::Packet;
 pub use discover::{Beacon, Discover};
 
 /// Identification of a peer. This is the public key (256bit) of a Schnorr signature using a
@@ -349,7 +349,7 @@ impl<T: Inspector> Gossip<T> {
 
 /// Create a new stream, managing the gossip protocol
 impl<T: Inspector> Stream for Gossip<T> {
-    type Item = Packet;
+    type Item = (PeerId, Packet);
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -467,34 +467,13 @@ impl<T: Inspector> Stream for Gossip<T> {
                     self.writer.spread(Packet::Push(transition.clone()), SpreadTo::Everyone);
 
                     // the peer has send us a new block of data, forward it
-                    return Ok(Async::Ready(Some(Packet::Push(transition))));
+                    return Ok(Async::Ready(Some((id, Packet::Push(transition)))));
                 } else {
                     trace!("Got a well-known transition!");
                 }
             },
-            Packet::File(file_id, state) => {
-                trace!("Got file packet = {:?}", state);
-
-                match state {
-                    FileBody::AskForFile => {
-                        let has_file = self.inspector.lock().unwrap().has_file(&file_id);
-                        self.writer.spread(Packet::File(file_id, FileBody::HasFile(has_file)), SpreadTo::Peer(id));
-                    },
-                    FileBody::HasFile(has_file_remote) => {
-                        let has_file = self.inspector.lock().unwrap().has_file(&file_id);
-                        if !has_file && has_file_remote {
-                            self.writer.spread(Packet::File(file_id, FileBody::GetFile(None)), SpreadTo::Peer(id));
-                        }
-                    },
-                    FileBody::GetFile(None) => {
-                        if let Some(data) = self.inspector.lock().unwrap().get_file(&file_id) {
-                            self.writer.spread(Packet::File(file_id, FileBody::GetFile(Some(data))), SpreadTo::Peer(id));
-                        }
-                    },
-                    x => {
-                        return Ok(Async::Ready(Some(Packet::File(file_id, x))));
-                    }
-                }
+            Packet::Other(buf) => {
+                return Ok(Async::Ready(Some((id, Packet::Other(buf)))));
             },
             Packet::Close => {
                 self.books.remove(&id);

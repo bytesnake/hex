@@ -13,7 +13,9 @@ pub enum Error {
     #[cfg(feature = "rusqlite")]
     Gossip(hex_gossip::Error),
     AlreadyExists,
+    SyncFailed(String),
     NotFound,
     ReadOnly,
-    AcousticId
+    AcousticId,
+    Serialize
 }

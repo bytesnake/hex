@@ -23,15 +23,6 @@ use crate::transition::{Transition, TransitionKey};
 /// a 256bit key, encrypting and signing every transition send through the network
 pub type NetworkKey = [u8; 32];
 
-/// Some definitions to handle files
-type FileId = Vec<u8>;
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum FileBody {
-    AskForFile,
-    HasFile(bool),
-    GetFile(Option<Vec<u8>>)
-}
 
 /// Peer-to-Peer message
 /// 
@@ -47,9 +38,7 @@ pub enum Packet {
     GetPeers(Option<Vec<PeerPresence>>),
     /// Push a new packet into the network with reference to received transitions
     Push(Transition),
-    /// Ask for a file
-    //File(Vec<u8>),
-    File(FileId, FileBody),
+    Other(Vec<u8>),
     Close
 }
 

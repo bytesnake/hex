@@ -50,6 +50,7 @@ pub mod utils;
 #[cfg(feature="rusqlite")]
 mod database;
 mod transition;
+mod file;
 
 pub use error::{Result, Error};
 pub use events::{Action, Event};

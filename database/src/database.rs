@@ -4,29 +4,30 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use futures::{Sink, Stream, Future, IntoFuture, oneshot, Complete};
+use futures::{Sink, Stream, Future, IntoFuture, oneshot};
 use futures::sync::mpsc::{channel, Sender, Receiver};
-use tokio::prelude::FutureExt;
 use rusqlite::{self, Statement, OpenFlags};
 use tokio;
-use std::time::Duration;
+use bincode::{serialize, deserialize};
+
 use std::thread;
 
 use crate::error::{Error, Result};
 use crate::search::SearchQuery;
 use crate::objects::*;
+use crate::file;
 
-use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo, FileBody};
+use hex_gossip::{Gossip, PeerId, GossipConf, Spread, Transition, Inspector, Discover, Packet, SpreadTo};
 use crate::transition::{Storage, TransitionAction, transition_from_sql};
 
-type Awaiting = Arc<Mutex<HashMap<TrackKey, Complete<(TrackKey, Vec<u8>)>>>>;
 /// Instance of the database
 pub struct Instance {
     gossip: Option<(Spread<Storage>, PeerId, Sender<TransitionAction>)>,
     storage: Option<(Arc<Mutex<Storage>>, PeerId, Sender<TransitionAction>)>,
     path: PathBuf,
     receiver: Option<Receiver<TransitionAction>>,
-    awaiting: Awaiting
+    awaiting: Arc<Mutex<file::State>>
+    //awaiting: Awaiting
 }
 
 impl Instance {
@@ -42,7 +43,7 @@ impl Instance {
             socket.execute_batch(include_str!("create_db.sql")).unwrap();
         }
 
-        let awaiting: Awaiting = Arc::new(Mutex::new(HashMap::new()));
+        let awaiting = Arc::new(Mutex::new(file::State::new(data_path.clone())));
         if let Some(id) = conf.id.clone() {
             let (sender, receiver) = channel(1024);
 
@@ -50,13 +51,14 @@ impl Instance {
                 let storage = Storage::new(path);
                 let gossip = Gossip::new(conf, storage);
                 let writer = gossip.writer();
+                let writer2 = gossip.writer();
                 let my_sender = sender.clone();
                 let tmp_awaiting = awaiting.clone();
                 let (network, addr) = (gossip.network(), gossip.addr());
 
                 let gossip = gossip
                     .map_err(|e| eprintln!("Gossip err: {}", e))
-                    .and_then(move |x| {
+                    .and_then(move |(peer, x)| {
                         trace!("Got a new transition!");
 
                         match x {
@@ -68,16 +70,18 @@ impl Instance {
                                     eprintln!("Sender err = {:?}", err);
                                 }
                             },
-                            Packet::File(id, data) => {
-                                if let FileBody::GetFile(Some(data)) = data {
-                                    let id = TrackKey::from_vec(&id);
-
-                                    if let Some(shot) = tmp_awaiting.lock().unwrap().remove(&id) {
-                                        if let Err(err) = shot.send((id, data)) {
-                                            eprintln!("Oneshot err = {:?}", err);
-                                        }
-
+                            Packet::Other(buf) => {
+                                let packet = match deserialize(&buf) {
+                                    Ok(packet) => packet,
+                                    Err(err) => {
+                                        warn!("Could not deserialize file packet = {:?}", err);
+                                        return Ok(());
                                     }
+                                };
+
+                                if let Some(packet) = tmp_awaiting.lock().unwrap().process(packet) {
+                                    let buf = serialize(&packet).unwrap();
+                                    writer2.spread(Packet::Other(buf), SpreadTo::Peer(peer));
                                 }
                             },
                             _ => {
@@ -147,7 +151,7 @@ pub struct View {
     writer: Option<Spread<Storage>>,
     storage: Option<Arc<Mutex<Storage>>>,
     sender: Option<Sender<TransitionAction>>,
-    awaiting: Awaiting,
+    awaiting: Arc<Mutex<file::State>>,
     data_path: PathBuf
 }
 
@@ -185,16 +189,22 @@ impl View {
         match &self.writer {
             Some(spread) => {
                 if spread.num_peers() == 0 {
-                    drop(c);
+                    if let Err(err) = c.send(Err(Error::SyncFailed("No peers available to ask for file".into()))) {
+                        eprintln!("Send error = {:?}", err);
+                    }
                 } else {
-                    self.awaiting.lock().unwrap().insert(track_id.clone(), c);
-                    spread.spread(Packet::File(track_id.to_vec(), FileBody::AskForFile), SpreadTo::Everyone);
+                    self.awaiting.lock().unwrap().add(track_id.clone(), spread.num_peers(), c);
+
+                    let buf = serialize(&file::Packet { id: track_id, body: file::PacketBody::AskForFile }).unwrap();
+
+                    spread.spread(Packet::Other(buf), SpreadTo::Everyone);
                     spread.flush_all();
                 }
             },
             None => {
-                //c.send(Err(Error::NotFound));
-                drop(c)
+                if let Err(err) = c.send(Err(Error::SyncFailed("No connection to network".into()))) {
+                    eprintln!("Send error = {:?}", err);
+                }
             }
         }
 
@@ -202,6 +212,13 @@ impl View {
         let data_path = self.data_path.clone();
         p
             //.timeout(Duration::from_millis(6000))
+            .then(|res| {
+                match res {
+                    Ok(Ok(res)) => Ok(res),
+                    Ok(Err(err)) => Err(err),
+                    Err(_) => Err(Error::SyncFailed("Internal channel canceled".into()))
+                }
+            })
             .and_then(move |(id, buf)| {
                 let path = data_path.join(id.to_path());
                 if !path.exists() {
@@ -215,12 +232,10 @@ impl View {
                 Ok(())
             })
             .then(move |x| {
-                if let Ok(ref mut map) = awaiting.lock() {
-                    (*map).remove(&track_id.clone());
-                }
+                awaiting.lock().unwrap().remove(track_id);
 
                 x
-            }).map_err(|_| Error::NotFound)
+            })
     }
     /// Prepare a search with a provided query and translate it to SQL. This method fails in case
     /// of an invalid query.
