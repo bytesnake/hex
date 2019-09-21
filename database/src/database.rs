@@ -27,7 +27,6 @@ pub struct Instance {
     path: PathBuf,
     receiver: Option<Receiver<TransitionAction>>,
     awaiting: Arc<Mutex<file::State>>
-    //awaiting: Awaiting
 }
 
 impl Instance {

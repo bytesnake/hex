@@ -19,7 +19,8 @@ pub enum Tag {
 pub enum Order {
     ByDate,
     ByTitle,
-    ByFavs
+    ByFavs,
+    ByRandom
 }
 
 impl Order {
@@ -32,6 +33,7 @@ impl Order {
                 "date" => Some(Order::ByDate),
                 "title" => Some(Order::ByTitle),
                 "favs" => Some(Order::ByFavs),
+                "rand" => Some(Order::ByRandom),
                 _ => None
             };
         }
@@ -44,7 +46,8 @@ impl Order {
         let tmp = match *self {
             Order::ByDate => "Created",
             Order::ByTitle => "Title",
-            Order::ByFavs => "FavsCount"
+            Order::ByFavs => "FavsCount",
+            Order::ByRandom => "RANDOM()",
         };
 
         tmp.into()
