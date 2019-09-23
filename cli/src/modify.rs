@@ -2,9 +2,9 @@ use std::io::{Write, BufRead, BufReader};
 use std::fs::{self, File};
 use std::collections::HashMap;
 use std::process::Command;
-use hex_database::{Track, View, Playlist};
+use hex_database::{Track, Writer, Playlist};
 
-pub fn modify_tracks(view: &View, tracks: Vec<Track>) {
+pub fn modify_tracks(write: &Writer, tracks: Vec<Track>) {
     {
         let mut file = File::create("/tmp/cli_modify").unwrap();
 
@@ -47,7 +47,7 @@ pub fn modify_tracks(view: &View, tracks: Vec<Track>) {
                 continue;
             }
 
-            view.update_track(
+            write.update_track(
                 track.key,
                 if params[0] == "None" { None } else { Some(&params[0]) },
                 if params[1] == "None" { None } else { Some(&params[1]) },
@@ -61,7 +61,7 @@ pub fn modify_tracks(view: &View, tracks: Vec<Track>) {
     fs::remove_file("/tmp/cli_modify").unwrap();
 }
 
-pub fn modify_playlist(view: &View, mut playlist: Playlist, tracks: Vec<Track>) {
+pub fn modify_playlist(write: &Writer, mut playlist: Playlist, tracks: Vec<Track>) {
     let mut map = HashMap::new();
 
     {
@@ -129,7 +129,7 @@ pub fn modify_playlist(view: &View, mut playlist: Playlist, tracks: Vec<Track>) 
                 }
             }
 
-            if let Err(err) = view.update_playlist(playlist.key, Some(playlist.title), playlist.desc, Some(playlist.tracks)) {
+            if let Err(err) = write.update_playlist(playlist.key, Some(playlist.title), playlist.desc, Some(playlist.tracks)) {
                 eprintln!("Could not update playlist = {:?}", err);
             }
         }

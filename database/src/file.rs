@@ -1,11 +1,18 @@
+use std::io::{Read, Write};
 use std::fs::File;
 use std::path::PathBuf;
-use std::io::Read;
 use std::collections::HashMap;
-use futures::Complete;
+use std::sync::{Arc, Mutex};
+
+use futures::{Future, oneshot, Complete};
+use bincode::serialize;
+use hex_gossip::{SpreadTo, Spread};
 
 use crate::error::*;
 use crate::objects::TrackKey;
+use crate::transition::Storage;
+
+pub type Files = Arc<State>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Packet {
@@ -22,14 +29,16 @@ pub enum PacketBody {
 
 pub struct State {
     data_path: PathBuf,
-    awaiting: HashMap<TrackKey, (usize, Complete<Result<(TrackKey, Vec<u8>)>>)>
+    awaiting: Mutex<HashMap<TrackKey, (usize, Complete<Result<(TrackKey, Vec<u8>)>>)>>,
+    spread: Spread<Storage>
 }
 
 impl State {
-    pub fn new(data_path: PathBuf) -> State {
+    pub fn new(data_path: PathBuf, spread: Spread<Storage>) -> State {
         State {
             data_path,
-            awaiting: HashMap::new()
+            awaiting: Mutex::new(HashMap::new()),
+            spread
         }
     }
 
@@ -45,7 +54,7 @@ impl State {
         self.data_path.join(&id.to_string()).exists()
     }
 
-    pub fn process(&mut self, packet: Packet) -> Option<Packet> {
+    pub fn process(&self, packet: Packet) -> Option<Packet> {
         let Packet { id, body } = packet;
 
         let inner = match body {
@@ -62,13 +71,13 @@ impl State {
                     }
                 } else {
                     let mut ct = 0;
-                    if let Some(ref mut elm) = self.awaiting.get_mut(&id) {
+                    if let Some(ref mut elm) = self.awaiting.lock().unwrap().get_mut(&id) {
                         elm.0 -= 1;
                         ct = elm.0;
                     }
 
                     if ct == 0 {
-                        if let Some((_, shot)) = self.awaiting.remove(&id) {
+                        if let Some((_, shot)) = self.awaiting.lock().unwrap().remove(&id) {
                             if let Err(err) = shot.send(Err(Error::SyncFailed("No peer had file available".into()))) {
                                 eprintln!("Oneshot err = {:?}", err);
                             }
@@ -85,7 +94,7 @@ impl State {
                         Some(PacketBody::GetFile(self.get_file(id)))
                     },
                     Some(data) => {
-                        if let Some((_, shot)) = self.awaiting.remove(&id) {
+                        if let Some((_, shot)) = self.awaiting.lock().unwrap().remove(&id) {
                             if let Err(err) = shot.send(Ok((id, data))) {
                                 eprintln!("Oneshot err = {:?}", err);
                             }
@@ -101,11 +110,42 @@ impl State {
         inner.map(|x| Packet { id: id, body: x })
     }
 
-    pub fn add(&mut self, track_key: TrackKey, num_peers: usize, c: Complete<Result<(TrackKey, Vec<u8>)>>) {
-        self.awaiting.insert(track_key, (num_peers, c));
-    }
+    pub fn ask_for_file(&self, track_id: TrackKey) -> impl Future<Item = (), Error = Error> {
+        let (c, p) = oneshot();
 
-    pub fn remove(&mut self, track_key: TrackKey) {
-        self.awaiting.remove(&track_key);
+        if self.spread.num_peers() == 0 {
+            if let Err(err) = c.send(Err(Error::SyncFailed("No peers available to ask for file".into()))) {
+                eprintln!("Send error = {:?}", err);
+            }
+        } else {
+            self.awaiting.lock().unwrap().insert(track_id.clone(), (self.spread.num_peers(), c));
+
+            let buf = serialize(&Packet { id: track_id, body: PacketBody::AskForFile }).unwrap();
+
+            self.spread.spread(hex_gossip::Packet::Other(buf), SpreadTo::Everyone);
+            self.spread.flush_all();
+        }
+
+        let data_path = self.data_path.clone();
+        p
+            .then(|res| {
+                match res {
+                    Ok(Ok(res)) => Ok(res),
+                    Ok(Err(err)) => Err(err),
+                    Err(_) => Err(Error::SyncFailed("Internal channel canceled".into()))
+                }
+            })
+            .and_then(move |(id, buf)| {
+                let path = data_path.join(id.to_path());
+                if !path.exists() {
+                    let mut file = File::create(path).unwrap();
+
+                    if let Err(err) = file.write(&buf) {
+                        eprintln!("File write err = {:?}", err);
+                    }
+                }
+
+                Ok(())
+            })
     }
 }

@@ -15,7 +15,7 @@ use crate::error::{Result, Error};
 
 use crate::convert::{UploadState, download::{DownloadState}};
 
-use hex_database::{self, Track, Token, View, Playlist};
+use hex_database::{self, Track, Token, Reader, Writer, Playlist};
 use hex_music_container::{self, Configuration, Container};
 use hex_server_protocol::{Request, Answer, RequestAction, AnswerAction, PacketId, objects::UploadProgress};
 
@@ -46,7 +46,8 @@ pub struct State {
     /// All pending requests
     reqs: HashMap<PacketId, RequestState>,
     /// Open connection to the database
-    pub collection: View,
+    pub read: Reader,
+    pub write: Writer,
     /// Path to the data section
     data_path: PathBuf,
     /// All uploads
@@ -59,15 +60,15 @@ pub struct State {
 
 impl State {
     /// Create a new `State` from a configuration
-    pub fn new(handle: Handle, path: &Path, view: View) -> State {
+    pub fn new(handle: Handle, path: &Path, read: Reader, write: Writer) -> State {
         State {
             handle: handle,
             reqs: HashMap::new(),
-            collection: view,
             data_path: path.join("data"),
             uploads: Vec::new(),
             downloads: Vec::new(),
-            token_avail: false
+            token_avail: false,
+            read, write
         }
     }
 
@@ -77,12 +78,12 @@ impl State {
 
         let answ = match msg {
             RequestAction::GetTrack { key } => {
-                self.collection.get_track(key)
+                self.read.get_track(key)
                     .map(|x| AnswerAction::Track(x))
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::UpdateTrack { key, title, album, interpret, people, composer } => {
-                self.collection.update_track(key, 
+                self.write.update_track(key, 
                     title.as_ref().map(String::as_str), 
                     album.as_ref().map(String::as_str), 
                     interpret.as_ref().map(String::as_str), 
@@ -104,7 +105,7 @@ impl State {
                     _ => panic!("blub")
                 };
 
-                self.collection.search_limited(&query, *seek)
+                self.read.search_limited(&query, *seek)
                     .map(|x| {
                         // update information about position in stream
                         let more = x.len() >= 50;
@@ -123,7 +124,7 @@ impl State {
             RequestAction::StreamNext { key } => {
                 let State {
                     ref data_path,
-                    ref collection,
+                    ref read,
                     ref mut reqs,
                     ..
                 } = *self;
@@ -137,7 +138,7 @@ impl State {
 
                         RequestState::Stream {
                             container: Container::<File>::load(file).unwrap(),
-                            track: collection.get_track(key.unwrap()).unwrap()
+                            track: read.get_track(key.unwrap()).unwrap()
                         }
                     });
                 
@@ -212,7 +213,7 @@ impl State {
             },
 
             RequestAction::GetSuggestion { key } => {
-                let suggestion = self.collection.get_track(key)
+                let suggestion = self.read.get_track(key)
                     .map_err(|x| Error::Database(x))
                     .and_then(|x| acousticid::get_metadata(&x.fingerprint, x.duration as u32));
 
@@ -223,28 +224,28 @@ impl State {
             },
 
             RequestAction::AddPlaylist { name } => {
-                let key = self.collection.last_playlist_key().unwrap() + 1;
+                let key = self.read.last_playlist_key().unwrap() + 1;
                 let playlist = Playlist {
                     key: key.clone(),
                     title: name,
                     desc: None,
                     tracks: Vec::new(),
-                    origin: self.collection.id()
+                    origin: self.write.peer_id()
                 };
 
-                self.collection.add_playlist(playlist.clone())
+                self.write.add_playlist(playlist.clone())
                     .map(|_| AnswerAction::AddPlaylist(playlist))
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::DeletePlaylist { key } => {
-                self.collection.delete_playlist(key)
+                self.write.delete_playlist(key)
                     .map(|_| AnswerAction::DeletePlaylist)
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::UpdatePlaylist { key, title, desc } => {
-                self.collection.update_playlist(key, title, desc, None)
+                self.write.update_playlist(key, title, desc, None)
                     .map(|_| AnswerAction::UpdatePlaylist)
                     .map_err(|err| Error::Database(err))
             },
@@ -254,23 +255,23 @@ impl State {
             },
 
             RequestAction::AddToPlaylist { key, playlist } => {
-                self.collection.add_to_playlist(key, playlist)
+                self.write.add_to_playlist(key, playlist)
                     .map(|_| AnswerAction::AddToPlaylist)
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::DeleteFromPlaylist { key, playlist } => {
-                self.collection.delete_from_playlist(key, playlist)
+                self.write.delete_from_playlist(key, playlist)
                     .map(|_| AnswerAction::DeleteFromPlaylist)
                     .map_err(|err| Error::Database(err))
             },
 
             RequestAction::GetPlaylists => {
-                Ok(AnswerAction::GetPlaylists(self.collection.get_playlists()))
+                Ok(AnswerAction::GetPlaylists(self.read.get_playlists()))
             },
 
             RequestAction::GetPlaylist { key }=> {
-                self.collection.get_playlist(key)
+                self.read.get_playlist(key)
                     .map(|mut x| {
                         for track in &mut x.1 {
                             track.fingerprint = vec![];
@@ -282,7 +283,7 @@ impl State {
             },
 
             RequestAction::GetPlaylistsOfTrack { key } => {
-                self.collection.get_playlists_of_track(key)
+                self.read.get_playlists_of_track(key)
                     .map(|x| AnswerAction::GetPlaylistsOfTrack(x))
                     .map_err(|err| Error::Database(err))
             },
@@ -290,7 +291,7 @@ impl State {
                 println!("Delete track with key: {}", key);
                 //self.collection.add_event(Action::DeleteSong(key.clone()).with_origin(origin.clone())).unwrap();
 
-                self.collection.delete_track(key)
+                self.write.delete_track(key)
                     .map(|x| AnswerAction::DeleteTrack(x))
                     .map_err(|err| Error::Database(err))
             },
@@ -316,7 +317,7 @@ impl State {
                 // tick each item
                 for item in &mut self.uploads {
                     if let Some(track) = item.tick(self.data_path.clone()) {
-                        self.collection.add_track(track).unwrap();
+                        self.write.add_track(track).unwrap();
                     }
                 }
 
@@ -340,14 +341,14 @@ impl State {
             },
 
             RequestAction::VoteForTrack { key } => {
-                self.collection.vote_for_track(key)
+                self.write.vote_for_track(key)
                     .map(|_| AnswerAction::VoteForTrack)
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::GetToken { token } => {
                 self.token_avail = true;
 
-                self.collection.get_token(token)
+                self.read.get_token(token)
                     .map(|(token, x)| {
                         if let Some((playlist, tracks)) = x {
                             (
@@ -365,7 +366,7 @@ impl State {
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::CreateToken => {
-                let id = self.collection.last_token_id().unwrap() + 1;
+                let id = self.read.last_token_id().unwrap() + 1;
                 let token = Token {
                     token: id,
                     key: None,
@@ -374,7 +375,7 @@ impl State {
                     last_use: 0
                 };
 
-                self.collection.add_token(token)
+                self.write.add_token(token)
                     .map(|id| AnswerAction::CreateToken(id))
                     .map_err(|err| Error::Database(err))
             },
@@ -383,25 +384,25 @@ impl State {
                     self.token_avail = false;
                 }
 
-                self.collection.update_token(token, key, played, pos)
+                self.write.update_token(token, key, played, pos)
                      .map(|_| AnswerAction::UpdateToken)
                      .map_err(|err| Error::Database(err))
             },
             RequestAction::LastToken => {
-                self.collection.get_last_used_token()
+                self.read.get_last_used_token()
                     .map(|x| AnswerAction::LastToken(Some(x.0.token)))
                     .map_err(|err| Error::Database(err))
             },
             RequestAction::GetSummary => {
-                Ok(AnswerAction::GetSummary(self.collection.get_complete_summary()))
+                Ok(AnswerAction::GetSummary(self.read.get_complete_summary()))
             },
             RequestAction::GetTransitions => {
-                Ok(AnswerAction::GetTransitions(self.collection.get_transitions()))
+                Ok(AnswerAction::GetTransitions(self.read.get_transitions()))
             },
             RequestAction::Download { format, tracks } => {
                 let id = id.clone();
                 tracks.into_iter()
-                    .map(|x| self.collection.get_track(x)
+                    .map(|x| self.read.get_track(x)
                         .map_err(|err| Error::Database(err))
                     )
                     .collect::<Result<Vec<Track>>>()

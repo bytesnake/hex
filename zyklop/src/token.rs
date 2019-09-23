@@ -2,7 +2,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use rand::{thread_rng, Rng};
 
-use hex_database::{Track, Token, TrackKey, View};
+use hex_database::{Track, Token, TrackKey, Files};
 use hex_music_container::{Container, Configuration};
 
 use crate::error::{Error, Result};
@@ -13,12 +13,12 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn new(track: Track, data_path: &Path, view: &View) -> Result<Stream> {
+    pub fn new(track: Track, data_path: &Path, files: &Files) -> Result<Stream> {
         println!("New Stream: {:?}", track.title);
         let path = data_path.join(track.key.to_path());
         
         if !path.exists() {
-            if let Err(_) = tokio::runtime::current_thread::block_on_all(view.ask_for_file(track.key.clone())) {
+            if let Err(_) = tokio::runtime::current_thread::block_on_all(files.ask_for_file(track.key.clone())) {
                 println!("File {} not available", track.key.to_string());
 
                 return Err(Error::NotAvailable);
@@ -56,11 +56,11 @@ pub struct Current {
     not_played: Vec<Track>,
     played: Vec<Track>,
     data_path: PathBuf,
-    view: View
+    files: Files
 }
 
 impl Current {
-    pub fn new(mut token: Token, mut tracks: Vec<Track>, view: View, data_path: PathBuf) -> Current {
+    pub fn new(mut token: Token, mut tracks: Vec<Track>, files: Files, data_path: PathBuf) -> Current {
         let current_track_key = token.played.pop();
         let current_track = current_track_key.and_then(|track_key| {
             tracks.iter().position(|x| x.key == track_key)
@@ -77,12 +77,12 @@ impl Current {
             played,
             not_played,
             data_path: data_path.clone(),
-            view
+            files
         };
 
         match current_track {
             Some(track) => {
-                if let Ok(mut stream) = Stream::new(track, &data_path, &current.view) {
+                if let Ok(mut stream) = Stream::new(track, &data_path, &current.files) {
                     println!("Load current track: {:?}", token.pos);
 
                     if let Some(pos) = token.pos {
@@ -153,7 +153,7 @@ impl Current {
     }
 
     pub fn create_stream(&self, elm: Track, path: &Path) -> Result<Stream> {
-        Stream::new(elm, path, &self.view)
+        Stream::new(elm, path, &self.files)
     }
 
     pub fn next_track(&mut self) {
@@ -177,7 +177,7 @@ impl Current {
             // ask for the next three tracks
             for key in self.not_played.iter().take(2).map(|x| x.key.clone()) {
                 if !self.data_path.join(key.to_path()).exists() {
-                    self.view.ask_for_file(key);
+                    self.files.ask_for_file(key);
                 }
             }
 

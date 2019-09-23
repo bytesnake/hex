@@ -47,17 +47,22 @@ pub mod search;
 pub mod events;
 pub mod utils;
 
-#[cfg(feature="rusqlite")]
-mod database;
 mod transition;
 mod file;
+#[cfg(feature="rusqlite")]
+mod instance;
+mod read;
+mod write;
 
 pub use error::{Result, Error};
 pub use events::{Action, Event};
 pub use transition::TransitionAction;
 pub use objects::{Track, Playlist, Token, TrackKey, PlaylistKey, TokenId};
 #[cfg(feature="rusqlite")]
-pub use database::*;
+pub use instance::Instance;
+pub use read::Reader;
+pub use write::Writer;
+pub use file::Files;
 #[cfg(feature="hex-gossip")]
 pub use hex_gossip::{GossipConf, Transition};
 #[cfg(not(feature = "hex-gossip"))]

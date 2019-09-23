@@ -31,7 +31,7 @@ fn main() {
     }
 
     let instance = Instance::from_file(&db_path, gossip);
-    let view = instance.view();
+    let (read, write) = (instance.reader(), instance.writer());
 
     //let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
 
@@ -54,7 +54,7 @@ fn main() {
                                 0 => {create_counter += 1; token.shuffle()},
                                 2 => {
                                     if let Some(ref stream) = token.stream {
-                                        if let Err(err) = view.vote_for_track(stream.track.key) {
+                                        if let Err(err) = write.vote_for_track(stream.track.key) {
                                             eprintln!("Error: Could not vote for track {:?}: {:?}", token.track_key(), err);
                                         }
                                     }
@@ -68,16 +68,16 @@ fn main() {
                     Event::NewCard(num) => {
                         println!("Got card with number {}", num);
 
-                        match view.get_token(num as i64) {
+                        match read.get_token(num as i64) {
                             Ok((a, Some((_, b)))) => {
-                                token = Some(token::Current::new(a, b, instance.view(), data_path.clone()));
+                                token = Some(token::Current::new(a, b, instance.files(), data_path.clone()));
                             },
                             Ok((a, None)) => {
-                                token = Some(token::Current::new(a, Vec::new(), instance.view(), data_path.clone()));
+                                token = Some(token::Current::new(a, Vec::new(), instance.files(), data_path.clone()));
                             },
                             Err(hex_database::Error::NotFound) => {
                                 println!("Not found!");
-                                let id = view.last_token_id().unwrap() + 1;
+                                let id = read.last_token_id().unwrap() + 1;
                                 let token = Token {
                                     token: id,
                                     key: None,
@@ -86,14 +86,14 @@ fn main() {
                                     last_use: 0
                                 };
 
-                                view.add_token(token).expect("Error: Could not create a new token!");
+                                write.add_token(token).expect("Error: Could not create a new token!");
 
                                 push_new.send(id as u32).unwrap();
                             },
                             Err(err) => eprintln!("Error: Could not get token with error: {:?}", err)
                         }
                         if let Some(ref token) = token {
-                            if let Err(err) = view.use_token(token.token.token) {
+                            if let Err(err) = write.use_token(token.token.token) {
                                 eprintln!("Error: Could not user token {:?} because {:?}", token.token.token, err);
                             }
                         }
@@ -110,7 +110,7 @@ fn main() {
                                 }
                             }
 
-                            if let Err(err) = view.update_token(token, None, Some(played), pos) {
+                            if let Err(err) = write.update_token(token, None, Some(played), pos) {
                                 eprintln!("Error: Could not update token {:?} because {:?}", token, err);
                             }
 
@@ -126,7 +126,7 @@ fn main() {
 
         if create_counter == 3 {
             println!("Reset token to new id ..");
-            let id = view.last_token_id().unwrap() + 1;
+            let id = read.last_token_id().unwrap() + 1;
             let token = Token {
                 token: id,
                 key: None,
@@ -135,7 +135,7 @@ fn main() {
                 last_use: 0
             };
 
-            view.add_token(token).expect("Error: Could not create a new token!");
+            write.add_token(token).expect("Error: Could not create a new token!");
 
             push_new.send(id as u32).unwrap();
 

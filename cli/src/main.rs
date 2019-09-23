@@ -6,10 +6,15 @@ mod modify;
 mod sync;
 mod store;
 
+use std::thread;
 use std::io::{self, Write, BufRead};
 use std::fs;
 use std::path::{Path, PathBuf};
-use hex_database::{Instance, View, search::SearchQuery, Track, GossipConf, Playlist};
+use futures::stream::Stream;
+use futures::future::IntoFuture;
+use futures::future::Future;
+
+use hex_database::{Instance, Reader, Writer, search::SearchQuery, Track, GossipConf, Playlist};
 
 fn main() {
     env_logger::init();
@@ -35,8 +40,11 @@ fn main() {
     }
 
     let instance = Instance::from_file(&db_path, gossip);
-    let view = instance.view();
+    let (read, write, files) = (instance.reader(),instance.writer(),instance.files());
     let mut prev_lines = Vec::new();
+
+    // spawn in background
+    thread::spawn(|| tokio::run(instance.for_each(|_| Ok(())).into_future().map_err(|_| ())));
 
     'outer: loop {
         print!(" > ");
@@ -71,41 +79,41 @@ fn main() {
         }
 
         let query = SearchQuery::new(&args[1]);
-        let mut query = view.search_prep(query).unwrap();
-        let tracks: Vec<Track> = view.search(&mut query).collect();
+        let mut query = read.search_prep(query).unwrap();
+        let tracks: Vec<Track> = read.search(&mut query).collect();
 
         let data_path = data_path.clone();
         match args[0] {
             "" => {
-                print_overview(&view);
+                print_overview(&read);
             },
             "search" => {
                 show_tracks(&args[1], tracks);
             },
             "delete" => {
-                delete_tracks(&view, &data_path, tracks);
+                delete_tracks(&write, &data_path, tracks);
             },
             "add-playlist" => {
-                add_playlist(&view, tracks);
+                add_playlist(&read, &write, tracks);
             },
             "sync" => {
-                sync::sync_tracks(data_path.clone(), tracks, &view);
+                sync::sync_tracks(&files, &data_path, tracks);
             },
             "play" => {
-                play::play_tracks(data_path.clone(), &view, tracks);
+                play::play_tracks(&files, &data_path, tracks);
             },
             "modify" => {
-                modify::modify_tracks(&view, tracks);
+                modify::modify_tracks(&write, tracks);
             },
             "modify-playlist" => {
-                if let Ok((playlist,tracks)) = view.get_playlist_by_title(&args[1]) {
-                    modify::modify_playlist(&view, playlist, tracks);
+                if let Ok((playlist,tracks)) = read.get_playlist_by_title(&args[1]) {
+                    modify::modify_playlist(&write, playlist, tracks);
                 } else {
                     println!("Playlist {} not found!", args[1]);
                 }
             },
             "store" => {
-                store::store(&view, Path::new(args[1]), data_path.clone());
+                store::store(&write, Path::new(args[1]), &data_path);
             },
             "quit" | "q" | "exit" | "bye" => {
                 println!("Bye, have a nice day!");
@@ -130,10 +138,10 @@ fn show_tracks(query: &str, tracks: Vec<Track>) {
 
 }
 
-fn add_playlist(db: &View, tracks: Vec<Track>) {
+fn add_playlist(read: &Reader, write: &Writer, tracks: Vec<Track>) {
     println!("Create new playlist with {} tracks", tracks.len());
 
-    let last_key = db.last_playlist_key().unwrap();
+    let last_key = read.last_playlist_key().unwrap();
     let pl = Playlist {
         key: last_key + 1,
         title: "New Playlist".into(),
@@ -142,10 +150,10 @@ fn add_playlist(db: &View, tracks: Vec<Track>) {
         origin: vec![0; 16]
     };
 
-    db.add_playlist(pl).unwrap();
+    write.add_playlist(pl).unwrap();
 }
 
-fn delete_tracks(db: &View, data_path: &Path, tracks: Vec<Track>) {
+fn delete_tracks(write: &Writer, data_path: &Path, tracks: Vec<Track>) {
     print!("Do you really want to delete {} tracks [n]: ", tracks.len());
     io::stdout().flush().unwrap();
 
@@ -167,7 +175,7 @@ fn delete_tracks(db: &View, data_path: &Path, tracks: Vec<Track>) {
     }
 
     for track in tracks {
-        db.delete_track(track.key).unwrap();
+        write.delete_track(track.key).unwrap();
 
        if fs::remove_file(data_path.join(track.key.to_path())).is_err() {
            eprintln!("Error: Could not remove file of track {}", track.key.to_string());
@@ -175,8 +183,8 @@ fn delete_tracks(db: &View, data_path: &Path, tracks: Vec<Track>) {
     }
 }
 
-fn print_overview(db: &View) {
-    let mut tracks = db.get_tracks();
+fn print_overview(read: &Reader) {
+    let mut tracks = read.get_tracks();
     tracks.sort_by(|a, b| a.favs_count.cmp(&b.favs_count).reverse());
 
     let duration = tracks.iter().fold(0.0, |y,x| y + x.duration);
@@ -191,7 +199,7 @@ fn print_overview(db: &View) {
 
     println!("");
 
-    let playlists = db.get_playlists();
+    let playlists = read.get_playlists();
 
     println!(" => Found {} playlists:", playlists.len());
 

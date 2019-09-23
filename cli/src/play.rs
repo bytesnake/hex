@@ -1,9 +1,9 @@
+use std::path::Path;
 use std::thread;
 use std::panic;
 use std::io::{self, Write, Read};
 use std::fs::File;
 use std::time::Duration;
-use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use crate::audio::AudioDevice;
 use terminal_size::{Width, terminal_size};
@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio;
 use nix::sys::termios;
 
-use hex_database::{Track, View};
+use hex_database::{Track, Files};
 use hex_music_container::{Container, Configuration};
 
 #[derive(Debug)]
@@ -51,7 +51,7 @@ fn format_time(mut secs: f64) -> String {
     out
 }
 
-pub fn player(data_path: PathBuf, view: &View, tracks: Vec<Track>, events: Receiver<Event>, working: Arc<AtomicBool>) {
+pub fn player(data_path: &Path, files: &Files, tracks: Vec<Track>, events: Receiver<Event>, working: Arc<AtomicBool>) {
     let mut device = AudioDevice::new();
     let width = match terminal_size() {
         Some((Width(w),_)) => w,
@@ -65,7 +65,7 @@ pub fn player(data_path: PathBuf, view: &View, tracks: Vec<Track>, events: Recei
         }
 
         if !data_path.join(tracks[idx].key.to_path()).exists() {
-            if let Err(_) = tokio::runtime::current_thread::block_on_all(view.ask_for_file(tracks[idx].key.clone())) {
+            if let Err(_) = tokio::runtime::current_thread::block_on_all(files.ask_for_file(tracks[idx].key.clone())) {
                 println!("File {} not available", tracks[idx].key.to_string());
 
                 idx += 1;
@@ -164,7 +164,7 @@ pub fn player(data_path: PathBuf, view: &View, tracks: Vec<Track>, events: Recei
     device.shutdown();
 }
 
-pub fn play_tracks(data_path: PathBuf, view: &View, tracks: Vec<Track>) {
+pub fn play_tracks(files: &Files, data_path: &Path, tracks: Vec<Track>) {
 
     // setup terminal to pass arrows
     // Querying original as a separate, since `Termios` does not implement copy
@@ -228,7 +228,7 @@ pub fn play_tracks(data_path: PathBuf, view: &View, tracks: Vec<Track>) {
         }
     });
 
-    player(data_path.to_path_buf(), &view, tracks, receiver, working);
+    player(data_path, &files, tracks, receiver, working);
 
     termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &orig_term).unwrap();
 

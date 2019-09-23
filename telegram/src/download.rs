@@ -12,7 +12,7 @@ use futures::sync::mpsc::{channel, Receiver};
 use crate::error::*;
 
 use hex_music_container::{Container, Configuration, error::Error as MusicError};
-use hex_database::{Track, View};
+use hex_database::{Track, Files};
 
 use threadpool::ThreadPool;
 
@@ -20,7 +20,6 @@ pub struct DownloadProgress {
     pub result: Result<(PathBuf, Track)>,
     pub num: usize
 }
-
 
 fn worker(track: Track, data_path: PathBuf) -> Result<(PathBuf, Track)> {
     let download_path = data_path.join("download");
@@ -90,7 +89,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(view: &View, tracks: Vec<Track>, data_path: PathBuf) -> State {
+    pub fn new(files: Files, tracks: Vec<Track>, data_path: PathBuf) -> State {
         let (sender, recv) = channel(200);
 
         let pool = ThreadPool::new(4);
@@ -106,7 +105,7 @@ impl State {
                 let c1 = counter.clone();
                 let c2 = counter.clone();
 
-                let res = view.ask_for_file(track.key.clone())
+                let res = files.ask_for_file(track.key.clone())
                     .and_then(move |_| {
                         pool.execute(move || {
                             let item = worker(track, data_path);

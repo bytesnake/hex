@@ -19,9 +19,9 @@ fn main() {
     }
 
     let instance = Instance::from_file(&db_path, gossip);
-    let view = instance.view();
+    let (read, write) = (instance.reader(), instance.writer());
 
-    let newest_date = view.get_latest_summary_day()
+    let newest_date = read.get_latest_summary_day()
         .map(|x| Utc.datetime_from_str(&format!("{} 10:10:00", x), "%Y-%m-%d %H:%M:%S").unwrap().date())
         .unwrap_or(Utc::today().checked_sub_signed(Duration::days(2)).unwrap());
 
@@ -34,17 +34,17 @@ fn main() {
 
     let mut days = vec![(0u32, 0u32); num_days as usize];
 
-    let num_tracks = view.get_num_tracks();
+    let num_tracks = read.get_num_tracks();
 
     for day in 0..num_days {
-        let num_transitions = view.get_num_transitions(day as u32);
+        let num_transitions = read.get_num_transitions(day as u32);
 
         days[day as usize] = (num_tracks as u32, num_transitions as u32);
     }
 
     println!("{:?}", days);
 
-    /*let tracks = view.get_tracks();
+    /*let tracks = read.get_tracks();
     let fps: Vec<Fingerprint> = tracks.iter().map(|x| x.fingerprint.clone()).collect();
     for i in 0..fps.len() {
         for j in 0..fps.len() {
@@ -75,7 +75,7 @@ fn main() {
         let datestamp = datestamp.format("%Y-%m-%d");
 
         
-        view.summarise_day(datestamp.to_string(), days[i].0, days[i].1).unwrap();
+        write.summarise_day(datestamp.to_string(), days[i].0, days[i].1).unwrap();
     }
 
     println!("{:#?}", days);*/

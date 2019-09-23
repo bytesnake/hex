@@ -8,7 +8,7 @@ use std::io::BufRead;
 use std::sync::Mutex;
 use std::sync::Arc;
 
-use hex_database::View;
+use hex_database::Writer;
 use std::sync::mpsc::{channel, Sender, Receiver};
 
 use rspotify::spotify::client::Spotify as SpotifyAPI;
@@ -50,7 +50,7 @@ pub struct ExternalMusic {
 }
 
 impl ExternalMusic {
-    pub fn new(view: View, data_path: PathBuf, auth: hex_conf::SpotifyAPI) -> ExternalMusic {
+    pub fn new(write: Writer, data_path: PathBuf, auth: hex_conf::SpotifyAPI) -> ExternalMusic {
         let client_credential = SpotifyClientCredentials::default()
             .client_id(&auth.id)
             .client_secret(&auth.secret)
@@ -106,7 +106,7 @@ impl ExternalMusic {
 
                     //println!("Added track {:?}", track.title);
 
-                    if let Err(err) = view.add_track(track) {
+                    if let Err(err) = write.add_track(track) {
                         eprintln!("Could not add track: {:?}", err);
                     }
                     

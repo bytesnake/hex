@@ -28,25 +28,25 @@ mod upload;
 mod external;
 mod error;
 
-fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
+fn run_bot(instance: Instance, conf: Conf, path: PathBuf) {
     let key = env::var("TELEGRAM_BOT_KEY").unwrap();
 
     let mut bot = Bot::new(&key).timeout(200);
 
-    let view = instance.view();
+    /*let view = instance.view();
     let view2 = instance.view();
     let view3 = instance.view();
     let view4 = instance.view();
-    let view6 = instance.view();
+    let view6 = instance.view();*/
 
-    let external = external::ExternalMusic::new(view4, path.clone(), conf.spotify.clone().unwrap());
+    let external = external::ExternalMusic::new(instance.writer(), path.clone(), conf.spotify.clone().unwrap());
 
-    let path2 = path.clone();
+    let read = instance.reader();
     let search = bot.new_cmd("/suche")
         .and_then(move |(bot, msg)| {
             let Message { text, chat, .. } = msg;       
 
-            view.search_limited(&text.unwrap(), 0)
+            read.search_limited(&text.unwrap(), 0)
                 .map_err(|x| format_err!("{:?}", x))
                 .map(|x| {
                     let mut result = x.into_iter().take(10)
@@ -89,16 +89,20 @@ fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
         })
         .for_each(|_| Ok(()));
 
+    let read = instance.reader();
+    let files = instance.files();
+    let pathc = path.clone();
+
     let download = bot.new_cmd("/lade")
         .and_then(move |(bot, msg)| {
-            let result = view2.search_limited(&msg.text.unwrap(), 0).unwrap();
+            let result = read.search_limited(&msg.text.unwrap(), 0).unwrap();
 
             bot.message(msg.chat.id, format!("download 0/{}", result.len())).send()
                 .map(|(bot, msg)| (result, bot, msg))
         })
         .and_then(move |(result, bot, msg)| {
             let result_len = result.len();
-            let download = download::State::new(&view6, result, path.clone());
+            let download = download::State::new(files.clone(), result, pathc.clone());
             let bot2 = bot.clone();
             let Message {chat, message_id, ..} = msg;
             let chat_id = chat.id;
@@ -138,6 +142,8 @@ fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
         })
         .for_each(|_| Ok(()));
 
+    let write = instance.writer();
+    let path2 = path.clone();
     let stream = bot.get_stream(None)
         .filter_map(|(bot, x)| x.message.map(|x| (bot,x)))
         .filter_map(|(bot, x)| {
@@ -183,7 +189,7 @@ fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
 
             let answ = match track {
                 Ok(track) => { 
-                    match view3.add_track(track.clone()) {
+                    match write.add_track(track.clone()) {
                         Ok(_) => format!("Habe {} gespeichert", track.title.unwrap()),
                         Err(e) => format!("Fehler ist aufgetreten: {:?}", e)
                     }
@@ -196,8 +202,14 @@ fn run_bot(instance: &Instance, conf: Conf, path: PathBuf) {
         .for_each(|_| Ok(()));
 
     let chain = stream.into_future().join(search.join(download.join(external)))
-        .inspect(|err| eprintln!("Eventloop crashed = {:?}", err))
+        .inspect(|err| eprintln!("Telegram eventloop crashed = {:?}", err))
         .map_err(|_| ()).map(|_| ());
+
+    let gossip = instance.for_each(|_| Ok(())).into_future()
+        .inspect(|err| eprintln!("Database eventloop crashed = {:?}", err))
+        .map_err(|_| ()).map(|_| ());
+
+    let chain = chain.join(gossip).map(|_| ());
 
     tokio::run(chain);
 }
@@ -207,21 +219,22 @@ fn main() {
 
     let (mut conf, path) = hex_conf::Conf::new().unwrap();
 
-    let mut gossip = GossipConf::new();
 
-    if let Some(peer) = conf.peer.take() {
-        gossip = gossip
-            .addr((conf.host, peer.port))
-            .id(peer.id())
-            .network_key(peer.network_key())
-            .discover(peer.discover)
-            .contacts(peer.contacts);
-    }
-
-    let instance = Instance::from_file(path.join("music.db"), gossip);
 
     loop {
-        run_bot(&instance, conf.clone(), path.clone());
+        let mut gossip = GossipConf::new();
+
+        if let Some(peer) = conf.peer.take() {
+            gossip = gossip
+                .addr((conf.host, peer.port))
+                .id(peer.id())
+                .network_key(peer.network_key())
+                .discover(peer.discover)
+                .contacts(peer.contacts);
+        }
+
+        let instance = Instance::from_file(path.join("music.db"), gossip);
+        run_bot(instance, conf.clone(), path.clone());
         thread::sleep(Duration::from_millis(2000));
     }
 }

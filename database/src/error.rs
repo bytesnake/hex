@@ -1,3 +1,4 @@
+use std::io;
 use std::result;
 #[cfg(feature = "rusqlite")]
 use hex_gossip;
@@ -17,5 +18,6 @@ pub enum Error {
     NotFound,
     ReadOnly,
     AcousticId,
-    Serialize
+    Serialize,
+    Io(io::Error)
 }

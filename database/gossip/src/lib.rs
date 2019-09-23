@@ -137,7 +137,6 @@ impl<T: Inspector> Spread<T> {
                 peers.remove(&id).unwrap().shutdown().unwrap();
             }
 
-
             return Ok(Async::NotReady); 
         });
 

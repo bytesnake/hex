@@ -43,23 +43,10 @@ pub fn start(conf: Conf, path: PathBuf) {
     }
 
     let mut instance = Instance::from_file(&path.join("music.db"), gossip);
+    let (read, write) = (instance.reader(), instance.writer());
 
     let broadcasts: Rc<RefCell<Vec<Sender<TransitionAction>>>> = Rc::new(RefCell::new(Vec::new()));
 
-    let tmp = broadcasts.clone();
-    let c = instance.recv().for_each(|x| {
-        let mut senders = tmp.borrow_mut();
-
-        senders.retain(|x| !x.is_closed());
-
-        for i in &mut *senders {
-            if let Err(err) = i.try_send(x.clone()) {
-                eprintln!("Got error: {}", err);
-            }
-        }
-
-        Ok(())
-    });
 
 	// a stream of incoming connections
 	let f = incoming
@@ -81,7 +68,7 @@ pub fn start(conf: Conf, path: PathBuf) {
 
             let handle2 = handle.clone();
             let path_cpy = path.clone();
-            let view = instance.view();
+            let (read, write) = (read.clone(), write.clone());
             let (s, r) = channel(1024);
 
             broadcasts.borrow_mut().push(s);
@@ -91,7 +78,7 @@ pub fn start(conf: Conf, path: PathBuf) {
                 .use_protocol("rust-websocket")
                 .accept()
                 .and_then(move |(s,_)| {
-                    let mut state = State::new(handle2, &path_cpy, view);
+                    let mut state = State::new(handle2, &path_cpy, read, write);
 
                     let (sink, stream) = s.split();
 
@@ -131,6 +118,21 @@ pub fn start(conf: Conf, path: PathBuf) {
 
             Ok(())
         });
+
+    let tmp = broadcasts.clone();
+    let c = instance.for_each(|x| {
+        let mut senders = tmp.borrow_mut();
+
+        senders.retain(|x| !x.is_closed());
+
+        for i in &mut *senders {
+            if let Err(err) = i.try_send(x.clone()) {
+                eprintln!("Got error: {}", err);
+            }
+        }
+
+        Ok(())
+    });
 
 	core.run(Future::join(f, c)).unwrap();
 }

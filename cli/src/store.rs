@@ -2,15 +2,14 @@ use std::slice;
 use std::io::Read;
 use std::fs::File;
 use std::process::Command;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use walkdir::WalkDir;
 use id3::Tag;
 
-use hex_database::Track;
+use hex_database::{Track, Writer};
 use hex_music_container::{Configuration, Container};
-use hex_database::View;
 
-pub fn store(view: &View, path: &Path, data_path: PathBuf) {
+pub fn store(write: &Writer, path: &Path, data_path: &Path) {
     let mut files = Vec::new();
     for e in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
         if e.metadata().unwrap().is_file() {
@@ -83,6 +82,6 @@ pub fn store(view: &View, path: &Path, data_path: PathBuf) {
 
         println!("Add track with key {}", track.key.to_string());
 
-        view.add_track(track).unwrap();
+        write.add_track(track).unwrap();
     }
 }
