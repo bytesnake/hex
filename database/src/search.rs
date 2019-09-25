@@ -34,6 +34,8 @@ impl Order {
                 "title" => Some(Order::ByTitle),
                 "favs" => Some(Order::ByFavs),
                 "rand" => Some(Order::ByRandom),
+                "random" => Some(Order::ByRandom),
+                "randomly" => Some(Order::ByRandom),
                 _ => None
             };
         }

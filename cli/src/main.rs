@@ -112,6 +112,10 @@ fn main() {
                     println!("Playlist {} not found!", args[1]);
                 }
             },
+            "modify-tokens" => {
+                modify::modify_tokens(&write, &read);
+            },
+
             "store" => {
                 store::store(&write, Path::new(args[1]), &data_path);
             },

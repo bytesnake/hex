@@ -2,7 +2,7 @@ use std::io::{Write, BufRead, BufReader};
 use std::fs::{self, File};
 use std::collections::HashMap;
 use std::process::Command;
-use hex_database::{Track, Writer, Playlist};
+use hex_database::{Track, Reader, Writer, Playlist};
 
 pub fn modify_tracks(write: &Writer, tracks: Vec<Track>) {
     {
@@ -139,3 +139,79 @@ pub fn modify_playlist(write: &Writer, mut playlist: Playlist, tracks: Vec<Track
 
     fs::remove_file("/tmp/cli_modify").unwrap();
 }
+
+pub fn modify_tokens(write: &Writer, read: &Reader) {
+    let tokens = read.get_tokens().unwrap();
+
+    {
+        let mut file = File::create("/tmp/cli_modify").unwrap();
+
+        for (token, playlist) in tokens.clone() {
+            let buf = format!("{} | {} | {}\n",
+                token.token,
+                token.last_use,
+                playlist.map(|x| x.title).unwrap_or("None".into()));
+
+            file.write(&buf.as_bytes()).unwrap();
+        }
+    }
+
+    // open vim and edit all tracks
+    Command::new("vim")
+        .arg("-c").arg(":set wrap!")
+        .arg("-c").arg(":%!column -t -o \"|\" -s \"|\"")
+        .arg("/tmp/cli_modify")
+        .status().expect("Could not open file!");
+
+    // apply changes to the database
+    {
+        let file = File::open("/tmp/cli_modify").unwrap();
+
+        for (line, (mut token, playlist)) in BufReader::new(file).lines().zip(tokens.into_iter()) {
+            let params: Vec<String> = line.unwrap().split("|").map(|x| x.trim().into()).collect();
+            if params.len() != 3 {
+                continue;
+            }
+
+            if params[2] == "None" {
+                token.key = None;
+                write.update_token2(token);
+            } else if playlist.map(|x| x.title).unwrap_or("None".into()) != params[2] {
+                if let Ok((new_playlist,_)) = read.get_playlist_by_title(&params[2]) {
+                    token.key = Some(new_playlist.key);
+                    write.update_token2(token);
+                } else {
+                    println!("Could not find playlist {}!", params[2]);
+                }
+            }
+        }
+
+        /*for (line, track) in BufReader::new(file).lines().zip(tracks.into_iter()) {
+            let params: Vec<String> = line.unwrap().split("|").map(|x| x.trim().into()).collect();
+            if params.len() != 5 {
+                continue;
+            }
+
+            // skip if there is no change
+            if track.title.unwrap_or("None".into()) == params[0] && 
+               track.album.unwrap_or("None".into()) == params[1] && 
+               track.interpret.unwrap_or("None".into()) == params[2] && 
+               track.people.unwrap_or("None".into()) == params[3] && 
+               track.composer.unwrap_or("None".into()) == params[4] {
+                continue;
+            }
+
+            write.update_track(
+                track.key,
+                if params[0] == "None" { None } else { Some(&params[0]) },
+                if params[1] == "None" { None } else { Some(&params[1]) },
+                if params[2] == "None" { None } else { Some(&params[2]) },
+                if params[3] == "None" { None } else { Some(&params[3]) },
+                if params[4] == "None" { None } else { Some(&params[4]) },
+            ).unwrap();
+        }*/
+    }
+
+    fs::remove_file("/tmp/cli_modify").unwrap();
+}
+
