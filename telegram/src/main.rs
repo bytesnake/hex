@@ -1,4 +1,6 @@
 #[macro_use]
+extern crate log;
+#[macro_use]
 extern crate failure;
 
 use std::env;
@@ -33,13 +35,7 @@ fn run_bot(instance: Instance, conf: Conf, path: PathBuf) {
 
     let mut bot = Bot::new(&key).timeout(200);
 
-    /*let view = instance.view();
-    let view2 = instance.view();
-    let view3 = instance.view();
-    let view4 = instance.view();
-    let view6 = instance.view();*/
-
-    let external = external::ExternalMusic::new(instance.writer(), path.clone(), conf.spotify.clone().unwrap());
+    let external = external::ExternalMusic::new(instance.reader(), instance.writer(), path.clone(), conf.spotify.clone().unwrap());
 
     let read = instance.reader();
     let search = bot.new_cmd("/suche")
@@ -218,8 +214,6 @@ fn main() {
     env_logger::init();
 
     let (mut conf, path) = hex_conf::Conf::new().unwrap();
-
-
 
     loop {
         let mut gossip = GossipConf::new();

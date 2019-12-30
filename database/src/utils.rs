@@ -1,11 +1,11 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 use std::str;
 
 use crate::error::*;
 
-pub fn fingerprint_from_file(num_channels: u16, raw_path: PathBuf) -> Result<Vec<u32>> {                                                                                                                              
+pub fn fingerprint_from_file(num_channels: u16, raw_path: &Path) -> Result<Vec<u32>> {                                                                                                                              
     let cmd = Command::new("fpcalc")
         .arg(raw_path.to_str().unwrap())
         .arg("-rate").arg("48000")
@@ -32,5 +32,5 @@ pub fn get_fingerprint(num_channels: u16, data: &[i16]) -> Result<Vec<u32>> {
 
    file.write(v_bytes).unwrap();
 
-   fingerprint_from_file(num_channels, file.path().to_path_buf())
+   fingerprint_from_file(num_channels, file.path())
 }

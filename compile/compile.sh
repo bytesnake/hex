@@ -1,9 +1,9 @@
 #!/bin/sh
 
 PROJECT=$(pwd)
-SYSROOT_SSL=$PROJECT/compile/libraries/openssl/
-SYSROOT_ALSA=$PROJECT/compile/libraries/alsa/
-SYSROOT_OPUS=$PROJECT/compile/libraries/opus/
+SYSROOT_SSL=$PROJECT/../compile/libraries/openssl/
+SYSROOT_ALSA=$PROJECT/../compile/libraries/alsa/
+SYSROOT_OPUS=$PROJECT/../compile/libraries/opus/
 
 export PKG_CONFIG_DIR=
 export PKG_CONFIG_PATH=${SYSROOT_SSL}lib/pkgconfig:${SYSROOT_ALSA}lib/pkgconfig:${SYSROOT_OPUS}lib/pkgconfig:

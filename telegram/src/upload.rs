@@ -43,8 +43,7 @@ fn worker(sender: Sender<Track>, file_name: String, samples: Vec<u8>, data_path:
 
     let samples: &[i16] = unsafe { ::std::slice::from_raw_parts(samples.as_ptr() as *const i16, samples.len() / 2) };
 
-
-    let fingerprint = fingerprint_from_file(2, raw_path)
+    let fingerprint = fingerprint_from_file(2, &raw_path)
         .map_err(|x| Error::Database(x))?;
 
     let mut track = Track::empty(fingerprint, duration.into());

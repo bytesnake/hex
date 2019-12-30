@@ -8,7 +8,7 @@ use mfrc522::{MFRC522, pcd::Reg, picc::UID};
 use std::thread;
 use std::time::Duration;
 
-const BUTTON_PINS: &[u64] = &[1016, 1014, 1018, 1019];
+const BUTTON_PINS: &[u64] = &[3, 4, 13, 19];
 
 #[derive(Debug)]
 pub enum Event {
@@ -37,7 +37,7 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
 
     let inputs = inputs.unwrap();
 
-    let mut spi = Spidev::open("/dev/spidev32766.0").unwrap();
+    let mut spi = Spidev::open("/dev/spidev0.0").unwrap();
     let options = SpidevOptions::new()
         .lsb_first(false)
         .bits_per_word(8)
@@ -47,7 +47,7 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
 
     spi.configure(&options).unwrap();
 
-    let pin = Pin::new(1013);
+    let pin = Pin::new(25);
     pin.export().unwrap();
     while !pin.is_exported() {}
     pin.set_direction(Direction::Out).unwrap();

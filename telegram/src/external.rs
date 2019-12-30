@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::process::{Stdio, Command};
 use std::path::PathBuf;
@@ -8,7 +8,7 @@ use std::io::BufRead;
 use std::sync::Mutex;
 use std::sync::Arc;
 
-use hex_database::Writer;
+use hex_database::{Reader, Writer};
 use std::sync::mpsc::{channel, Sender, Receiver};
 
 use rspotify::spotify::client::Spotify as SpotifyAPI;
@@ -28,6 +28,8 @@ fn get_playlist(spotify: &SpotifyAPI, key: &str) -> PseudoPlaylist {
     let mut title = "".into();
 
     if let Ok(playlist) = playlists {
+        println!("{}", playlist.tracks.items.len());
+
         for track in playlist.tracks.items {
             if let Some(id) = track.track.id {
                 let album = track.track.album.name;
@@ -50,7 +52,7 @@ pub struct ExternalMusic {
 }
 
 impl ExternalMusic {
-    pub fn new(write: Writer, data_path: PathBuf, auth: hex_conf::SpotifyAPI) -> ExternalMusic {
+    pub fn new(read: Reader, write: Writer, data_path: PathBuf, auth: hex_conf::SpotifyAPI) -> ExternalMusic {
         let client_credential = SpotifyClientCredentials::default()
             .client_id(&auth.id)
             .client_secret(&auth.secret)
@@ -80,6 +82,15 @@ impl ExternalMusic {
                 let playlist = get_playlist(&spotify_api, &playlist_key);
 
                 for metadata in playlist.1 {
+                    // check whether the track already exists
+                    let tracks = read.search_limited(&format!("title:\"{}\",album:\"{}\"", metadata.0, metadata.1), 0).unwrap();
+
+                    /*if tracks.len() > 0 {
+                        debug!("Song {} already exists!", metadata.0);
+                        continue;
+                    }*/
+    
+
                     *c2.lock().unwrap() = Some((playlist.0.clone(), metadata.0.clone()));
                     stdin.write(metadata.3.as_bytes()).unwrap();
                     stdin.write(b"\n").unwrap();
@@ -94,7 +105,7 @@ impl ExternalMusic {
                     let mut buf = Vec::new();
                     file.read_to_end(&mut buf).unwrap();
                     
-                    let fingerprint = fingerprint_from_file(2, path).unwrap();
+                    let fingerprint = fingerprint_from_file(2, &path).unwrap();
                     
                     let mut track = Track::empty(fingerprint, buf.len() as f64 / 48000.0 / 2.0);
                     track.title = Some(metadata.0);
@@ -115,6 +126,8 @@ impl ExternalMusic {
                     let file = File::create(data_path.join("data").join(track_path)).unwrap();
 
                     Container::save_pcm(Configuration::Stereo, samples.to_vec(), file, None).unwrap();
+
+                    fs::remove_file(path).unwrap();
                 }
                 *c2.lock().unwrap() = None;
             }

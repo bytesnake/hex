@@ -1,12 +1,12 @@
 mod error;
 mod audio;
-//mod events;
-mod events_term;
+mod events;
+//mod events_term;
 mod token;
 
 use std::path::PathBuf;
 
-use events_term::Event;
+use events::Event;
 use hex_database::{Instance, Token, GossipConf};
 
 fn main() {
@@ -35,7 +35,7 @@ fn main() {
 
     //let (sender, receiver): (Sender<TrackKey>, Receiver<TrackKey>) = channel();
 
-    let (events, push_new) = events_term::events();
+    let (events, push_new) = events::events();
     let mut audio = audio::AudioDevice::new();
 
     let mut token: Option<token::Current> = None;
