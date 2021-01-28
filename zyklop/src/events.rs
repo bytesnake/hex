@@ -18,7 +18,7 @@ pub enum Event {
     CardLost
 }
 
-pub fn events() -> (Receiver<Vec<Event>>, Sender<u32>) {
+pub fn spawn_events_thread() -> (Receiver<Vec<Event>>, Sender<u32>) {
     let (sender, recv) = channel();
     let (sender2, recv2) = channel();
 

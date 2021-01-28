@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     println!("Blinking an LED on a {}.", DeviceInfo::new().unwrap().model());
 
     let (led_state, led_thread) = led::spawn_led_thread()?;
-    let (events_out, events_in) = events::events();
+    let (events_out, events_in) = events::spawn_events_thread();
 
     //led_state.send(
         //led::State::Sine(led::Color(0, 255, 237, 0), 1000.0)).unwrap();
