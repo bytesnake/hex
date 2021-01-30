@@ -9,6 +9,10 @@ edition = "2018"
 [dependencies]
 rppal = "0.11.3"
 spidev = "0.2.1"
+libmpv = "1"
+anyhow = "1"
+
+hex2 = { path = ".." }
 
 [dependencies.mfrc522]
 git = "https://github.com/emkw/rust-MFRC522.git"
