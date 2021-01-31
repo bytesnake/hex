@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 rppal = "0.11.3"
 spidev = "0.2.1"
-libmpv = "1"
 anyhow = "1"
 
 hex2 = { path = ".." }

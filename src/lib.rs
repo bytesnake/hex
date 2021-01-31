@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 
 mod error;
 
-use error::{Result, StoreError};
+pub use error::{Result, StoreError};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Playlist {
@@ -83,6 +83,14 @@ impl Store {
             .filter(|x| x.name == name)
             .next()
             .ok_or(StoreError::PlaylistNotFound(name.into()))
+    }
+    ///
+    /// Search for a playlist by the playlist ID
+    pub fn playlist_by_card(&mut self, id: u32) -> Result<&mut Playlist> {
+        self.playlists.iter_mut()
+            .filter(|x| x.card_id.map(|x| x == id).unwrap_or(false))
+            .next()
+            .ok_or(StoreError::PlaylistNotFound(format!("card {}", id)))
     }
 }
 

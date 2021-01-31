@@ -14,7 +14,7 @@ thiserror = "1.0"
 #clap = { version = "2", default-features = false }
 
 [lib]
-name = "hex_lib"
+name = "hex2"
 path = "src/lib.rs"
 
 #[[bin]]

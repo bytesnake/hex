@@ -16,4 +16,8 @@ pub enum StoreError {
     TomlGen(#[from] toml::ser::Error),
     #[error("could not find playlist with name {0}")]
     PlaylistNotFound(String),
+    #[error("music file not found with name {0}")]
+    SongNotFound(String),
+    #[error("binary {0} missing")]
+    BinaryMissing(String),
 }
