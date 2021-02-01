@@ -1,10 +1,10 @@
 mod led;
 mod events;
 mod mplayer;
-mod state;
 
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, RecvTimeoutError};
 use std::time::Duration;
+use std::thread;
 
 use rppal::system::DeviceInfo;
 use anyhow::{Context, Result, anyhow};
@@ -13,12 +13,28 @@ use hex2::StoreError;
 
 use events::Event;
 use mplayer::Mplayer;
+use led::Color;
 
 pub enum State {
     Idle,
     Playing(u32, Mplayer),
     Programming(u32, u32),
-    Error(u32, anyhow::Error, State),
+}
+
+fn process_error(state: State, led_state: &Sender<led::State>, duration: u32, error: anyhow::Error) -> Result<State> {
+    eprintln!("Got error: {:?}", error);
+
+    led_state.send(led::State::Sine(led::Color(255, 0, 0, 255), 1000.0))?;
+
+    thread::sleep(Duration::from_millis(duration as u64));
+
+    match &state {
+        State::Playing(_, _) => led_state.send(led::State::Continuous(led::Color(0, 0, 255, 255)))?,
+        State::Programming(_, _) => led_state.send(led::State::Continuous(led::Color(0, 255, 0, 255)))?,
+        State::Idle => led_state.send(led::State::Continuous(led::Color(255, 255, 255, 255)))?,
+    }
+
+    Ok(state)
 }
 
 fn process(led_state: &Sender<led::State>) -> Result<()> {
@@ -37,39 +53,49 @@ fn process(led_state: &Sender<led::State>) -> Result<()> {
     let mut store = hex2::Store::from_path(&path)?;
     let mut state = State::Idle;
 
-    loop {
-        // get a new input event
-        let answ = events_out.recv_timeout(Duration::from_millis(50));
-        let answ_ref = answ.as_ref().map(|x| &x[..]);
-
-        state = match (answ_ref, state) {
-            (Ok(&[Event::NewCard(id)]), State::Idle) => {
-                //led_state.send(
-                //led::State::Sine(led::Color(0, 255, 237, 0), 1000.0)).unwrap();
-
-                if let Ok(pl) = store.playlist_by_card(id) {
-                    match Mplayer::from_list(vec![]) {
-                        Ok(mplayer) => State::Playing(id, mplayer),
-                        Err(err) => State::Error(2000, err.into(), State::Idle)
-                    }
-                } else {
-                    State::Error(2000, StoreError::PlaylistNotFound(id.to_string()).into(), Satate::Idle)
-                }
-            },
-            (Ok(&[Event::CardLost]), State::Playing(_, _)) => State::Idle,
-            (Err(_), State::Error(duration, reason, next_state)) => {
-                eprintln!("Got error: {:?}", reason);
-
-                led_state.send(led::State::Sine(led::Color(255, 0, 0, 255), 1000.0))?;
-
-                thread::sleep(Duration::from_millis(duration));
-
-                led_state
-            },
-            (_, state) => state
+    'outer: loop {
+        // get a new input event and convert into reference to array
+        let answ = match events_out.recv_timeout(Duration::from_millis(50)) {
+            Ok(new_input) => new_input,
+            Err(RecvTimeoutError::Timeout) => continue 'outer,
+            Err(RecvTimeoutError::Disconnected) => 
+                break 'outer Err(anyhow!("pipe breaked!")),
         };
 
-        dbg!(&answ);
+        let new_state = match (answ, state) {
+            (Event::NewCard(id), state @ State::Idle) => {
+                if let Ok(pl) = store.playlist_by_card(id) {
+                    match Mplayer::from_list(vec![]) {
+                        Ok(mplayer) => Ok(State::Playing(id, mplayer)),
+                        Err(err) => process_error(state, led_state, 2000, err.into()),
+                    }
+                } else {
+                    process_error(state, led_state, 2000,
+                        StoreError::PlaylistNotFound(id.to_string()).into())
+                }
+            },
+            (Event::CardLost, _) => Ok(State::Idle),
+            (Event::ButtonPressed(0), State::Playing(id, mut player)) => {
+                player.next()?;
+
+                Ok(State::Playing(id, player))
+            },
+            (Event::ButtonPressed(1), State::Playing(id, mut player)) => {
+                player.prev()?;
+
+                Ok(State::Playing(id, player))
+            },
+            (_, state) => Ok(state)
+        };
+
+        match &new_state {
+            Ok(State::Idle) => led_state.send(led::State::Continuous(Color(255, 255, 255, 255)))?,
+            Ok(State::Playing(_, _)) => led_state.send(led::State::Continuous(Color(0, 0, 255, 255)))?,
+            Ok(State::Programming(_, _)) => led_state.send(led::State::Continuous(Color(0, 255, 0, 255)))?,
+            _ => {}
+        }
+
+        state = new_state?;
     }
 }
 

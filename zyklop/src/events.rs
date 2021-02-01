@@ -13,12 +13,13 @@ const BUTTON_PINS: &[u64] = &[17, 27, 22];
 #[derive(Debug)]
 pub enum Event {
     ButtonPressed(u8),
+    ThreeButtonPressed,
     PowerButton(bool),
     NewCard(u32),
     CardLost
 }
 
-pub fn spawn_events_thread() -> (Receiver<Vec<Event>>, Sender<u32>) {
+pub fn spawn_events_thread() -> (Receiver<Event>, Sender<u32>) {
     let (sender, recv) = channel();
     let (sender2, recv2) = channel();
 
@@ -27,7 +28,7 @@ pub fn spawn_events_thread() -> (Receiver<Vec<Event>>, Sender<u32>) {
     (recv, sender2)
 }
 
-fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
+fn events_fn(sender: Sender<Event>, recv: Receiver<u32>) {
     let gpio = Gpio::new().unwrap();
     let mut inputs: Vec<_> = BUTTON_PINS.iter().map(|pin| {
         gpio.get(*pin as u8).unwrap().into_input_pullup()
@@ -54,7 +55,7 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
     let mut uid = UID::default();
     let mut prev = vec![Level::High, Level::High, Level::High, Level::High];
     loop {
-        let vers = mfrc522.register_read(Reg::Version).expect("Could not read version");
+        //let vers = mfrc522.register_read(Reg::Version).expect("Could not read version");
 
         //println!("VERSION: 0x{:x}", vers);
         if let Ok(new_id) = recv.try_recv() {
@@ -76,36 +77,15 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
             }
         }
 
-        let vals: Vec<Level> = inputs.iter().map(|dev| dev.read()).collect();
-
-        let mut events = Vec::new();
-        //if let Ok(vals) = vals {
-            if vals[0] == Level::Low && prev[0] == Level::High {
-                events.push(Event::ButtonPressed(0));
-            }
-            if vals[1] == Level::Low && prev[1] == Level::High {
-                events.push(Event::ButtonPressed(1));
-            }
-            if vals[2] == Level::Low && prev[2] == Level::High {
-                events.push(Event::ButtonPressed(2));
-            }
-            if vals[3] == Level::Low && prev[3] == Level::High {
-                events.push(Event::PowerButton(false));
-            }
-            if vals[3] == Level::High && prev[3] == Level::Low {
-                events.push(Event::PowerButton(true));
-            }
-
-            prev = vals;
-        //}
-
         if card_avail {
             let mut buffer = [0_u8; 18];
             let (read_status, nread) = mfrc522.mifare_read(4, &mut buffer);
             if !read_status.is_ok() || nread == 0 {
                 println!("Lost: {:?}", read_status);
                 card_avail = false;
-                events.push(Event::CardLost);
+                sender.send(Event::CardLost).unwrap();
+
+                continue;
             }
         } else {
             let new_card = mfrc522.picc_is_new_card_present();
@@ -127,16 +107,45 @@ fn events_fn(sender: Sender<Vec<Event>>, recv: Receiver<u32>) {
                                  ((buffer[2] as u32) << 8)  |
                                  ((buffer[3] as u32) << 0);
 
-                        events.push(Event::NewCard(id));
+                        sender.send(Event::NewCard(id)).unwrap();
+
+                        continue;
                     }
                 }
 
             }
         }
 
-        if events.len() > 0 {
-            println!("{:?}", events);
-            sender.send(events).unwrap();
+        let vals: Vec<Level> = inputs.iter().map(|dev| dev.read()).collect();
+
+        let mut events = Vec::new();
+        if vals[3] == Level::Low && prev[3] == Level::High {
+            sender.send(Event::PowerButton(false)).unwrap();
+            prev = vals;
+            continue;
+        }
+        else if vals[3] == Level::High && prev[3] == Level::Low {
+            sender.send(Event::PowerButton(true)).unwrap();
+            prev = vals;
+            continue;
+        }
+
+        if vals[0] == Level::Low && prev[0] == Level::High {
+            events.push(Event::ButtonPressed(0));
+        }
+        if vals[1] == Level::Low && prev[1] == Level::High {
+            events.push(Event::ButtonPressed(1));
+        }
+        if vals[2] == Level::Low && prev[2] == Level::High {
+            events.push(Event::ButtonPressed(2));
+        }
+        prev = vals;
+
+        if events.len() == 3 {
+            sender.send(Event::ThreeButtonPressed).unwrap();
+            continue;
+        } else if events.len() > 0 {
+            sender.send(events.pop().unwrap()).unwrap();
         }
 
         thread::sleep(Duration::from_millis(40));
