@@ -7,6 +7,7 @@ use mfrc522::{MFRC522, pcd::Reg, picc::UID};
 
 use std::thread;
 use std::time::Duration;
+use anyhow::Result;
 
 const BUTTON_PINS: &[u64] = &[17, 27, 22];
 
@@ -28,8 +29,9 @@ pub fn spawn_events_thread() -> (Receiver<Event>, Sender<u32>) {
     (recv, sender2)
 }
 
-fn events_fn(sender: Sender<Event>, recv: Receiver<u32>) {
-    let gpio = Gpio::new().unwrap();
+fn events_fn(sender: Sender<Event>, recv: Receiver<u32>) -> Result<()> {
+    let gpio = Gpio::new()?;
+
     let mut inputs: Vec<_> = BUTTON_PINS.iter().map(|pin| {
         gpio.get(*pin as u8).unwrap().into_input_pullup()
     }).collect();
@@ -83,7 +85,7 @@ fn events_fn(sender: Sender<Event>, recv: Receiver<u32>) {
             if !read_status.is_ok() || nread == 0 {
                 println!("Lost: {:?}", read_status);
                 card_avail = false;
-                sender.send(Event::CardLost).unwrap();
+                sender.send(Event::CardLost)?;
 
                 continue;
             }
@@ -107,7 +109,7 @@ fn events_fn(sender: Sender<Event>, recv: Receiver<u32>) {
                                  ((buffer[2] as u32) << 8)  |
                                  ((buffer[3] as u32) << 0);
 
-                        sender.send(Event::NewCard(id)).unwrap();
+                        sender.send(Event::NewCard(id))?;
 
                         continue;
                     }
@@ -120,12 +122,12 @@ fn events_fn(sender: Sender<Event>, recv: Receiver<u32>) {
 
         let mut events = Vec::new();
         if vals[3] == Level::Low && prev[3] == Level::High {
-            sender.send(Event::PowerButton(false)).unwrap();
+            sender.send(Event::PowerButton(false))?;
             prev = vals;
             continue;
         }
         else if vals[3] == Level::High && prev[3] == Level::Low {
-            sender.send(Event::PowerButton(true)).unwrap();
+            sender.send(Event::PowerButton(true))?;
             prev = vals;
             continue;
         }
@@ -142,10 +144,10 @@ fn events_fn(sender: Sender<Event>, recv: Receiver<u32>) {
         prev = vals;
 
         if events.len() == 3 {
-            sender.send(Event::ThreeButtonPressed).unwrap();
+            sender.send(Event::ThreeButtonPressed)?;
             continue;
         } else if events.len() > 0 {
-            sender.send(events.pop().unwrap()).unwrap();
+            sender.send(events.pop().unwrap())?;
         }
 
         thread::sleep(Duration::from_millis(40));

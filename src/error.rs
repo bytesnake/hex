@@ -20,4 +20,12 @@ pub enum StoreError {
     SongNotFound(String),
     #[error("binary {0} missing")]
     BinaryMissing(String),
+    #[error("mplayer exited with stderr={0}")]
+    MplayerFailed(String),
+    #[error("reached end of playlist")]
+    ReachedEndOfPlaylist,
+    #[error("reached beginning of playlist")]
+    ReachedBeginningOfPlaylist,
+    #[error("randomized playing is disallowed")]
+    RandomNotAllowed,
 }
