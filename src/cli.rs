@@ -2,12 +2,12 @@ use std::env;
 use std::io::{Write, Read};
 use std::fs;
 use std::path::PathBuf;
-use hex_lib::Workspace;
+use odysee::Store;
 use clap::{Arg, App, SubCommand, AppSettings};
 
 fn main() {
     let matches =
-    App::new("Hex command line interface")
+    App::new("Zyklop command line interface")
         .version("0.1")
         .author("Lorenz Schmidt, <lorenz.schmidt@mailbox.org>")
         .about("Controls the local music library")
@@ -28,6 +28,7 @@ fn main() {
         .get_matches();
 
     match matches.subcommand() {
+        /*
         ("init", Some(sub_match)) => {
             let full_path = sub_match.value_of("PATH").unwrap();
             // parse path
@@ -37,7 +38,7 @@ fn main() {
                 full_path = PathBuf::from(env::current_dir().unwrap()).join(full_path);
             }
 
-            if full_path.join("Hex.toml").exists() {
+            if full_path.join(".toml").exists() {
                 eprintln!(" => Workspace in {} already exists!", full_path.to_str().unwrap());
                 return;
             }
@@ -51,26 +52,14 @@ fn main() {
             // create Hex.toml file
             let mut f = fs::File::create(&full_path.join("Hex.toml")).unwrap();
             f.write("editor = \"vim\"\n\n".as_bytes()).unwrap();
-        },
+        },*/
 
         ("playlist", Some(sub_match)) => {
-            let full_path = env::current_dir().unwrap();
+            let p = sub_match.value_of("PATH").unwrap();
+            let full_path = env::current_dir().unwrap().join(p);
 
-            if !full_path.join("Hex.toml").exists() {
-                eprintln!("No music workspace: Hex.toml missing");
+            let store = Store::from_path(full_path).unwrap();
 
-                return;
-            }
-
-            let workspace = Workspace::from_path(&full_path);
-
-            match sub_match.value_of("PATH") {
-                Some(paths) => {},
-                None => {
-                    for p in workspace.playlists() {
-                    }
-                }
-            }
         },
         _ => {
         }

@@ -1,5 +1,5 @@
 [package]
-name = "hex2"
+name = "odysee"
 version = "0.1.0"
 authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
 edition = "2018"
@@ -11,12 +11,12 @@ toml = "0.5"
 serde = { version = "1", features = ["derive"] }
 metaflac = "0.2"
 thiserror = "1.0"
-#clap = { version = "2", default-features = false }
+clap = { version = "2", default-features = false }
 
 [lib]
-name = "hex2"
+name = "odysee"
 path = "src/lib.rs"
 
-#[[bin]]
-#name = "hex-cli"
-#path = "src/cli.rs"
+[[bin]]
+name = "odysee-cli"
+path = "src/cli.rs"

@@ -10,10 +10,16 @@ mod error;
 pub use error::{Result, StoreError};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Playlist {
-    pub name: String,
+pub struct PlaylistStatus {
+    card_id: u32,
     #[serde(default)]
-    pub card_id: Option<u32>,
+    current_pos: Option<(usize, f32)>,
+    #[serde(default)]
+    random_seed: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Playlist {
     #[serde(default)]
     pub allow_random: bool,
     #[serde(default)]
@@ -21,14 +27,14 @@ pub struct Playlist {
     #[serde(skip)]
     pub files: Vec<PathBuf>,
     #[serde(skip)]
-    pub position: Option<(usize, usize)>,
+    status: Option<PlaylistStatus>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Store {
     #[serde(skip)]
     root_path: PathBuf,
-    playlists: Vec<Playlist>,
+    playlists: HashMap<String, Playlist>,
 }
 
 impl Store {
@@ -55,11 +61,11 @@ impl Store {
         f.read_to_string(&mut source)?;
 
         // parse and deserialize string to a vector of playlists
-        let mut playlists: Store = toml::from_str(&source)?;
-        playlists.root_path = path.to_path_buf();
+        let mut store: HashMap<String,Playlist> = toml::from_str(&source)?;
+        let root_path = path.to_path_buf();
 
         // open music position file
-        let mut f = File::open(path.join("Positions.toml"))
+        let mut f = File::open(path.join("Zyklop.toml"))
             .map_err(|e| StoreError::ConfMissing(path.to_path_buf(), e))?;
 
         // load file into string
@@ -67,24 +73,33 @@ impl Store {
         f.read_to_string(&mut source)?;
 
         // parse and deserialize string to a vector of playlists
-        let mut positions: HashMap<String, (usize, usize)> = toml::from_str(&source)?;
+        let stati: HashMap<String, PlaylistStatus> = toml::from_str(&source)?;
 
-        for pl in &mut playlists.playlists {
-            // add optional position to each playlist
-            pl.position = positions.remove(&pl.name);
-            if pl.radio_url.is_none() {
-                pl.files = std::fs::read_dir(&playlists.root_path.join("files").join(&pl.name)).unwrap()
+        dbg!(&stati);
+
+        for (key, status) in stati {
+            let mut playlist = match store.get_mut(&key) {
+                Some(x) => x,
+                None => continue
+            };
+
+            playlist.status = Some(status);
+        }
+        dbg!(&store);
+
+        for (name, playlist) in &mut store {
+            if playlist.radio_url.is_none() {
+                playlist.files = std::fs::read_dir(&root_path.join("files").join(&name)).unwrap()
                     .filter_map(|x| x.ok())
                     .map(|x| x.path())
                     .collect();
             }
         }
 
-
-
-        dbg!(&playlists);
-
-        Ok(playlists)
+        Ok(Store {
+            playlists: store,
+            root_path,
+        })
     }
 
     /// Save the playlists configuration to a file
@@ -92,23 +107,29 @@ impl Store {
     /// This converts `self.playlists` to string by serializing it with TOML and then writes the
     /// string to the `Music.toml` file. An error may occure when the file can't be open or written
     /// to
-    pub fn save(&self) -> Result<()> {
-        let self_str = toml::to_string(&self)?;
+    pub fn save(&mut self) -> Result<()> {
+        let stati = self.playlists.iter_mut()
+            .filter_map(|(name, x)| x.status.take().map(|x| (name.clone(), x)))
+            .collect::<HashMap<_, _>>();
+
+        let self_str = toml::to_string(&self.playlists)?;
 
         let mut f = File::create(self.root_path.join("Music.toml"))
             .map_err(|e| StoreError::ConfMissing(self.root_path.to_path_buf(), e))?;
 
-        f.write(self_str.as_bytes())?;
+        f.write_all(self_str.as_bytes())?;
 
-        let positions = toml::to_string(&self.playlists.iter().filter_map(|x| x.position.map(|a| (x.name.clone(), a))).collect::<Vec<_>>())?;
+        let stati = toml::to_string(&stati)?;
 
-        let mut f = File::create(self.root_path.join("Positions.toml"))
+        let mut f = File::create(self.root_path.join("Zyklop.toml"))
             .map_err(|e| StoreError::ConfMissing(self.root_path.to_path_buf(), e))?;
 
-        f.write(positions.as_bytes())?;
+        f.write_all(stati.as_bytes())?;
 
         Ok(())
     }
+}
+/*
 
     /// Return a vector of all playlists
     pub fn playlists(&self) -> &[Playlist] {
@@ -181,7 +202,7 @@ impl Store {
 
         Ok(())
     }
-}
+}*/
 
 impl Drop for Store {
     fn drop(&mut self) {
